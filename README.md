@@ -88,6 +88,7 @@ bilipy_bot/
 - [ ] 全自动的cookie更新（目前可参考[此处](https://socialsisteryi.github.io/bilibili-API-collect/docs/login/cookie_refresh.html)）
 - [ ] 转发视频的检测（目前转发视频会报错，待解决）
 - [ ] 更多动态类型的支持（目前没有测试音频和专栏投稿）
+- [ ] 对动态还有转发图片的支持（由于多张图片需要算法的原因，这里仅保留了视频和直播的图片发送）
 
 ## 参考
 - [bilibili-api](https://github.com/nemo2011/bilibili-api)
