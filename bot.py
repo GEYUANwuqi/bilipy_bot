@@ -119,9 +119,9 @@ async def test():
                     for chunk in response.iter_content(chunk_size=8192):
                         file.write(chunk)
             
-            for list in handle_list:
+            for handles in handle_list:
                 # 动态推送到QQ
-                handle = win32gui.FindWindow(None, list) #  获取窗口句柄
+                handle = win32gui.FindWindow(None, handles) #  获取窗口句柄
                 win32gui.ShowWindow(handle, win32con.SW_RESTORE)  # 恢复窗口
                 logging.info(f"找到窗口句柄: {handle}")
                 if at_all:

@@ -24,7 +24,7 @@ with open('config.json', 'r', encoding='utf-8') as config_file:
 
 async def test():
     credential_uid = Credential(sessdata=config['live']['sessdata'])
-    live = await LiveRoom.get_room_info(self=LiveRoom(credential=credential_uid, room_display_id=config['live']['room_id']))
+    live = await LiveRoom.get_room_info(self=LiveRoom(credential=credential_uid, room_display_id=config['live']['room_display_id']))
     if os.path.getsize("old_live.json") == 0:
     # 如果 old_live.json 文件为空，则将数据写入 new_live.json 和 old_live.json 文件
         with open("new_live.json", "w", encoding="utf-8") as new_live, open("old_live.json", "w", encoding="utf-8") as old_live:
@@ -78,9 +78,9 @@ async def test():
     at_all = bool(config['live']['at_all'])
 
     if pic_url != None:
-        for list in handle_list:
+        for handles in handle_list:
             # 动态推送到QQ
-            handle = win32gui.FindWindow(None, list) #  获取窗口句柄
+            handle = win32gui.FindWindow(None, handles) #  获取窗口句柄
             logging.info(f"找到窗口句柄: {handle}")
             win32gui.ShowWindow(handle, win32con.SW_RESTORE)  # 恢复窗口
             if online and at_all :
