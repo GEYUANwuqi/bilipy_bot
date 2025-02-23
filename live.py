@@ -1,3 +1,4 @@
+import logging
 from time import sleep
 from bilibili_api import Credential, sync
 from bilibili_api.live import LiveRoom
@@ -9,11 +10,21 @@ from PIL import Image
 import os
 import json
 import io
-import datetime
+
+# 配置日志系统
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("live.log", encoding='utf-8'),
+                        logging.StreamHandler()
+                    ])
+# 从配置文件中读取配置
+with open('config.json', 'r', encoding='utf-8') as config_file:
+    config = json.load(config_file)
 
 async def test():
-    uid = Credential(sessdata="")
-    live = await LiveRoom.get_room_info(self=LiveRoom(credential=uid, room_display_id=114514))
+    credential_uid = Credential(sessdata=config['live']['sessdata'])
+    live = await LiveRoom.get_room_info(self=LiveRoom(credential=credential_uid, room_display_id=config['live']['room_id']))
     if os.path.getsize("old_live.json") == 0:
     # 如果 old_live.json 文件为空，则将数据写入 new_live.json 和 old_live.json 文件
         with open("new_live.json", "w", encoding="utf-8") as new_live, open("old_live.json", "w", encoding="utf-8") as old_live:
@@ -31,6 +42,7 @@ async def test():
     with open("new_live.json", "r", encoding="utf-8") as new_live, open("old_live.json", "r", encoding="utf-8") as old_live:
         new_info = json.load(new_live)
         old_info = json.load(old_live)
+
     new_live_info = str(new_info["room_info"]["live_start_time"])
     old_live_info = str(old_info["room_info"]["live_start_time"])
     title = new_info["room_info"]["title"]
@@ -38,9 +50,10 @@ async def test():
     romm_id = new_info["room_info"]["room_id"]
     pic_url = None
     online = False
+
     if new_live_info == "0" and old_live_info != "0":
         pic_url = new_info["room_info"]["cover"]
-        print("下播")
+        logging.info("下播")
         live = f"【下播通知】\n{name}下播啦！\n{title}\n直播地址：https://live.bilibili.com/{romm_id}"
     elif new_live_info == "0" :
         live = f"未开播"
@@ -48,9 +61,10 @@ async def test():
         live = f"开播中"
     else:
         pic_url = new_info["room_info"]["cover"]
-        print("上播")
+        logging.info("上播")
         online = True
         live = f"\n【直播通知】\n{name}开播啦！\n{title}\n直播地址：https://live.bilibili.com/{romm_id}"
+    
     if pic_url != None:
         #下载图片
         response = requests.get(pic_url, stream=True)
@@ -59,13 +73,15 @@ async def test():
         with open(filename, 'wb') as file:
             for chunk in response.iter_content(chunk_size=8192):
                 file.write(chunk)
-    handle_list= ["测试","test","BOT"]
-    at_all = True
+                
+    handle_list= list(config['live']['handle_list'])
+    at_all = bool(config['live']['at_all'])
+
     if pic_url != None:
         for list in handle_list:
             # 动态推送到QQ
             handle = win32gui.FindWindow(None, list) #  获取窗口句柄
-            print(handle)
+            logging.info(f"找到窗口句柄: {handle}")
             win32gui.ShowWindow(handle, win32con.SW_RESTORE)  # 恢复窗口
             if online and at_all :
                 #  处理@符号
@@ -107,7 +123,9 @@ async def test():
             sleep(2)
 
 while True:
-    sync(test())
-    new_time = datetime.datetime.now()
-    print(f"等待10秒,{new_time}")
+    try:
+        sync(test())
+    except Exception as e:
+        logging.error(f"发生错误: {e}")
+    logging.info(f"等待10秒")
     sleep(10)

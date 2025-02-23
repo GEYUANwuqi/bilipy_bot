@@ -1,3 +1,4 @@
+import logging
 from time import sleep
 from bilibili_api import Credential, sync
 from bilibili_api import user
@@ -9,16 +10,21 @@ from PIL import Image
 import os
 import json
 import io
-import datetime
 
-# 检查直播的办法"live_rcmd" in new_data["items"][id]["modules"]["module_dynamic"]["major"]
-# 检查置顶的办法"module_tag" in new_data["items"][id]["modules"]
+# 配置日志系统
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("bot.log", encoding='utf-8'),
+                        logging.StreamHandler()
+                    ])
+# 从配置文件中读取配置
+with open('config.json', 'r', encoding='utf-8') as config_file:
+    config = json.load(config_file)
 
 async def test():
-
-    credential_uid = Credential(sessdata="")
-    
-    dy_dict = await user.User.get_dynamics_new(self=user.User(uid=114514, credential=credential_uid),offset="")
+    credential_uid = Credential(sessdata=config['bot']['sessdata'])
+    dy_dict = await user.User.get_dynamics_new(self=user.User(uid=config['bot']['uid'], credential=credential_uid),offset="")
     if os.path.getsize("old.json") == 0:
     # 如果 old.json 文件为空，则将数据写入 new.json 和 old.json 文件
         with open("new.json", "w", encoding="utf-8") as new_file, open("old.json", "w", encoding="utf-8") as old_file:
@@ -56,39 +62,53 @@ async def test():
     new_maxts, new_maxid = getmax_tsid(new_data)
     old_maxts, old_maxid = getmax_tsid(old_data)
     go = False
+    forward_dy = False
+    forward_av = False
     forward = False
     pic = None
     if new_maxts > old_maxts :
-        print(f"最大的时间戳是: {new_maxts}, 对应的ID是: {new_maxid}")
+        logging.info(f"最大的时间戳是: {new_maxts}, 对应的ID是: {new_maxid}")
         go = True
         id = new_maxid
     if "DYNAMIC_TYPE_FORWARD" in new_data["items"][id]["type"] :
         forward = True
+        if "DYNAMIC_TYPE_AV" in new_data["items"][id]["orig"]["type"] :
+            forward_av = True
+        else:
+            forward_dy = True
     elif "live_rcmd" in new_data["items"][id]["modules"]["module_dynamic"]["major"] :
         go = False
     
-    if forward :
+    if forward_dy :
         title = new_data["items"][id]["modules"]["module_dynamic"]["desc"]["text"]
         name2 = new_data["items"][id]["orig"]["modules"]["module_author"]["name"]
         url =  "www.bilibili.com/opus/" + str(new_data["items"][id]["id_str"][2:])
         other_url = new_data["items"][id]["orig"]["modules"]["module_dynamic"]["major"]["opus"]["jump_url"][2:]
-        text = f"\n【转发通知】\n{name}转发了{name2}的动态\n{title}\n动态地址:{url}\n原动态地址:{other_url}"
-        print("有转发")
+        text = f"\n【转发动态通知】\n{name}转发了{name2}的动态\n{title}\n动态地址:{url}\n原动态地址:{other_url}"
+        logging.info("有转发动态")
+    elif forward_av :
+        title = new_data["items"][id]["modules"]["module_dynamic"]["desc"]["text"]
+        name2 = new_data["items"][id]["orig"]["modules"]["module_author"]["name"]
+        url =  "www.bilibili.com/opus/" + str(new_data["items"][id]["id_str"][2:])
+        other_url = new_data["items"][id]["orig"]["modules"]["module_dynamic"]["major"]["archive"]["jump_url"][2:]
+        text = f"\n【转发视频通知】\n{name}转发了{name2}的视频\n{title}\n动态地址:{url}\n原视频地址:{other_url}"
+        logging.info("有转发视频")
     elif "jump_url" in new_data["items"][id]["basic"] and go:
         title = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["title"] or None
         content = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["summary"]["text"] or None
         url = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["jump_url"][2:]
         text = f"\n【动态通知】\n【{name}】发布了新动态\n{title}\n{content}\n动态地址:{url}"
-        print("有新动态")
+        logging.info("有新动态")
     elif go :
         tab = new_data["items"][id]["modules"]["module_dynamic"]["desc"]["text"] or None
         title = new_data["items"][id]["modules"]["module_dynamic"]["major"]["archive"]["title"] or None
         pic = new_data["items"][id]["modules"]["module_dynamic"]["major"]["archive"]["cover"]
         url = new_data["items"][id]["modules"]["module_dynamic"]["major"]["archive"]["jump_url"][2:]
         text = f"\n【视频通知】\n【{name}】更新了新视频\n{tab}\n《{title}》\n视频地址:{url}"
-        print("有新视频")
-    handle_list= ["测试","test","BOT"]
-    at_all = True
+        logging.info("有新视频")
+    
+    handle_list= list(config['bot']['handle_list'])
+    at_all = bool(config['bot']['at_all'])
     if go or forward :
             if pic != None :
                 #下载图片
@@ -103,7 +123,7 @@ async def test():
                 # 动态推送到QQ
                 handle = win32gui.FindWindow(None, list) #  获取窗口句柄
                 win32gui.ShowWindow(handle, win32con.SW_RESTORE)  # 恢复窗口
-                print(handle)
+                logging.info(f"找到窗口句柄: {handle}")
                 if at_all:
                     #  处理@符号
                     win32clipboard.OpenClipboard()
@@ -141,8 +161,9 @@ async def test():
                 sleep(2)
 
 while True:
-    sync(test())
-    new_time = datetime.datetime.now()
-    print(f"等待10秒,{new_time}")
+    try:
+        sync(test())
+    except Exception as e:
+        logging.error(f"发生错误: {e}")
+    logging.info(f"等待10秒")
     sleep(10)
-
