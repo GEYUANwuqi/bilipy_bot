@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import TimedRotatingFileHandler
 from time import sleep
 from bilibili_api import Credential, sync
 from bilibili_api import user
@@ -11,19 +12,29 @@ import os
 import json
 import io
 
+# 创建日志文件夹
+log_dir = "logs"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
 # 配置日志系统
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[
-                        logging.FileHandler("bot.log", encoding='utf-8'),
-                        logging.StreamHandler()
-                    ])
+log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+file_handler = TimedRotatingFileHandler(os.path.join(log_dir, "bot.log"), when="midnight", interval=1, backupCount=0, encoding='utf-8')
+file_handler.setFormatter(log_formatter)
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+
+logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+
 # 从配置文件中读取配置
 with open('config.json', 'r', encoding='utf-8') as config_file:
     config = json.load(config_file)
 
 async def test():
     credential_uid = Credential(sessdata=config['bot']['sessdata'])
+    
     dy_dict = await user.User.get_dynamics_new(self=user.User(uid=config['bot']['uid'], credential=credential_uid),offset="")
     if os.path.getsize("old.json") == 0:
     # 如果 old.json 文件为空，则将数据写入 new.json 和 old.json 文件
@@ -64,14 +75,12 @@ async def test():
     go = False
     forward_dy = False
     forward_av = False
-    forward = False
     pic = None
     if new_maxts > old_maxts :
         logging.info(f"最大的时间戳是: {new_maxts}, 对应的ID是: {new_maxid}")
         go = True
         id = new_maxid
     if "DYNAMIC_TYPE_FORWARD" in new_data["items"][id]["type"] :
-        forward = True
         if "DYNAMIC_TYPE_AV" in new_data["items"][id]["orig"]["type"] :
             forward_av = True
         else:
@@ -79,20 +88,20 @@ async def test():
     elif "live_rcmd" in new_data["items"][id]["modules"]["module_dynamic"]["major"] :
         go = False
     
-    if forward_dy :
+    if forward_dy and go :
         title = new_data["items"][id]["modules"]["module_dynamic"]["desc"]["text"]
         name2 = new_data["items"][id]["orig"]["modules"]["module_author"]["name"]
         url =  "www.bilibili.com/opus/" + str(new_data["items"][id]["id_str"][2:])
         other_url = new_data["items"][id]["orig"]["modules"]["module_dynamic"]["major"]["opus"]["jump_url"][2:]
         text = f"\n【转发动态通知】\n{name}转发了{name2}的动态\n{title}\n动态地址:{url}\n原动态地址:{other_url}"
-        logging.info("有转发动态")
-    elif forward_av :
+        logging.info("有转发")
+    elif forward_av and go :
         title = new_data["items"][id]["modules"]["module_dynamic"]["desc"]["text"]
         name2 = new_data["items"][id]["orig"]["modules"]["module_author"]["name"]
         url =  "www.bilibili.com/opus/" + str(new_data["items"][id]["id_str"][2:])
         other_url = new_data["items"][id]["orig"]["modules"]["module_dynamic"]["major"]["archive"]["jump_url"][2:]
         text = f"\n【转发视频通知】\n{name}转发了{name2}的视频\n{title}\n动态地址:{url}\n原视频地址:{other_url}"
-        logging.info("有转发视频")
+        logging.info("有转发")
     elif "jump_url" in new_data["items"][id]["basic"] and go:
         title = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["title"] or None
         content = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["summary"]["text"] or None
@@ -109,7 +118,7 @@ async def test():
     
     handle_list= list(config['bot']['handle_list'])
     at_all = bool(config['bot']['at_all'])
-    if go or forward :
+    if go :
             if pic != None :
                 #下载图片
                 response = requests.get(pic, stream=True)
@@ -119,9 +128,9 @@ async def test():
                     for chunk in response.iter_content(chunk_size=8192):
                         file.write(chunk)
             
-            for handles in handle_list:
+            for list in handle_list:
                 # 动态推送到QQ
-                handle = win32gui.FindWindow(None, handles) #  获取窗口句柄
+                handle = win32gui.FindWindow(None, list) #  获取窗口句柄
                 win32gui.ShowWindow(handle, win32con.SW_RESTORE)  # 恢复窗口
                 logging.info(f"找到窗口句柄: {handle}")
                 if at_all:
