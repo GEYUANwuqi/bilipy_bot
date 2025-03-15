@@ -44,7 +44,7 @@ bilipy_bot/
     ```sh
     conda create -n bilipy_bot python=3.12.4
     conda activate bilipy_bot
-    pip install bilibili-api-python-dev requests pywin32 pillow curl_cffi
+    pip install bilibili-api-python requests pywin32 pillow curl_cffi
     ```
 （理论Python版本不低于3.9，开发者使用3.12.4版本）
 
