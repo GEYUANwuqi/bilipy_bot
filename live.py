@@ -1,23 +1,56 @@
 import logging
+from logging.handlers import TimedRotatingFileHandler
 from time import sleep
 from bilibili_api import Credential, sync
 from bilibili_api.live import LiveRoom
 import requests
 import win32con
 import win32gui
+import win32com.client
 import win32clipboard
 from PIL import Image
 import os
 import json
 import io
 
-# 配置日志系统
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[
-                        logging.FileHandler("live.log", encoding='utf-8'),
-                        logging.StreamHandler()
-                    ])
+# 创建日志文件夹
+log_dir = "logs"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+# 自定义日志文件名生成规则
+def custom_namer(default_name):
+    base, ext = os.path.splitext(default_name)
+    if ext == ".log" and "_" not in base:
+        date_part = base.split(".")[-1]
+        return f"{base.split('.')[0]}_{date_part}{ext}"
+    return default_name
+
+# 配置日志格式
+log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# 配置文件日志处理器
+file_handler = TimedRotatingFileHandler(
+    filename=os.path.join(log_dir, "bot.log"),  # 基础文件名
+    when="midnight",       # 每天午夜切割
+    interval=1,            # 每天生成一个新文件
+    backupCount=0,         # 0表示保留所有历史文件
+    encoding='utf-8'
+)
+file_handler.namer = custom_namer      # 注入自定义文件名生成器
+file_handler.suffix = "%Y-%m-%d"       # 指定日期格式
+file_handler.setFormatter(log_formatter)
+
+# 控制台日志处理器
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+
+# 全局日志配置
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[file_handler, console_handler]
+)
+
 # 从配置文件中读取配置
 with open('config.json', 'r', encoding='utf-8') as config_file:
     config = json.load(config_file)
@@ -80,9 +113,14 @@ async def test():
     if pic_url != None:
         for handles in handle_list:
             # 动态推送到QQ
+            shell = win32com.client.Dispatch("WScript.Shell")  # 初始化Shell对象用于发送按键
             handle = win32gui.FindWindow(None, handles) #  获取窗口句柄
+            win32gui.ShowWindow(handle, win32con.SW_RESTORE)  # 恢复窗口（如果处于最小化状态）
+            shell.SendKeys('%')  # 发送Alt键绕过Windows的前台权限限制
+            win32gui.SetForegroundWindow(handle)  # 将窗口设置为前台
+            win32gui.ShowWindow(handle, win32con.SW_SHOW)  # 确保窗口显示在最前端
             logging.info(f"找到窗口句柄: {handle}")
-            win32gui.ShowWindow(handle, win32con.SW_RESTORE)  # 恢复窗口
+
             if online and at_all :
                 #  处理@符号
                 win32clipboard.OpenClipboard()
