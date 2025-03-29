@@ -1,6 +1,6 @@
 # bilipy_bot
 
-bilipy_bot 是一个用于监控 B 站动态和直播，并将通知推送到 QQ 的项目。
+bilipy_bot 是一个用于监控 B 站动态和直播，并将通知推送到 QQ 的项目
 
 ## 功能
 
@@ -13,6 +13,11 @@ bilipy_bot 是一个用于监控 B 站动态和直播，并将通知推送到 QQ
 ```
 bilipy_bot/
 │
+├──logs
+│   ├── app.log
+│   ├── bot.log
+│   └── live.log
+├── app.py
 ├── bot.py
 ├── live.py
 ├── new_live.json
@@ -22,7 +27,7 @@ bilipy_bot/
 ├── config.json
 └── README.md
 ```
-
+- app.py: 主程序，用于启动监控任务
 - bot.py: 监控 B 站用户动态并推送通知到 QQ
 - live.py: 监控 B 站用户直播状态并推送通知到 QQ
 - new_live.json: 存储最新的直播信息
@@ -44,7 +49,7 @@ bilipy_bot/
     ```sh
     conda create -n bilipy_bot python=3.12.4
     conda activate bilipy_bot
-    pip install bilibili-api-python requests pywin32 pillow curl_cffi
+    pip install bilibili-api-python-dev requests pywin32 pillow curl_cffi
     ```
 （理论Python版本不低于3.9，开发者使用3.12.4版本）
 
@@ -56,15 +61,11 @@ bilipy_bot/
 - `room_display_id`即被监测的直播间id，直接取网址中直播间id即可
 - `handle_list`即需要发送通知的群组或者私信的“标题”，即群组名或者好友名（例如我需要发到群组“阿b直播通知1群”，那直接填此群组名即可）
 - `at_all`即是否需要@全体成员，填`true`或者`false`
-2. 运行 live.py 监控直播状态
+2. 运行 app.py 启动一键监控
     ```sh
-    python live.py
+    python app.py
     ```
 
-3. 运行 bot.py 监控用户动态
-    ```sh
-    python bot.py
-    ```
 
 ## 算法实现方式
 - 先使用api获取数据，然后与之前的数据进行对比，如果数据有变化，则发送通知
@@ -89,7 +90,6 @@ bilipy_bot/
 
 ## 待办事项
 - [ ] 全自动的cookie更新（目前可参考[此处](https://socialsisteryi.github.io/bilibili-API-collect/docs/login/cookie_refresh.html)）
-- [x] 转发视频的检测（已解决）
 - [ ] 代码结构优化
 - [ ] 更多动态类型的支持（目前没有测试音频和专栏投稿）
 
