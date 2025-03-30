@@ -89,6 +89,7 @@ bilipy_bot/
 - json相关：一般来说不会有，如果正常情况下有报错，可能是api返回的数据结构有变动，及时反馈在issue中即可
 
 ## 待办事项
+- [ ] 将处理程序进行分模块，以防止更多的错误出现
 - [ ] 全自动的cookie更新（目前可参考[此处](https://socialsisteryi.github.io/bilibili-API-collect/docs/login/cookie_refresh.html)）
 - [ ] 代码结构优化
 - [ ] 更多动态类型的支持（目前没有测试音频和专栏投稿）
