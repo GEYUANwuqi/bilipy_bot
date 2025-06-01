@@ -20,6 +20,7 @@ bilipy_bot/
 ├── app.py
 ├── bot.py
 ├── live.py
+├── send_qq.py
 ├── new_live.json
 ├── new.json
 ├── old_live.json
@@ -30,6 +31,7 @@ bilipy_bot/
 - app.py: 主程序，用于启动监控任务
 - bot.py: 监控 B 站用户动态并推送通知到 QQ
 - live.py: 监控 B 站用户直播状态并推送通知到 QQ
+- send_qq.py：发送消息至qq窗口的脚本模块
 - new_live.json: 存储最新的直播信息
 - new.json: 存储最新的动态信息
 - old_live.json: 存储之前的直播信息
@@ -86,7 +88,7 @@ bilipy_bot/
 - api-412报错：请求速度太快了，被风控
 - api-4100000报错：api失效，更新bilibli_api即可
 - win32相关：一般报错在获取句柄，查看窗口名对不对，要小心群可能会改名
-- json相关：一般来说不会有，如果正常情况下有报错，可能是api返回的数据结构有变动，及时反馈在issue中即可
+- json相关：一般来说是config文件或者数据文件被错误写入，config文件表现为后面多加了一个“}”符号，删掉后恢复json结构即可，表现在数据文件里为json结构不完整，清除相对应的new和old文件里的内容即可，如果以上情况都排查过还是报错的话，可能是api返回的数据结构有变动，及时反馈在issue中即可
 
 ## 待办事项
 - [ ] 将处理程序进行分模块，以防止更多的错误出现
