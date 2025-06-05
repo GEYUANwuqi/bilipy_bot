@@ -20,7 +20,8 @@ def parse_args():
 
 args = parse_args()
 pic = args.pic_path 
-text = args.text
+text = (args.text).encode().decode('unicode_escape')
+
 if text is None:
     print("【error】请使用-t参数传入需要发送的内容")
     sys.exit(1)

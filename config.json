@@ -3,12 +3,12 @@
         "sessdata":"", 
         "uid":"",
         "handle_list": ["测试", "test", "BOT"],
-        "at_all":true
+        "at_all":false
     },
     "live":{
         "sessdata":"", 
         "room_display_id":"",
         "handle_list": ["测试", "test", "BOT"],
-        "at_all":true
+        "at_all":false
     }
 }
