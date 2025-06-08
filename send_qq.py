@@ -11,6 +11,7 @@ import sys
 import argparse
 
 def parse_args():
+    """解析命令行参数"""
     parser = argparse.ArgumentParser(description='发送消息至qq窗口的脚本模块')
     parser.add_argument('-p', '--pic', dest='pic_path', type=str, default=None,
                         help='传入图片的本地路径_default=None')
@@ -19,8 +20,13 @@ def parse_args():
     return parser.parse_args()
 
 args = parse_args()
-pic = args.pic_path 
-text = (args.text).encode().decode('unicode_escape')
+pic = args.pic_path
+# 对文本参数进行反转义处理
+if args.text:
+    # 先还原转义序列，再解码
+    text = args.text.encode('utf-8').decode('unicode_escape')
+else:
+    text = None
 
 if text is None:
     print("【error】请使用-t参数传入需要发送的内容")
@@ -60,8 +66,8 @@ for handles in handle_list:
         #
         sleep(2)   #等待@符号加载
         win32gui.SendMessage(handle, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
+        sleep(2)
     #  处理文本
-    sleep(2)
     win32clipboard.OpenClipboard()
     win32clipboard.EmptyClipboard()
     win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, text)
@@ -86,3 +92,5 @@ for handles in handle_list:
     win32gui.SendMessage(handle, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
     print("【info】消息发送成功")
     sleep(2)
+
+exit(0)
