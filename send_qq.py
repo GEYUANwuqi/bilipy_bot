@@ -17,10 +17,13 @@ def parse_args():
                         help='传入图片的本地路径_default=None')
     parser.add_argument('-t', '--text', dest='text', type=str, default=None,
                         help='传入需要发送的内容_must')
+    parser.add_argument('-a', '--at_all', dest='text', type=int, default=1,
+                        help='是否强制@所有人，0为强制否_default=1')
     return parser.parse_args()
 
 args = parse_args()
 pic = args.pic_path
+at_all_must = int(args.at_all)
 # 对文本参数进行反转义处理
 if args.text:
     # 先还原转义序列，再解码
@@ -38,7 +41,10 @@ with open('config.json', 'r', encoding='utf-8') as config_file:
     config = json.load(config_file)
 
 handle_list= list(config['bot']['handle_list'])
-at_all = bool(config['bot']['at_all'])
+if at_all_must == 0:
+    at_all = False
+else:
+    at_all = bool(config['bot']['at_all'])
 if pic != None :
     #下载图片
     response = requests.get(pic, stream=True)
