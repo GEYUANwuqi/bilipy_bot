@@ -6,7 +6,7 @@ import json
 from logger import setup_logger
 import subprocess
 
-logger = setup_logger()
+logger = setup_logger(filename='bot')
 
 # 从配置文件中读取配置
 with open('config.json', 'r', encoding='utf-8') as config_file:

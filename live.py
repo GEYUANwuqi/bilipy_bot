@@ -7,13 +7,14 @@ from logger import setup_logger
 import os
 import json
 
-logger = setup_logger()
+logger = setup_logger(filename='live')
 
 # 从配置文件中读取配置
 with open('config.json', 'r', encoding='utf-8') as config_file:
     config = json.load(config_file)
 
 async def test():
+    """主函数，获取直播间信息并处理"""
     credential_uid = Credential(sessdata=config['live']['sessdata'])
     live = await LiveRoom.get_room_info(self=LiveRoom(credential=credential_uid, room_display_id=config['live']['room_display_id']))
     if os.path.getsize("old_live.json") == 0:

@@ -49,11 +49,11 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
         
         return [f[1] for f in result[:len(result)-self.backup_count]]
 
-def setup_logger():
+def setup_logger(filename):
     """配置日志系统"""
     # 设置日志文件名格式
     date_str = datetime.now().strftime('%Y_%m_%d')
-    log_file = os.path.join(log_dir, f'bot_{date_str}.log')
+    log_file = os.path.join(log_dir, f'{filename}_{date_str}.log')
     
     # 创建自定义处理器
     file_handler = DailyRotatingFileHandler(log_file, backupCount=10)
@@ -83,23 +83,3 @@ def setup_logger():
     sys.excepthook = handle_exception
     
     return logger
-
-# 初始化日志系统
-if __name__ == '__main__':
-    logger = setup_logger()
-    
-    # 安全获取baseFilename
-    file_handler = None
-    for handler in logger.handlers:
-        if isinstance(handler, DailyRotatingFileHandler):
-            file_handler = handler
-            break
-    
-    if file_handler:
-        # 使用类型提示确保类型检查器知道这是TimedRotatingFileHandler
-        timed_handler: TimedRotatingFileHandler = file_handler
-        print(f"当前日志文件: {timed_handler.baseFilename}")
-    else:
-        print("未找到文件处理器")
-    
-    print("请等待至凌晨4点观察日志自动切分和清理")
