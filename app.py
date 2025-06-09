@@ -56,6 +56,7 @@ async def loads_json(dy_dict, new_filename, old_filename):
     return new_data, old_data
     
 def send_qq(bat_text) :
+    """发送QQ消息"""
     try :
         process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
         logger.info(f"执行命令: {bat_text}")
