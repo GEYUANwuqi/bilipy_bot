@@ -9,6 +9,9 @@ import json
 import io
 import sys
 import argparse
+from logger import setup_logger
+
+logger = setup_logger(filename='send_qq')
 
 def parse_args():
     """解析命令行参数"""
@@ -17,13 +20,13 @@ def parse_args():
                         help='传入图片的本地路径_default=None')
     parser.add_argument('-t', '--text', dest='text', type=str, default=None,
                         help='传入需要发送的内容_must')
-    parser.add_argument('-a', '--at_all', dest='text', type=int, default=1,
-                        help='是否强制@所有人，0为强制否_default=1')
+    parser.add_argument('-a', '--at_all', dest='at_all', type=int, default=1,
+                        help='是否强制@所有人，0为强制否，其他参数代表config为最高优先级_default=1')
     return parser.parse_args()
 
 args = parse_args()
 pic = args.pic_path
-at_all_must = int(args.at_all)
+at_all_must = args.at_all
 # 对文本参数进行反转义处理
 if args.text:
     # 先还原转义序列，再解码
@@ -32,7 +35,7 @@ else:
     text = None
 
 if text is None:
-    print("【error】请使用-t参数传入需要发送的内容")
+    logger.error("请使用-t参数传入需要发送的内容")
     sys.exit(1)
 
 
@@ -61,7 +64,7 @@ for handles in handle_list:
     win32gui.ShowWindow(handle, win32con.SW_RESTORE)  # 恢复窗口（如果处于最小化状态）
     shell.SendKeys('%')  # 发送Alt键绕过Windows的前台权限限制
     win32gui.ShowWindow(handle, win32con.SW_SHOW)  # 确保窗口显示在最前端
-    print(f"【info】找到窗口句柄: {handle}")
+    logger.info(f"找到窗口句柄: {handle}")
     if at_all:
         #  处理@符号
         win32clipboard.OpenClipboard()
@@ -96,7 +99,7 @@ for handles in handle_list:
     # 发送
     sleep(2)
     win32gui.SendMessage(handle, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
-    print("【info】消息发送成功")
+    logger.info("消息发送成功")
     sleep(2)
 
 exit(0)

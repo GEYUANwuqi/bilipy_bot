@@ -99,7 +99,7 @@ async def bot():
         name2 = new_data["items"][id]["orig"]["modules"]["module_author"]["name"]
         url = "www.bilibili.com/opus/" + str(new_data["items"][id]["id_str"][2:])
         other_url = new_data["items"][id]["orig"]["modules"]["module_dynamic"]["major"]["opus"]["jump_url"][2:]
-        text = f"【转发动态通知】\n{name}转发了{name2}的动态\n{title}\n动态地址:{url}\n原动态地址:{other_url}"
+        text = f"\n【转发动态通知】\n{name}转发了{name2}的动态\n{title}\n动态地址:{url}\n原动态地址:{other_url}"
         logger.info("有转发")
     elif forward_av and go :
         name = new_data["items"][0]["modules"]["module_author"]["name"]
@@ -107,14 +107,14 @@ async def bot():
         name2 = new_data["items"][id]["orig"]["modules"]["module_author"]["name"]
         url = "www.bilibili.com/opus/" + str(new_data["items"][id]["id_str"][2:])
         other_url = new_data["items"][id]["orig"]["modules"]["module_dynamic"]["major"]["archive"]["jump_url"][2:]
-        text = f"【转发视频通知】\n{name}转发了{name2}的视频\n{title}\n动态地址:{url}\n原视频地址:{other_url}"
+        text = f"\n【转发视频通知】\n{name}转发了{name2}的视频\n{title}\n动态地址:{url}\n原视频地址:{other_url}"
         logger.info("有转发")
     elif "jump_url" in new_data["items"][id]["basic"] and go:
         name = new_data["items"][0]["modules"]["module_author"]["name"]
         title = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["title"] or None
         content = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["summary"]["text"] or None
         url = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["jump_url"][2:]
-        text = f"【动态通知】\n【{name}】发布了新动态\n{title}\n{content}\n动态地址:{url}"
+        text = f"\n【动态通知】\n【{name}】发布了新动态\n{title}\n{content}\n动态地址:{url}"
         logger.info("有新动态")
     elif go :
         name = new_data["items"][0]["modules"]["module_author"]["name"]
@@ -122,7 +122,7 @@ async def bot():
         title = new_data["items"][id]["modules"]["module_dynamic"]["major"]["archive"]["title"] or None
         pic_url = new_data["items"][id]["modules"]["module_dynamic"]["major"]["archive"]["cover"]
         url = new_data["items"][id]["modules"]["module_dynamic"]["major"]["archive"]["jump_url"][2:]
-        text = f"【视频通知】\n【{name}】更新了新视频\n{tab}\n《{title}》\n视频地址:{url}"
+        text = f"\n【视频通知】\n【{name}】更新了新视频\n{tab}\n《{title}》\n视频地址:{url}"
         logger.info("有新视频")
 
     if go:
