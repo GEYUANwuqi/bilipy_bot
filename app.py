@@ -1,167 +1,112 @@
-import logging
-from logging.handlers import TimedRotatingFileHandler
+from time import sleep
+from bilibili_api import Credential
+from bilibili_api import user
 import os
-import sys
-import time
+import json
+from logger import setup_logger
 import subprocess
-import signal
-import platform
+import asyncio
+import aiohttp
+import aiofiles
 
-# 日志目录配置
-LOG_DIR = "logs"
-os.makedirs(LOG_DIR, exist_ok=True)
+logger = setup_logger(filename='bot')
 
-class ControllerLogHandler(TimedRotatingFileHandler):
-    def __init__(self):
-        filename = os.path.join(LOG_DIR, "app.log")
-        super().__init__(
-            filename=filename,
-            when="midnight",
-            interval=1,
-            backupCount=7,
-            encoding="utf-8"
-        )
-        self.suffix = "%Y-%m-%d"
-        self.namer = self._custom_namer
+# 从配置文件中读取配置
+with open('config.json', 'r', encoding='utf-8') as config_file:
+    config = json.load(config_file)
 
-    @staticmethod
-    def _custom_namer(default_name):
-        base, ext = os.path.splitext(default_name)
-        if "_" not in base:
-            date_part = base.split(".")[-1]
-            return f"{base.replace('.log','')}_{date_part}{ext}"
-        return default_name
+async def getmax_tsid(date):
+        """获取最大时间戳和对应的ID"""
+        max_timestamp = int(0)
+        max_id = None
+        # 遍历items列表中的每个元素
+        list = date["items"]
+        for index, item in enumerate(list):
+            timestamp = item["modules"]["module_author"]["pub_ts"]
+            # 如果max_timestamp为None或者当前时间戳大于max_timestamp，则更新最大时间戳和对应的ID
+            if timestamp > max_timestamp:
+                max_timestamp = timestamp
+                max_id = index
+        return max_timestamp, max_id
 
-def setup_controller_logger():
-    logger = logging.getLogger("Controller")
-    logger.setLevel(logging.INFO)
-
-    if logger.handlers:
-        for handler in logger.handlers[:]:
-            logger.removeHandler(handler)
-
-    file_handler = ControllerLogHandler()
-    console_handler = logging.StreamHandler()
-
-    file_formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)-7s | [PID:%(process)d] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
-    console_formatter = logging.Formatter("[%(levelname)s] %(message)s")
-
-    file_handler.setFormatter(file_formatter)
-    console_handler.setFormatter(console_formatter)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    return logger
-
-logger = setup_controller_logger()
-
-# 全局进程列表
-child_processes = []
-
-def signal_handler(sig, frame):
-    logger.info("收到终止信号，清理子进程...")
-    cleanup_processes()
-    sys.exit(0)
-
-def cleanup_processes():
-    global child_processes
-    for proc in child_processes:
-        try:
-            if proc.poll() is None:
-                logger.info(f"终止进程 {proc.pid}")
-                if platform.system() == "Windows":
-                    subprocess.run(
-                        ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
-                    )
-                else:
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-        except Exception as e:
-            logger.error(f"终止进程失败: {str(e)}")
-    child_processes.clear()
-
-PROCESS_CONFIGS = [
-    {
-        'name': 'bot_dy',
-        'command': ['python', 'bot.py', 'bot']
-    },
-    {
-        'name': 'bot_live',
-        'command': ['python', 'live.py', 'live']
-    }
-]
-
-def launch_process(config):
-    try:
-        creation_flags = subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
-        process = subprocess.Popen(
-            config['command'],
-            creationflags=creation_flags
-        )
-        child_processes.append(process)
-        logger.info(f"启动进程 {config['name']} (PID:{process.pid})")
-        return process
-    except Exception as e:
-        logger.error(f"启动失败 {config['name']}: {str(e)}")
-        return None
-
-def manage_processes():
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+async def loads_json(dy_dict, new_filename, old_filename):
+    """异步处理并加载JSON文件"""
+    if os.path.getsize(old_filename) == 0:
+    # 如果 old.json 文件为空，则将数据写入 new.json 和 old.json 文件
+        async with aiofiles.open(new_filename, "w", encoding="utf-8") as new_file, aiofiles.open(old_filename, "w", encoding="utf-8") as old_file:
+            json.dump(dy_dict, new_file, ensure_ascii=False, indent=4)
+            json.dump(dy_dict, old_file, ensure_ascii=False, indent=4)
+    else:
+    # 如果 old.json 文件不为空，则将 new.json 文件的内容移动到 old.json 文件中，并将新的数据写入 new.json 文件
+        async with aiofiles.open(new_filename, "r", encoding="utf-8") as new_file:
+            new_data = json.loads(await new_file.read())
+        async with aiofiles.open(old_filename, "w", encoding="utf-8") as old_file:
+            json.dump(new_data, old_file, ensure_ascii=False, indent=4)
+        async with aiofiles.open(new_filename, "w", encoding="utf-8") as new_file:
+            json.dump(dy_dict, new_file, ensure_ascii=False, indent=4)
+    # 读取 new.json 和 old.json 文件的内容到变量中
+    async with aiofiles.open(new_filename, "r", encoding="utf-8") as new_file, aiofiles.open(old_filename, "r", encoding="utf-8") as old_file:
+        new_data = json.loads(await new_file.read())
+        old_data = json.loads(await old_file.read())
+    return new_data, old_data
     
-    processes = {}
-    
-    for cfg in PROCESS_CONFIGS:
-        proc = launch_process(cfg)
-        if proc:
-            processes[cfg['name']] = {
-                'process': proc,
-                'start_time': time.time(),
-                'config': cfg
-            }
-    
-    try:
-        while True:
-            time.sleep(60)
-            
-            for name, info in list(processes.items()):
-                proc = info['process']
-                cfg = info['config']
-                
-                status = proc.poll()
-                
-                if status is not None:
-                    logger.warning(f"进程 {name} (PID:{proc.pid}) 异常退出，状态码: {status}")
-                    new_proc = launch_process(cfg)
-                    if new_proc:
-                        processes[name] = {
-                            'process': new_proc,
-                            'start_time': time.time(),
-                            'config': cfg
-                        }
-                elif time.time() - info['start_time'] > 600:
-                    logger.info(f"定时重启 {name} (PID:{proc.pid})")
-                    proc.terminate()
-                    proc.wait()
-                    new_proc = launch_process(cfg)
-                    if new_proc:
-                        processes[name] = {
-                            'process': new_proc,
-                            'start_time': time.time(),
-                            'config': cfg
-                        }
-    finally:
-        cleanup_processes()
 
-if __name__ == "__main__":
-    try:
-        logger.info("====== 控制器启动 ======")
-        manage_processes()
-    except Exception as e:
-        logger.error(f"未捕获异常: {str(e)}")
-    finally:
-        logger.info("====== 控制器关闭 ======")
+async def bot():
+    """动态机器人函数，获取动态并处理"""
+    credential_uid = Credential(sessdata=config['bot']['sessdata'])
+    dy_dict = await user.User.get_dynamics_new(self=user.User(uid=config['bot']['uid'], credential=credential_uid))
+    new_data, old_data = await loads_json(dy_dict, "new.json", "old.json")
+    
+    new_maxts, new_maxid = await getmax_tsid(new_data)
+    old_maxts, old_maxid = await getmax_tsid(old_data)
+    id = int(0)
+    go = False
+    forward_dy = False
+    forward_av = False
+    pic = None
+
+    if new_maxts > old_maxts :
+        logger.info(f"最大的时间戳是: {new_maxts}, 对应的ID是: {new_maxid}")
+        go = True
+        id = new_maxid
+    if "DYNAMIC_TYPE_FORWARD" in new_data["items"][id]["type"] :
+        if "DYNAMIC_TYPE_AV" in new_data["items"][id]["orig"]["type"] :
+            forward_av = True
+        else:
+            forward_dy = True
+    elif "live_rcmd" in new_data["items"][id]["modules"]["module_dynamic"]["major"] :
+        go = False
+    
+    if forward_dy and go :
+        name = new_data["items"][0]["modules"]["module_author"]["name"]
+        title = new_data["items"][id]["modules"]["module_dynamic"]["desc"]["text"]
+        name2 = new_data["items"][id]["orig"]["modules"]["module_author"]["name"]
+        url =  "www.bilibili.com/opus/" + str(new_data["items"][id]["id_str"][2:])
+        other_url = new_data["items"][id]["orig"]["modules"]["module_dynamic"]["major"]["opus"]["jump_url"][2:]
+        text = f"【转发动态通知】\n{name}转发了{name2}的动态\n{title}\n动态地址:{url}\n原动态地址:{other_url}"
+        logger.info("有转发")
+    elif forward_av and go :
+        name = new_data["items"][0]["modules"]["module_author"]["name"]
+        title = new_data["items"][id]["modules"]["module_dynamic"]["desc"]["text"]
+        name2 = new_data["items"][id]["orig"]["modules"]["module_author"]["name"]
+        url =  "www.bilibili.com/opus/" + str(new_data["items"][id]["id_str"][2:])
+        other_url = new_data["items"][id]["orig"]["modules"]["module_dynamic"]["major"]["archive"]["jump_url"][2:]
+        text = f"【转发视频通知】\n{name}转发了{name2}的视频\n{title}\n动态地址:{url}\n原视频地址:{other_url}"
+        logger.info("有转发")
+    elif "jump_url" in new_data["items"][id]["basic"] and go:
+        name = new_data["items"][0]["modules"]["module_author"]["name"]
+        title = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["title"] or None
+        content = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["summary"]["text"] or None
+        url = new_data["items"][id]["modules"]["module_dynamic"]["major"]["opus"]["jump_url"][2:]
+        text = f"【动态通知】\n【{name}】发布了新动态\n{title}\n{content}\n动态地址:{url}"
+        logger.info("有新动态")
+    elif go :
+        name = new_data["items"][0]["modules"]["module_author"]["name"]
+        tab = new_data["items"][id]["modules"]["module_dynamic"]["desc"]["text"] or None
+        title = new_data["items"][id]["modules"]["module_dynamic"]["major"]["archive"]["title"] or None
+        pic = new_data["items"][id]["modules"]["module_dynamic"]["major"]["archive"]["cover"]
+        url = new_data["items"][id]["modules"]["module_dynamic"]["major"]["archive"]["jump_url"][2:]
+        text = f"【视频通知】\n【{name}】更新了新视频\n{tab}\n《{title}》\n视频地址:{url}"
+        logger.info("有新视频")
+    return text, pic
+
