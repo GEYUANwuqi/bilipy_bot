@@ -58,9 +58,8 @@ async def test():
         live = f"\n【直播通知】\n{name}开播啦！\n{title}\n直播地址：https://live.bilibili.com/{romm_id}"
                 
     if pic_url != None :
-    # 对文本进行转义序列编码（保留\n等字符）
+        # 对文本进行转义序列编码（保留\n等字符）
         encoded_text = live.encode('unicode_escape').decode('utf-8')
-        #下载图片
         response = requests.get(pic_url, stream=True)
         response.raise_for_status()
         filename = pic_url.split("/")[-1]
@@ -72,7 +71,6 @@ async def test():
         elif not online :
             bat_text = f"python send_qq.py -t {encoded_text} -p {pic_url} -a 0"
 
-        # 执行命令（保持不变）
         process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
         logger.info(f"执行命令: {bat_text}")
         process.wait()

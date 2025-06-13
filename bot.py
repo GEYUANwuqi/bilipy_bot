@@ -43,7 +43,6 @@ async def bot():
         """获取最大时间戳和对应的ID"""
         max_timestamp = int(0)
         max_id = None
-        # 遍历items列表中的每个元素
         list = date["items"]
         for index, item in enumerate(list):
             timestamp = item["modules"]["module_author"]["pub_ts"]
@@ -100,7 +99,6 @@ async def bot():
         logger.info("有新视频")
         
     if go:
-    # 对文本进行转义序列编码（保留\n等字符）
         encoded_text = text.encode('unicode_escape').decode('utf-8')
 
         if pic is None:
@@ -108,7 +106,6 @@ async def bot():
         elif pic != None:
             bat_text = f"python send_qq.py -t {encoded_text} -p {pic}"
 
-        # 执行命令（保持不变）
         process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
         logger.info(f"执行命令: {bat_text}")
         process.wait()
