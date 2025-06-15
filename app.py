@@ -16,8 +16,8 @@ async def getmax_tsid(date):
     """获取最大时间戳和对应的ID"""
     max_timestamp = int(0)
     max_id = None
-    list = date["items"]
-    for index, item in enumerate(list):
+    list_data = date["items"]
+    for index, item in enumerate(list_data):
         timestamp = item["modules"]["module_author"]["pub_ts"]
         # 如果max_timestamp为None或者当前时间戳大于max_timestamp，则更新最大时间戳和对应的ID
         if timestamp > max_timestamp:
