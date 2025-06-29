@@ -67,9 +67,9 @@ async def test():
             for chunk in response.iter_content(chunk_size=8192):
                 file.write(chunk)
         if online:
-            bat_text = f"python send_qq.py -t {encoded_text} -p {pic_url}"
+            bat_text = f'python send_qq.py -t "{encoded_text}" -p {pic_url}'
         elif not online :
-            bat_text = f"python send_qq.py -t {encoded_text} -p {pic_url} -a 0"
+            bat_text = f'python send_qq.py -t "{encoded_text}" -p {pic_url} -a 0'
 
         process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
         logger.info(f"执行命令: {bat_text}")

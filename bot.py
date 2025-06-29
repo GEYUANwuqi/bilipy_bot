@@ -102,9 +102,9 @@ async def bot():
         encoded_text = text.encode('unicode_escape').decode('utf-8')
 
         if pic is None:
-            bat_text = f"python send_qq.py -t {encoded_text}"
+            bat_text = f'python send_qq.py -t "{encoded_text}"'
         elif pic != None:
-            bat_text = f"python send_qq.py -t {encoded_text} -p {pic}"
+            bat_text = f'python send_qq.py -t "{encoded_text}" -p {pic}'
 
         process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
         logger.info(f"执行命令: {bat_text}")

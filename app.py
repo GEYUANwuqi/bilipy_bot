@@ -204,18 +204,18 @@ async def main():
     if live_msg is not None:
         encoded_text = live_msg.encode('unicode_escape').decode('utf-8')
         if live_online is True:
-            bat_text = f"python send_qq.py -t {encoded_text} -p {live_pic}"
+            bat_text = f'python send_qq.py -t "{encoded_text}" -p {live_pic}'
         elif live_online is False:
-            bat_text = f"python send_qq.py -t {encoded_text} -p {live_pic} -a 0"
+            bat_text = f'python send_qq.py -t "{encoded_text}" -p {live_pic} -a 0'
         await send_qq(bat_text)
         
     if dy_msg is not None:
         if dy_pic is None:
             encoded_text = dy_msg.encode('unicode_escape').decode('utf-8')
-            bat_text = f"python send_qq.py -t {encoded_text}"
+            bat_text = f'python send_qq.py -t "{encoded_text}"'
         else:
             encoded_text = dy_msg.encode('unicode_escape').decode('utf-8')
-            bat_text = f"python send_qq.py -t {encoded_text} -p {dy_pic}"
+            bat_text = f'python send_qq.py -t "{encoded_text}" -p {dy_pic}'
         await send_qq(bat_text)
 
 async def main_loop():
