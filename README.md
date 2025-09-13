@@ -38,7 +38,7 @@ bilipy_bot/
 - new.json: 存储最新的动态信息
 - old_live.json: 存储之前的直播信息
 - old.json: 存储之前的动态信息
-- config.json: 存储配置信息，包括 `sessdata`、`uid`、`at_all`、 `room_display_id` 和 `handle_list`
+- config.json: 存储配置信息，包括 `sessdata`、`uid`、`at_all`、 `room_display_id` 和 `handle_list`以及其他必要参数
 - README.md: 项目说明文件
 
 ## 安装
@@ -58,13 +58,15 @@ bilipy_bot/
 （理论Python版本不低于3.9，开发者使用3.12.4版本）
 
 ## 使用
-0. **初次使用**、**隔了很长时间使用**或**更换**`uid`和`room_display_id`使用时最好手动清除4个json数据文件中的内容
-1. 配置 `sessdata` 、`uid`、`room_display_id`、`handle_list`、`at_all`
+0. **初次使用**、**隔了很长时间使用**或**更换**`uid`和`room_display_id`使用时最好**手动清除4个json数据文件**中的内容
+1. 配置 `sessdata` 、`uid`、`room_display_id`、`handle_list`、`at_all`、`ntqq`、`sleep_time`
 - `sessdata`是b站的cookie，需要先登录账号后再f12中获取（具体查看[bilibili_api的开发文档](https://nemo2011.github.io/bilibili-api/#/get-credential)）
 - `uid`即被监测的用户uid，直接取网址中用户uid即可
 - `room_display_id`即被监测的直播间id，直接取网址中直播间id即可
 - `handle_list`即需要发送通知的群组或者私信的“标题”，即群组名或者好友名（例如我需要发到群组“阿b直播通知1群”，那直接填此群组名即可）
 - `at_all`即是否需要@全体成员，填`true`或者`false`
+- `ntqq`即是否为ntqq，如果使用新版qq的话需要填`true`，默认`false`
+- `sleep_time`即send_qq模块的操作间隔休眠时间，可填正整数及浮点，默认2秒
 2. 运行 app.py 启动一键监控
     ```sh
     python app.py
@@ -73,6 +75,12 @@ bilipy_bot/
     ```sh
     python bot.py / live.py
     ```
+
+## QQ的相关设置
+### 老版本[QQ9.7.23](https://dldir1.qq.com/qqfile/qq/PCQQ9.7.23/QQ9.7.23.29400.exe)
+- 登录账号后将群组以单独窗口打开后，使窗口位于前台即可，不可合并窗口
+### 新版本[QQNT](https://im.qq.com/pcqq/index.shtml)
+- 登录账号后需要右键群组并选择“打开独立聊天窗口”，不可合并窗口
 
 ## 算法实现方式
 - 先使用api获取数据，然后与之前的数据进行对比，如果数据有变化，则发送通知
@@ -84,7 +92,7 @@ bilipy_bot/
 - app.py的核心逻辑使用了全异步方式，对于数据获取以及处理而使用的异步的方案对并发任务的效率影响非常大
 - 在发送消息的时候，每一步都有2s的巨大延迟，这个是为了项目在低配置下的服务器（例如2v2G）上稳定运行，如果服务器够好，可以适当减小延迟，不过不建议取消延迟（哪怕只有0.1s）
 - 理论上可以实现无限个群和私信的发送，不过开发者最多只测试过同时发3个群组
-- QQ版本固定[9.7.23](https://dldir1.qq.com/qqfile/qq/PCQQ9.7.23/QQ9.7.23.29400.exe)，因为新架构的NTQQ无法通过窗口名获取句柄，也就无法发送消息
+- QQ版本可以使用[9.7.23](https://dldir1.qq.com/qqfile/qq/PCQQ9.7.23/QQ9.7.23.29400.exe)，也可以使用新版的[QQNT](https://im.qq.com/pcqq/index.shtml)，使用QQNT的时，应当在config文件中修改ntqq为true
 - 单个系统环境下仅可监控同一个uid的动态和直播，如果进行多线程，粘贴板会出现混乱的
 
 ## 一般错误分析以及注意事项

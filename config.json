@@ -10,5 +10,7 @@
         "room_display_id":"",
         "handle_list": ["测试", "test", "BOT"],
         "at_all":false
-    }
+    },
+    "ntqq":false,
+    "sleep_time":2
 }
