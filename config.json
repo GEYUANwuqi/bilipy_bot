@@ -1,16 +1,33 @@
 {
-    "bot":{
-        "sessdata":"", 
-        "uid":"",
-        "handle_list": ["测试", "test", "BOT"],
-        "at_all":false
-    },
-    "live":{
-        "sessdata":"", 
-        "room_display_id":"",
-        "handle_list": ["测试", "test", "BOT"],
-        "at_all":false
-    },
-    "ntqq":false,
-    "sleep_time":2
+  "bot": {
+    "sessdata": "",
+    "uid": "",
+    "handle_list": ["测试", "test", "BOT"],
+    "class_list": ["TXGuiFoundation", "Chrome_WidgetWin_1"],
+    "_comment": "该独立分支暂不考虑bot和at_all，下播默认-a参数也不会发送下播通知",
+    "at_all": false,
+        
+    "sleep_config": {
+      "window_activate": 0.2,
+      "paste": 0.2,
+      "enter": 0.2,
+      "loop": 1
+    }
+  },
+  "live": {
+    "sessdata": "",
+    "room_display_id": "",
+    "handle_list": ["测试", "test", "BOT"],
+    "class_list": ["TXGuiFoundation", "Chrome_WidgetWin_1"],
+    "_comment": "类名，用于不同环境匹配",
+    "at_all": false,
+        
+    "sleep_config": {
+      "_comment": "window_activate：激活窗口的延迟（秒）paste：粘贴文本或图片的延迟（秒）enter：按回车发送的延迟（秒）loop：循环间隔延迟（秒）",
+      "window_activate": 0.1,
+      "paste": 0.2,
+      "enter": 0.1,
+      "loop": 1
+    }
+  }
 }
