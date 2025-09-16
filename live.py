@@ -55,7 +55,7 @@ async def test():
         pic_url = new_info["room_info"]["cover"]
         logger.info("上播")
         online = True
-        live = f"\n【直播通知】\n{name}开播啦！\n{title}\n直播地址：https://live.bilibili.com/{romm_id}"
+        live = f"【直播通知】\n{name}开播啦~\n[{title}]\n直播地址：https://live.bilibili.com/{romm_id}"
                 
     if pic_url != None :
         # 对文本进行转义序列编码（保留\n等字符）
