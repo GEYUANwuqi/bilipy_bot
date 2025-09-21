@@ -22,7 +22,6 @@ parser = argparse.ArgumentParser(description="发送消息到QQ窗口")
 parser.add_argument('-t', '--text', required=True, help="发送的文本内容")
 parser.add_argument('-p', '--pic', default=None, help="图片URL")
 parser.add_argument('-c', '--config_type', default="live", choices=["bot","live"], help="配置段：bot/live")
-parser.add_argument('-a', '--at_all', type=int, choices=[0, 1], help="是否@全体成员 (0:否, 1:是)", default=None)
 parser.add_argument('--dry-run', action='store_true', help="只调试不实际发送")
 args = parser.parse_args()
 
@@ -35,10 +34,8 @@ handle_list = cfg.get("handle_list", [])
 config_at_all = bool(cfg.get("at_all", False))
 use_setforeground = bool(cfg.get("use_setforeground", True))  # 旧版QQ前台激活可选
 
-if args.at_all is not None:
-    final_at_all = bool(args.at_all)
-else:
-    final_at_all = config_at_all
+# 删除对 -a 参数的解析，直接使用配置文件中的设置
+final_at_all = config_at_all
 
 logger.info(f"匹配窗口列表: {handle_list}, @所有人: {final_at_all}, 旧版QQ SetForegroundWindow: {use_setforeground}")
 
