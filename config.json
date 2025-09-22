@@ -1,16 +1,31 @@
 {
-    "bot":{
-        "sessdata":"", 
-        "uid":"",
+    "bot": {
+        "sessdata": "",
+        "uid": "",
         "handle_list": ["测试", "test", "BOT"],
-        "at_all":false
+        "class_list": ["TXGuiFoundation", "Chrome_WidgetWin_1"],
+        "at_all": false,
+        "sleep_config": {
+            "window_activate": 0.2,
+            "paste": 0.2,
+            "enter": 0.2,
+            "loop": 1
+        }
     },
-    "live":{
-        "sessdata":"", 
-        "room_display_id":"",
-        "handle_list": ["测试", "test", "BOT"],
-        "at_all":false
+    "live": {
+        "sessdata": "9ff14338%2C1759584628%2C4e814%2A42CjAHa7g9KR2WWvwU9LQ4pDU6wvTikKtoYlgpaPCbSFcdRAswE3IF4-ksmkQkjH0UuqESVjlHZVJXR2JRM2kyLXUzSXltX25sRWdMU2JUQXE3TUs2UW83OTgzeTgxUnZ0b0Raa1pJdE9iX1Z3N2tuOUY5bnNkS1RXVnMyd21iNW05VGlzd2t6aHN3IIEC",
+        "room_display_id": "30690803",
+        "handle_list": ["響皇登基第二年"],
+        "class_list": ["TXGuiFoundation", "Chrome_WidgetWin_1"],
+        "at_all": false,
+        "sleep_config": {
+            "_comment": "window_activate：激活窗口的延迟（秒）paste：粘贴文本或图片的延迟（秒）enter：按回车发送的延迟（秒）loop：循环间隔延迟（秒）",
+            "window_activate": 0.2,
+            "paste": 0.2,
+            "enter": 0.2,
+            "loop": 1
+        }
     },
-    "ntqq":false,
-    "sleep_time":2
+    "ntqq": false,
+    "sleep_time": 2
 }
