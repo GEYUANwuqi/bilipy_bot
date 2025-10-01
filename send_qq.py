@@ -10,80 +10,65 @@ import win32clipboard
 import win32api
 from PIL import Image
 import re
-import logging
+from logger import setup_logger
 import glob
+from typing import Optional
+import argparse
+logger = setup_logger(filename='send_qq')
 
-# ------------------ Logger ------------------
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("send_qq")
-
-# ------------------ 命令行参数 ------------------
+class ArgsType(argparse.Namespace):
+    text: str
+    pic: Optional[str]
+    at_all: Optional[int]
+    dry_run: bool
 parser = argparse.ArgumentParser(description="发送消息到QQ窗口")
 parser.add_argument('-t', '--text', required=True, help="发送的文本内容")
 parser.add_argument('-p', '--pic', default=None, help="图片URL")
-parser.add_argument('-c', '--config_type', default="live", choices=["bot","live"], help="配置段：bot/live")
-parser.add_argument('-a', '--at_all', type=int, choices=[0, 1], help="是否@全体成员 (0:否, 1:是)", default=None)
+parser.add_argument('-a', '--at_all', type=int, choices=[0, 1], help="是否@全体成员 (0:否, 1:是)", default=0)
 parser.add_argument('--dry-run', action='store_true', help="只调试不实际发送")
-args = parser.parse_args()
+args = parser.parse_args(namespace=ArgsType())
+logger.debug(f"命令行参数: {args}")
 
-# ------------------ 配置读取 ------------------
 with open("config.json", "r", encoding="utf-8") as f:
     config = json.load(f)
-
-cfg = config[args.config_type]
-handle_list = cfg.get("handle_list", [])
-class_list = cfg.get("class_list", ["TXGuiFoundation", "Chrome_WidgetWin_1"])
-config_at_all = bool(cfg.get("at_all", False))
-sleep_config = cfg.get("sleep_config", {})
-ntqq = config.get("ntqq", False)  # 全局QQNT设置
+config = config.get("send_qq", {})
+handle_list = config.get("handle_list", [])
+class_list = ["TXGuiFoundation", "Chrome_WidgetWin_1"]
+config_at_all = bool(config.get("at_all", False))
+ntqq = config.get("ntqq", False) 
 sleep_time = config.get("sleep_time", 2)  # 全局延迟设置
-
-# 从sleep_config中获取具体延迟时间，如果没有则使用默认值
-window_activate_delay = sleep_config.get("window_activate", 0.2)
-paste_delay = sleep_config.get("paste", 0.2)
-enter_delay = sleep_config.get("enter", 0.2)
-loop_delay = sleep_config.get("loop", 1)
 
 if args.at_all is not None:
     final_at_all = bool(args.at_all)
+    logger.debug(f"命令行指定at_all为 {final_at_all}")
 else:
     final_at_all = config_at_all
+    logger.debug(f"从config读取at_all为 {final_at_all}")
 
 logger.info(f"匹配窗口列表: {handle_list}, 类名列表: {class_list}, @所有人: {final_at_all}, QQNT模式: {ntqq}")
-logger.info(f"延迟配置: 激活{window_activate_delay}s, 粘贴{paste_delay}s, 回车{enter_delay}s, 循环{loop_delay}s")
 
 # ------------------ 文本解析 ------------------
-def decode_unicode_escapes(text):
-    text = re.sub(r'\\u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1),16)), text)
-    text = text.replace("\\n", "\n")
-    text = text.strip('"')
-    return text
-
-text = decode_unicode_escapes(args.text)
+# 对文本参数进行反转义处理
+if args.text:
+    # 先还原转义序列，再解码
+    text = args.text.encode('utf-8').decode('unicode_escape')
+else:
+    text = None
 logger.info(f"最终发送文本:\n{text}")
 
 # ------------------ 下载图片 ------------------
-filename = None
+image_data = None
 if args.pic:
+    logger.debug(f"图片URL: {args.pic}")
+    logger.info("尝试进行图片下载")
     try:
-        # 从URL中提取文件名
-        url_parts = args.pic.split("/")
-        url_filename = url_parts[-1] if url_parts[-1] else url_parts[-2]
-        
-        # 确保有.jpg扩展名
-        if not url_filename.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp')):
-            url_filename += ".jpg"
-            
         response = requests.get(args.pic, stream=True)
         response.raise_for_status()
-        filename = url_filename
-        with open(filename, "wb") as f:
-            for chunk in response.iter_content(8192):
-                f.write(chunk)
-        logger.info(f"图片下载成功: {filename}")
+        image_data = io.BytesIO(response.content)
+        logger.info("图片下载成功并保存到内存")
     except Exception as e:
         logger.error(f"图片下载失败: {e}")
-        filename = None
+        image_data = None
 
 # ------------------ 窗口匹配 ------------------
 def enum_windows_callback(hwnd, hwnds):
@@ -122,7 +107,7 @@ def activate_window(hwnd, cls, is_ntqq):
         else:
             # 旧版QQ使用后台模式
             logger.info(f"使用后台模式 (旧版QQ)")
-        time.sleep(window_activate_delay)
+        time.sleep(sleep_time)
         return True
     except Exception as e:
         logger.error(f"窗口激活失败: {e}")
@@ -148,16 +133,16 @@ def paste_text_to_window(hwnd, text, is_ntqq):
             # 旧版QQ模式：后台发送消息
             win32gui.SendMessage(hwnd, win32con.WM_PASTE, 0, 0)
         
-        time.sleep(paste_delay)
+        time.sleep(sleep_time)
         return True
     except Exception as e:
         logger.error(f"文本粘贴失败: {e}")
         return False
 
-def paste_image_to_window(hwnd, filename, is_ntqq):
+def paste_image_to_window(hwnd, image_data, is_ntqq):
     """粘贴图片到窗口，根据模式选择前台或后台粘贴"""
     try:
-        image = Image.open(filename)
+        image = Image.open(image_data)
         output = io.BytesIO()
         image.convert("RGB").save(output, "BMP")
         data = output.getvalue()[14:]  # 去除BMP头
@@ -178,7 +163,7 @@ def paste_image_to_window(hwnd, filename, is_ntqq):
             # 旧版QQ模式：后台发送消息
             win32gui.SendMessage(hwnd, win32con.WM_PASTE, 0, 0)
         
-        time.sleep(paste_delay)
+        time.sleep(sleep_time)
         return True
     except Exception as e:
         logger.error(f"图片粘贴失败: {e}")
@@ -196,7 +181,7 @@ def send_enter_to_window(hwnd, is_ntqq):
             win32gui.SendMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
             win32gui.SendMessage(hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0)
         
-        time.sleep(enter_delay)
+        time.sleep(sleep_time)
         return True
     except Exception as e:
         logger.error(f"发送回车失败: {e}")
@@ -220,7 +205,8 @@ def cleanup_old_images(keep_filename=None):
         except Exception as e:
             logger.debug(f"清理文件失败 {file}: {e}")
 
-# ------------------ 主流程 ------------------
+class_list=  ["TXGuiFoundation", "Chrome_WidgetWin_1"]
+
 try:
     for hwnd, title, cls in matched_windows:
         logger.info(f"处理窗口: {title} (句柄: {hwnd}, 类名: {cls})")
@@ -240,14 +226,14 @@ try:
         if final_at_all:
             paste_text_to_window(hwnd, "@所有人", is_ntqq_mode)
             send_enter_to_window(hwnd, is_ntqq_mode)
-            time.sleep(loop_delay)
+            time.sleep(sleep_time)
 
         # 发送文本
         paste_text_to_window(hwnd, text, is_ntqq_mode)
 
         # 发送图片
-        if filename:
-            paste_image_to_window(hwnd, filename, is_ntqq_mode)
+        if image_data:
+            paste_image_to_window(hwnd, image_data, is_ntqq_mode)
 
         # 最终发送
         send_enter_to_window(hwnd, is_ntqq_mode)
@@ -258,9 +244,3 @@ try:
 
 except Exception as e:
     logger.error(f"发送过程中出现错误: {e}")
-
-finally:
-    # 清理旧图片，保留当前使用的图片
-    cleanup_old_images(filename)
-    if filename:
-        logger.info(f"新图片 {filename} 已保留")
