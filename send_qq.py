@@ -14,6 +14,7 @@ from typing import Optional
 import argparse
 logger = setup_logger(filename='send_qq')
 
+# 命令行解析
 class ArgsType(argparse.Namespace):
     text: str
     pic: Optional[str]
@@ -22,37 +23,48 @@ class ArgsType(argparse.Namespace):
 parser = argparse.ArgumentParser(description="发送消息到QQ窗口")
 parser.add_argument('-t', '--text', required=True, help="发送的文本内容")
 parser.add_argument('-p', '--pic', default=None, help="图片URL")
-parser.add_argument('-a', '--at_all', type=int, choices=[0, 1], help="是否@全体成员 (0:否, 1:是)", default=0)
+parser.add_argument('-a', '--at_all', required=True, type=int, choices=[0,1], help="是否@全体成员 (0:否 1:是)")
 parser.add_argument('--dry-run', action='store_true', help="只调试不实际发送")
 args = parser.parse_args(namespace=ArgsType())
 logger.debug(f"命令行参数: {args}")
 
+# 参数解析
 with open("config.json", "r", encoding="utf-8") as f:
-    config = json.load(f)
-config = config.get("send_qq", {})
-handle_list = config.get("handle_list", [])
-class_list = ["TXGuiFoundation", "Chrome_WidgetWin_1"]
-config_at_all = bool(config.get("at_all", False))
-ntqq = config.get("ntqq", False) 
-sleep_time = config.get("sleep_time", 2)  # 全局延迟设置
+    config:dict = json.load(f)
+config:dict = config.get("send_qq")
 
-if args.at_all is not None:
-    final_at_all = bool(args.at_all)
-    logger.debug(f"命令行指定at_all为 {final_at_all}")
+sleep_time:int = config.get("sleep_time")
+if args.at_all == 1 :
+    final_at_all = True
+    logger.debug("因命令行参数开启@全体成员")
+else :
+    final_at_all = False
+    logger.debug("因命令行参数关闭@全体成员")
+
+if config.get("auto"):
+    class_list = ["TXGuiFoundation", "Chrome_WidgetWin_1"]
+    pattern = "自动模式".startswith
+    logger.debug("自动模式: 同时匹配TXGuiFoundation和Chrome_WidgetWin_1")
+elif config.get("ntqq"):
+    class_list = ["Chrome_WidgetWin_1"]
+    pattern = "QQNT模式"
+    logger.debug("QQNT模式: 匹配Chrome_WidgetWin_1")
 else:
-    final_at_all = config_at_all
-    logger.debug(f"从config读取at_all为 {final_at_all}")
+    class_list = ["TXGuiFoundation"]
+    pattern = "旧版QQ模式"
+    logger.debug("旧版QQ模式: 匹配TXGuiFoundation")
 
-logger.info(f"匹配窗口列表: {handle_list}, 类名列表: {class_list}, @所有人: {final_at_all}, QQNT模式: {ntqq}")
+handle_list = config.get("handle_list")
+logger.info(f"匹配窗口列表: {handle_list}, 类名列表: {class_list}, @所有人: {final_at_all}, 窗口匹配模式: {pattern}")
 
-# ------------------ 文本解析 ------------------
+# 文本解析
 # 对文本参数进行反转义处理
 # 先还原转义序列，再解码
 logger.debug(f"原始文本: {args.text}")
 text = args.text.encode('utf-8').decode('unicode_escape')
 logger.info(f"发送文本:\n{text}")
 
-# ------------------ 下载图片 ------------------
+# 存入图片
 image_data = None
 if args.pic:
     logger.debug(f"图片URL: {args.pic}")
@@ -64,10 +76,9 @@ if args.pic:
         logger.info("图片下载成功并保存到内存")
     except Exception as e:
         logger.error(f"图片下载失败: {e}")
-        image_data = None
 
 # ------------------ 窗口匹配 ------------------
-def enum_windows_callback(hwnd, hwnds):
+def enum_windows_callback(hwnd, hwnds:list):
     if win32gui.IsWindowVisible(hwnd):
         title = win32gui.GetWindowText(hwnd)
         cls = win32gui.GetClassName(hwnd)
@@ -96,7 +107,7 @@ logger.info(f"找到 {len(matched_windows)} 个匹配窗口")
 def activate_window(hwnd, cls, is_ntqq):
     try:
         win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-        if is_ntqq or cls == "Chrome_WidgetWin_1":
+        if is_ntqq :
             # QQNT 或配置为QQNT模式的窗口使用前台激活
             win32gui.SetForegroundWindow(hwnd)
             logger.info(f"使用前台激活模式 (QQNT/Chrome窗口)")
@@ -183,17 +194,17 @@ def send_enter_to_window(hwnd, is_ntqq):
         logger.error(f"发送回车失败: {e}")
         return False
 
-
-class_list=  ["TXGuiFoundation", "Chrome_WidgetWin_1"]
-
 try:
     for hwnd, title, cls in matched_windows:
         logger.info(f"处理窗口: {title} (句柄: {hwnd}, 类名: {cls})")
         
         # 判断是否为QQNT模式
-        is_ntqq_mode = ntqq or cls == "Chrome_WidgetWin_1"
+        if cls == "Chrome_WidgetWin_1":
+            is_ntqq = True
+        else:
+            is_ntqq = False
         
-        if not activate_window(hwnd, cls, is_ntqq_mode):
+        if not activate_window(hwnd, cls, is_ntqq):
             logger.error("窗口激活失败，跳过此窗口")
             continue
 
@@ -203,19 +214,18 @@ try:
 
         # @全体成员
         if final_at_all:
-            paste_text_to_window(hwnd, "@所有人", is_ntqq_mode)
-            send_enter_to_window(hwnd, is_ntqq_mode)
-            time.sleep(sleep_time)
+            paste_text_to_window(hwnd, "@", is_ntqq)
+            send_enter_to_window(hwnd, is_ntqq)
 
         # 发送文本
-        paste_text_to_window(hwnd, text, is_ntqq_mode)
+        paste_text_to_window(hwnd, text, is_ntqq)
 
         # 发送图片
         if image_data:
-            paste_image_to_window(hwnd, image_data, is_ntqq_mode)
+            paste_image_to_window(hwnd, image_data, is_ntqq)
 
         # 最终发送
-        send_enter_to_window(hwnd, is_ntqq_mode)
+        send_enter_to_window(hwnd, is_ntqq)
         logger.info(f"消息已发送到窗口: {title}")
         
         # 窗口间延迟
