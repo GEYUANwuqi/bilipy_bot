@@ -9,9 +9,7 @@ import win32con
 import win32clipboard
 import win32api
 from PIL import Image
-import re
 from logger import setup_logger
-import glob
 from typing import Optional
 import argparse
 logger = setup_logger(filename='send_qq')
@@ -19,7 +17,7 @@ logger = setup_logger(filename='send_qq')
 class ArgsType(argparse.Namespace):
     text: str
     pic: Optional[str]
-    at_all: Optional[int]
+    at_all: int
     dry_run: bool
 parser = argparse.ArgumentParser(description="发送消息到QQ窗口")
 parser.add_argument('-t', '--text', required=True, help="发送的文本内容")
@@ -49,12 +47,10 @@ logger.info(f"匹配窗口列表: {handle_list}, 类名列表: {class_list}, @�
 
 # ------------------ 文本解析 ------------------
 # 对文本参数进行反转义处理
-if args.text:
-    # 先还原转义序列，再解码
-    text = args.text.encode('utf-8').decode('unicode_escape')
-else:
-    text = None
-logger.info(f"最终发送文本:\n{text}")
+# 先还原转义序列，再解码
+logger.debug(f"原始文本: {args.text}")
+text = args.text.encode('utf-8').decode('unicode_escape')
+logger.info(f"发送文本:\n{text}")
 
 # ------------------ 下载图片 ------------------
 image_data = None
@@ -187,23 +183,6 @@ def send_enter_to_window(hwnd, is_ntqq):
         logger.error(f"发送回车失败: {e}")
         return False
 
-# ------------------ 清理旧图片 ------------------
-def cleanup_old_images(keep_filename=None):
-    """清理旧的图片文件，保留当前使用的文件"""
-    image_extensions = ('*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp')
-    image_files = []
-    
-    for ext in image_extensions:
-        image_files.extend(glob.glob(ext))
-    
-    for file in image_files:
-        if keep_filename and file == keep_filename:
-            continue
-        try:
-            os.remove(file)
-            logger.info(f"已清理旧图片: {file}")
-        except Exception as e:
-            logger.debug(f"清理文件失败 {file}: {e}")
 
 class_list=  ["TXGuiFoundation", "Chrome_WidgetWin_1"]
 
@@ -241,6 +220,6 @@ try:
         
         # 窗口间延迟
         time.sleep(sleep_time)
-
 except Exception as e:
     logger.error(f"发送过程中出现错误: {e}")
+exit(0)
