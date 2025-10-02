@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import io
 import time
 import requests
@@ -31,9 +30,9 @@ logger.debug(f"命令行参数: {args}")
 # 参数解析
 with open("config.json", "r", encoding="utf-8") as f:
     config:dict = json.load(f)
-config:dict = config.get("send_qq")
+config:dict = config.get("send_qq") # type:ignore
 
-sleep_time:int = config.get("sleep_time")
+sleep_time:int = config.get("sleep_time") # type:ignore
 if args.at_all == 1 :
     final_at_all = True
     logger.debug("因命令行参数开启@全体成员")
@@ -43,7 +42,7 @@ else :
 
 if config.get("auto"):
     class_list = ["TXGuiFoundation", "Chrome_WidgetWin_1"]
-    pattern = "自动模式".startswith
+    pattern = "自动模式"
     logger.debug("自动模式: 同时匹配TXGuiFoundation和Chrome_WidgetWin_1")
 elif config.get("ntqq"):
     class_list = ["Chrome_WidgetWin_1"]
@@ -107,13 +106,14 @@ logger.info(f"找到 {len(matched_windows)} 个匹配窗口")
 def activate_window(hwnd, cls, is_ntqq):
     try:
         win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+        logger.info(f"活动窗口: {cls} - {title}")
         if is_ntqq :
             # QQNT 或配置为QQNT模式的窗口使用前台激活
             win32gui.SetForegroundWindow(hwnd)
-            logger.info(f"使用前台激活模式 (QQNT/Chrome窗口)")
+            logger.info(f"前台激活{hwnd} (QQNT/Chrome窗口)")
         else:
             # 旧版QQ使用后台模式
-            logger.info(f"使用后台模式 (旧版QQ)")
+            logger.info(f"后台激活{hwnd} (旧版QQ)")
         time.sleep(sleep_time)
         return True
     except Exception as e:
@@ -129,6 +129,7 @@ def paste_text_to_window(hwnd, text, is_ntqq):
         win32clipboard.EmptyClipboard()
         win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, text)
         win32clipboard.CloseClipboard()
+        logger.debug(f"设置剪贴板为{text}")
         
         if is_ntqq:
             # QQNT模式：前台粘贴
@@ -136,10 +137,12 @@ def paste_text_to_window(hwnd, text, is_ntqq):
             win32api.keybd_event(0x56, 0, 0, 0)  # V
             win32api.keybd_event(0x56, 0, win32con.KEYEVENTF_KEYUP, 0)
             win32api.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+            logger.debug("前台粘贴V")
         else:
             # 旧版QQ模式：后台发送消息
             win32gui.SendMessage(hwnd, win32con.WM_PASTE, 0, 0)
-        
+            logger.debug("后台发送WM_PASTE")
+        logger.info(f"粘贴{text}到{hwnd}")
         time.sleep(sleep_time)
         return True
     except Exception as e:
@@ -166,10 +169,12 @@ def paste_image_to_window(hwnd, image_data, is_ntqq):
             win32api.keybd_event(0x56, 0, 0, 0)  # V
             win32api.keybd_event(0x56, 0, win32con.KEYEVENTF_KEYUP, 0)
             win32api.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+            logger.debug("前台粘贴V")
         else:
             # 旧版QQ模式：后台发送消息
             win32gui.SendMessage(hwnd, win32con.WM_PASTE, 0, 0)
-        
+            logger.debug("后台发送WM_PASTE")
+        logger.info(f"粘贴图片到{hwnd}")
         time.sleep(sleep_time)
         return True
     except Exception as e:
@@ -183,12 +188,15 @@ def send_enter_to_window(hwnd, is_ntqq):
             # QQNT模式：前台发送
             win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
             win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+            logger.debug("前台发送回车")
         else:
             # 旧版QQ模式：后台发送回车
             win32gui.SendMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
             win32gui.SendMessage(hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0)
+            logger.debug("后台发送回车")
         
         time.sleep(sleep_time)
+        logger.info(f"发送回车到{hwnd}")
         return True
     except Exception as e:
         logger.error(f"发送回车失败: {e}")
@@ -196,13 +204,13 @@ def send_enter_to_window(hwnd, is_ntqq):
 
 try:
     for hwnd, title, cls in matched_windows:
-        logger.info(f"处理窗口: {title} (句柄: {hwnd}, 类名: {cls})")
-        
         # 判断是否为QQNT模式
         if cls == "Chrome_WidgetWin_1":
             is_ntqq = True
+            logger.info(f"检测到{hwnd}窗口{title}为{cls}，使用QQNT模式发送")
         else:
             is_ntqq = False
+            logger.info(f"检测到{hwnd}窗口{title}为{cls}，使用旧版QQ模式发送")
         
         if not activate_window(hwnd, cls, is_ntqq):
             logger.error("窗口激活失败，跳过此窗口")
@@ -230,6 +238,7 @@ try:
         
         # 窗口间延迟
         time.sleep(sleep_time)
+        logger.debug(f"窗口间延迟{sleep_time}秒")
 except Exception as e:
     logger.error(f"发送过程中出现错误: {e}")
 exit(0)
