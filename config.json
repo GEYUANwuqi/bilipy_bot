@@ -1,16 +1,21 @@
 {
-    "bot":{
-        "sessdata":"", 
-        "uid":"",
-        "handle_list": ["测试", "test", "BOT"],
-        "at_all":false
+    "bot": {
+        "_info": "sessdata:cookie, uid:UP主的UID, at_all:是否@所有人(全部类型)",
+        "sessdata": "",
+        "uid": "",
+        "at_all": false
     },
-    "live":{
-        "sessdata":"", 
-        "room_display_id":"",
-        "handle_list": ["测试", "test", "BOT"],
-        "at_all":false
+    "live": {
+        "_info": "sessdata:cookie, room_display_id:直播间ID, at_all:是否@所有人(仅开播通知生效)",
+        "sessdata": "",
+        "room_display_id": "",
+        "at_all": false
     },
-    "ntqq":false,
-    "sleep_time":2
+    "send_qq": {
+        "_info": "auto:自动寻找qq窗口, ntqq:是否启用QQNT发送消息, handle_list:窗口标题关键词列表, sleep_time:全局操作延迟时间(秒)",
+        "auto": true,
+        "ntqq": false,
+        "handle_list": ["测试", "test", "BOT"],
+        "sleep_time": 2
+    }
 }
