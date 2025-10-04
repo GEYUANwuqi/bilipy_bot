@@ -11,6 +11,7 @@ from PIL import Image
 from logger import setup_logger
 from typing import Optional
 import argparse
+import base64
 logger = setup_logger(filename='send_qq')
 
 # 命令行解析
@@ -59,8 +60,8 @@ logger.info(f"匹配窗口列表: {handle_list}, 类名列表: {class_list}, @�
 # 文本解析
 # 对文本参数进行反转义处理
 # 先还原转义序列，再解码
-logger.debug(f"原始文本: {args.text}")
-text = args.text.encode('utf-8').decode('unicode_escape')
+logger.debug(f"原始文本(Base64): {args.text}")
+text = base64.b64decode(args.text).decode('utf-8')
 logger.info(f"发送文本:\n{text}")
 
 # 存入图片

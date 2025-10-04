@@ -1,11 +1,11 @@
 from time import sleep
 from bilibili_api import Credential, sync
 from bilibili_api.live import LiveRoom
-import requests
 import subprocess
 from logger import setup_logger
 import os
 import json
+import base64
 
 logger = setup_logger(filename='live')
 
@@ -13,7 +13,7 @@ logger = setup_logger(filename='live')
 with open('config.json', 'r', encoding='utf-8') as config_file:
     config = json.load(config_file)
 
-async def test():
+async def live():
     """主函数，获取直播间信息并处理"""
     credential_uid = Credential(sessdata=config['live']['sessdata'])
     live = await LiveRoom.get_room_info(self=LiveRoom(credential=credential_uid, room_display_id=config['live']['room_display_id']))
@@ -56,31 +56,26 @@ async def test():
         logger.info("上播")
         online = True
         live = f"\n【直播通知】\n{name}开播啦！\n{title}\n直播地址：https://live.bilibili.com/{romm_id}"
-                
+
     if pic_url != None :
         # 对文本进行转义序列编码（保留\n等字符）
-        encoded_text = live.encode('unicode_escape').decode('utf-8')
-        response = requests.get(pic_url, stream=True)
-        response.raise_for_status()
-        filename = pic_url.split("/")[-1]
-        with open(filename, 'wb') as file:
-            for chunk in response.iter_content(chunk_size=8192):
-                file.write(chunk)
+        logger.info(f"原始文本: {live}")
+        encoded_text = base64.b64encode(live.encode('utf-8')).decode('ascii')
+        logger.debug(f"编码后文本(Base64): {encoded_text}")
         if online:
-            bat_text = f'python send_qq.py -t "{encoded_text}" -p {pic_url}'
+            bat_text = f"python send_qq.py -t {encoded_text} -p {pic_url} -a 1"
         elif not online :
-            bat_text = f'python send_qq.py -t "{encoded_text}" -p {pic_url} -a 0'
+            bat_text = f"python send_qq.py -t {encoded_text} -p {pic_url} -a 0"
 
         process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
         logger.info(f"执行命令: {bat_text}")
         process.wait()
         logger.info("命令执行完毕")
-    
 
 if __name__ == "__main__":
     while True:
         try:
-            sync(test())
+            sync(live())
         except Exception as e:
             logger.error(f"发生错误: {e}")
         logger.info(f"等待10秒")
