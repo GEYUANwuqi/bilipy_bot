@@ -5,6 +5,7 @@ import aiofiles
 from bilibili_api import Credential, user
 from bilibili_api.live import LiveRoom
 from logger import setup_logger
+import base64
 
 logger = setup_logger(filename='app')
 
@@ -196,26 +197,26 @@ async def main():
     results = await asyncio.gather(*tasks)
 
     live_data = results[0]
-    bot_data = results[1]
+    bot_data= results[1]
 
     live_online, live_msg, live_pic = live_data
     dy_msg, dy_pic = bot_data
     
     if live_msg is not None:
-        encoded_text = live_msg.encode('unicode_escape').decode('utf-8')
+        encoded_text = base64.b64encode(live_msg.encode('utf-8')).decode('ascii')
         if live_online is True:
-            bat_text = f'python send_qq.py -t "{encoded_text}" -p {live_pic}'
+            bat_text = f'python send_qq.py -t "{encoded_text}" -p {live_pic} -a 1'
         elif live_online is False:
             bat_text = f'python send_qq.py -t "{encoded_text}" -p {live_pic} -a 0'
         await send_qq(bat_text)
         
     if dy_msg is not None:
         if dy_pic is None:
-            encoded_text = dy_msg.encode('unicode_escape').decode('utf-8')
-            bat_text = f'python send_qq.py -t "{encoded_text}"'
+            encoded_text = base64.b64encode(dy_msg.encode('utf-8')).decode('ascii')
+            bat_text = f"python send_qq.py -t {encoded_text} -a 1"
         else:
-            encoded_text = dy_msg.encode('unicode_escape').decode('utf-8')
-            bat_text = f'python send_qq.py -t "{encoded_text}" -p {dy_pic}'
+            encoded_text = base64.b64encode(dy_msg.encode('utf-8')).decode('ascii')
+            bat_text = f"python send_qq.py -t {encoded_text} -p {dy_pic} -a 1"
         await send_qq(bat_text)
 
 async def main_loop():

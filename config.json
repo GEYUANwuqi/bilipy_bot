@@ -1,11 +1,11 @@
 {
     "bot": {
-        "_info": "sessdata:cookie, uid:UP主的UID, at_all:是否@所有人(全部类型)",
+        "_info": "sessdata:cookie, uid:UP主的UID",
         "sessdata": "",
         "uid": ""
     },
     "live": {
-        "_info": "sessdata:cookie, room_display_id:直播间ID, at_all:是否@所有人(仅开播通知生效)",
+        "_info": "sessdata:cookie, room_display_id:直播间I",
         "sessdata": "",
         "room_display_id": ""
     },

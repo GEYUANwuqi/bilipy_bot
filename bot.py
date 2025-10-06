@@ -5,6 +5,7 @@ import os
 import json
 from logger import setup_logger
 import subprocess
+import base64
 
 logger = setup_logger(filename='bot')
 
@@ -99,12 +100,12 @@ async def bot():
         logger.info("有新视频")
         
     if go:
-        encoded_text = text.encode('unicode_escape').decode('utf-8')
+        encoded_text = base64.b64encode(text.encode('utf-8')).decode('ascii')
 
         if pic is None:
-            bat_text = f'python send_qq.py -t "{encoded_text}"'
+            bat_text = f"python send_qq.py -t {encoded_text} -a 1"
         elif pic != None:
-            bat_text = f'python send_qq.py -t "{encoded_text}" -p {pic}'
+            bat_text = f"python send_qq.py -t {encoded_text} -p {pic} -a 1"
 
         process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
         logger.info(f"执行命令: {bat_text}")

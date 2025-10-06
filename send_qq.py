@@ -30,10 +30,14 @@ logger.debug(f"命令行参数: {args}")
 
 # 参数解析
 with open("config.json", "r", encoding="utf-8") as f:
-    config:dict = json.load(f)
-config:dict = config.get("send_qq") # type:ignore
+    configs:dict[str,dict[str,str]] = json.load(f)
+config:dict[str,str] = configs.get("send_qq",{})
 
-sleep_time:int = config.get("sleep_time") # type:ignore
+if not config:
+    logger.error("未在config.json内找到send_qq配置")
+    raise SystemExit(1)
+
+sleep_time:int = int(config.get("sleep_time",2))
 if args.at_all == 1 :
     final_at_all = True
     logger.debug("因命令行参数开启@全体成员")
