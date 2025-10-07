@@ -35,7 +35,7 @@ config:dict[str,str] = configs.get("send_qq",{})
 
 if not config:
     logger.error("未在config.json内找到send_qq配置")
-    raise SystemExit(1)
+    exit(1)
 
 sleep_time:int = int(config.get("sleep_time",2))
 if args.at_all == 1 :
@@ -246,4 +246,5 @@ try:
         logger.debug(f"窗口间延迟{sleep_time}秒")
 except Exception as e:
     logger.error(f"发送过程中出现错误: {e}")
+    exit(1)
 exit(0)

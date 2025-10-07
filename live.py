@@ -73,7 +73,11 @@ class BilibiliLive:
             process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
             logger.info(f"执行命令: {bat_text}")
             process.wait()
-            logger.info("命令执行完毕")
+            return_code = process.returncode
+            if return_code == 0:
+                logger.info("命令执行成功")
+            else:
+                logger.error(f"命令执行失败，返回码: {return_code}")
 
 # 创建全局实例
 bilibili_live = BilibiliLive()

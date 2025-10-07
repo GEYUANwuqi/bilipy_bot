@@ -36,13 +36,12 @@ class BilibiliApp:
         """发送QQ消息"""
         logger.info(f"开始执行命令: {bat_text}")
         try:
-            process = await asyncio.create_subprocess_shell(f'start /wait cmd /c {bat_text}')
-            returncode = await process.wait()
-            
-            if returncode == 0:
-                logger.info(f"命令执行成功")
+            process = await asyncio.create_subprocess_shell(f'start /wait cmd /c {bat_text}',shell=True)
+            return_code = await process.wait()
+            if return_code == 0:
+                logger.info("命令执行成功")
             else:
-                logger.error(f"命令执行失败，返回码: {returncode}")
+                logger.error(f"命令执行失败，返回码: {return_code}")
         except Exception as e:
             logger.error(f"命令执行异常: {e}")
 
