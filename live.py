@@ -1,17 +1,21 @@
-from time import sleep
-from bilibili_api import Credential, sync
-from bilibili_api.live import LiveRoom
-import subprocess
 import asyncio
-from logger import setup_logger
-import json
 import base64
+import json
+from bilibili_api import Credential
+from bilibili_api.live import LiveRoom
+from logger import setup_logger
+
 
 logger = setup_logger(filename='live')
 
 # 从配置文件中读取配置
 with open('config.json', 'r', encoding='utf-8') as config_file:
-    config = json.load(config_file)
+    configs:dict = json.load(config_file)
+
+config = configs.get("live",{})
+if not config:
+    logger.error("未在config.json内找到live配置")
+    raise SystemExit(1)
 
 class BilibiliLive:
     def __init__(self):
@@ -20,9 +24,9 @@ class BilibiliLive:
 
     async def get_room_info(self):
         """获取直播间信息"""
-        credential_uid = Credential(sessdata=config['live']['sessdata'])
+        credential_uid = Credential(sessdata=config['sessdata'])
         live = await LiveRoom.get_room_info(
-            self=LiveRoom(credential=credential_uid, room_display_id=config['live']['room_display_id']))
+            self=LiveRoom(credential=credential_uid, room_display_id=config['room_display_id']))
         return live
 
     async def process_live_info(self):
@@ -33,6 +37,7 @@ class BilibiliLive:
         if self.new_info is None:
             self.new_info = live_info
             self.old_info = live_info
+            logger.debug(f"初始化数据{self.new_info}")
         
         # 更新数据
         self.old_info = self.new_info
@@ -53,6 +58,7 @@ class BilibiliLive:
         elif new_live_info == "0":
             live = f"未开播"
         elif new_live_info != "0" and old_live_info == new_live_info:
+            logger.debug("当前直播进行中")
             live = f"开播中"
         else:
             pic_url = self.new_info["room_info"]["cover"]
@@ -70,27 +76,27 @@ class BilibiliLive:
             else:
                 bat_text = f"python send_qq.py -t {encoded_text} -p {pic_url} -a 0"
 
-            process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
+            process = await asyncio.create_subprocess_shell(f'start /wait cmd /c {bat_text}',shell=True)
             logger.info(f"执行命令: {bat_text}")
-            process.wait()
+            return_code = await process.wait()
             return_code = process.returncode
             if return_code == 0:
                 logger.info("命令执行成功")
             else:
                 logger.error(f"命令执行失败，返回码: {return_code}")
 
-# 创建全局实例
-bilibili_live = BilibiliLive()
-
-async def live():
-    """主函数，获取直播间信息并处理"""
-    await bilibili_live.process_live_info()
-
-if __name__ == "__main__":
+async def main_loop():
+    """主事件循环"""
+    logger.debug("启动主事件循环")
     while True:
         try:
-            asyncio.run(live())
+            await bilibili_live.process_live_info()
         except Exception as e:
             logger.error(f"发生错误: {e}")
-        logger.info(f"等待10秒")
-        sleep(10)
+        logger.info("等待10秒")
+        await asyncio.sleep(10)
+
+if __name__ == "__main__":
+    bilibili_live = BilibiliLive()
+    logger.debug(f"创建全局实例{bilibili_live}")
+    asyncio.run(main_loop())

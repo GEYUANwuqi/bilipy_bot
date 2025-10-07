@@ -1,17 +1,16 @@
 import argparse
-import json
-import io
-import time
-import requests
-import win32gui
-import win32con
-import win32clipboard
-import win32api
-from PIL import Image
-from logger import setup_logger
-from typing import Optional
-import argparse
 import base64
+import io
+import json
+import time
+from typing import Optional
+import requests
+from PIL import Image
+import win32api
+import win32clipboard
+import win32con
+import win32gui
+from logger import setup_logger
 logger = setup_logger(filename='send_qq')
 
 # 命令行解析
@@ -37,7 +36,7 @@ if not config:
     logger.error("未在config.json内找到send_qq配置")
     exit(1)
 
-sleep_time:int = int(config.get("sleep_time",2))
+sleep_time:float = float(config.get("sleep_time",2))
 if args.at_all == 1 :
     final_at_all = True
     logger.debug("因命令行参数开启@全体成员")

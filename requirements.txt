@@ -1,0 +1,4 @@
+bilibili-api-python
+pillow
+pywin32
+requests

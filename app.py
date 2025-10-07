@@ -1,15 +1,19 @@
 import asyncio
+import base64
+import json
 from bilibili_api import Credential, user
 from bilibili_api.live import LiveRoom
 from logger import setup_logger
-import base64
-import json
 
 logger = setup_logger(filename='app')
 
 # 从配置文件中读取配置
 with open('config.json', 'r', encoding='utf-8') as config_file:
-    config = json.load(config_file)
+    config:dict = json.load(config_file)
+
+if config.get("bot") is None or config.get("live") is None:
+    logger.error("未在config.json内找到bot或live配置")
+    raise SystemExit(1)
 
 class BilibiliApp:
     def __init__(self):
@@ -61,6 +65,7 @@ class BilibiliApp:
         if self.new_dy_data is None:
             self.new_dy_data = dy_dict
             self.old_dy_data = dy_dict
+            logger.debug(f"初始动态数据: {self.new_dy_data}")
         
         # 更新数据
         self.old_dy_data = self.new_dy_data
@@ -76,16 +81,21 @@ class BilibiliApp:
         pic_url = None
         text = None
 
+        # 数据处理
         if new_maxts > old_maxts:
+            logger.debug(f"新动态数据: {new_maxts},{new_maxid}，旧动态数据: {old_maxts},{old_maxid}")
             logger.info(f"最大的时间戳是: {new_maxts}, 对应的ID是: {new_maxid}")
             go = True
             id = new_maxid
 
         if go and "DYNAMIC_TYPE_FORWARD" in self.new_dy_data["items"][id]["type"]:
+            logger.debug("检测到DYNAMIC_TYPE_FORWARD")
             if "DYNAMIC_TYPE_AV" in self.new_dy_data["items"][id]["orig"]["type"]:
                 forward_av = True
+                logger.debug("检测到DYNAMIC_TYPE_AV")
             else:
                 forward_dy = True
+                logger.debug("默认处理为转发动态")
         elif go and "live_rcmd" in self.new_dy_data["items"][id]["modules"]["module_dynamic"]["major"]:
             go = False
             logger.info("直播推荐动态，跳过处理")
@@ -123,6 +133,7 @@ class BilibiliApp:
             logger.info("有新视频")
 
         if go:
+            logger.debug(f"函数传回{text},{pic_url}")
             return text, pic_url
         else:
             return None, None
@@ -142,6 +153,7 @@ class BilibiliApp:
         if self.new_live_data is None:
             self.new_live_data = live_dict
             self.old_live_data = live_dict
+            logger.debug(f"初始化直播数据{self.new_live_data}")
         
         # 更新数据
         self.old_live_data = self.new_live_data
@@ -156,6 +168,7 @@ class BilibiliApp:
         live_msg = None
         online = False
 
+        # 数据处理
         if new_live_info == "0" and old_live_info != "0":
             pic_url = self.new_live_data["room_info"]["cover"]
             logger.info("下播")
@@ -163,6 +176,7 @@ class BilibiliApp:
         elif new_live_info == "0":
             live_msg = f"未开播"
         elif new_live_info != "0" and old_live_info == new_live_info:
+            logger.debug("当前直播进行中")
             live_msg = f"开播中"
         else:
             pic_url = self.new_live_data["room_info"]["cover"]
@@ -171,6 +185,7 @@ class BilibiliApp:
             live_msg = f"\n【直播通知】\n{name}开播啦！\n{title}\n直播地址：https://live.bilibili.com/{room_id}"
 
         if pic_url is not None:
+            logger.debug(f"函数传回{online},{live_msg},{pic_url}")
             return online, live_msg, pic_url
         else:
             return None, None, None
@@ -189,6 +204,7 @@ class BilibiliApp:
         live_online, live_msg, live_pic = live_data
         dy_msg, dy_pic = bot_data
 
+        # 对返回的数据进行处理
         if live_msg is not None:
             encoded_text = base64.b64encode(live_msg.encode('utf-8')).decode('ascii')
             if live_online is True:
@@ -206,22 +222,18 @@ class BilibiliApp:
                 bat_text = f"python send_qq.py -t {encoded_text} -p {dy_pic} -a 1"
             await self.send_qq(bat_text)
 
-# 创建全局实例
-app = BilibiliApp()
-
-async def main():
-    """主函数"""
-    await app.run()
-
 async def main_loop():
     """主事件循环"""
+    logger.debug("启动主事件循环")
     while True:
         try:
-            await main()
+            await app.run()
         except Exception as e:
             logger.error(f"发生错误: {e}")
         logger.info("等待10秒")
         await asyncio.sleep(10)
 
 if __name__ == "__main__":
+    app = BilibiliApp()
+    logger.debug(f"创建全局实例{app}")
     asyncio.run(main_loop())

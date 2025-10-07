@@ -1,17 +1,19 @@
-from time import sleep
-from bilibili_api import Credential, sync
-from bilibili_api import user
-import json
 import asyncio
-from logger import setup_logger
-import subprocess
 import base64
+import json
+from bilibili_api import Credential,user
+from logger import setup_logger
 
 logger = setup_logger(filename='bot')
 
 # 从配置文件中读取配置
 with open('config.json', 'r', encoding='utf-8') as config_file:
-    config = json.load(config_file)
+    configs:dict = json.load(config_file)
+
+config = configs.get("bot",{})
+if not config:
+    logger.error("未在config.json内找到bot配置")
+    raise SystemExit(1)
 
 class BilibiliBot:
     def __init__(self):
@@ -20,9 +22,9 @@ class BilibiliBot:
 
     async def get_dynamics(self):
         """获取动态数据"""
-        credential_uid = Credential(sessdata=config['bot']['sessdata'])
+        credential_uid = Credential(sessdata=config['sessdata'])
         dy_dict = await user.User.get_dynamics_new(
-            self=user.User(uid=config['bot']['uid'], credential=credential_uid))
+            self=user.User(uid=config['uid'], credential=credential_uid))
         return dy_dict
 
     def get_max_timestamp_id(self, date):
@@ -45,6 +47,7 @@ class BilibiliBot:
         if self.new_data is None:
             self.new_data = dy_dict
             self.old_data = dy_dict
+            logger.debug(f"初始化数据{self.new_data}")
         
         # 更新数据
         self.old_data = self.new_data
@@ -61,17 +64,22 @@ class BilibiliBot:
         pic = None
         
         if new_maxts > old_maxts:
+            logger.debug(f"新动态数据: {new_maxts},{new_maxid}, 旧动态数据: {old_maxts},{old_maxid}")
             logger.info(f"最大的时间戳是: {new_maxts}, 对应的ID是: {new_maxid}")
             go = True
             id = new_maxid
             
         if "DYNAMIC_TYPE_FORWARD" in self.new_data["items"][id]["type"]:
+            logger.debug("检测到DYNAMIC_TYPE_FORWARD")
             if "DYNAMIC_TYPE_AV" in self.new_data["items"][id]["orig"]["type"]:
                 forward_av = True
+                logger.debug("检测到DYNAMIC_TYPE_AV")
             else:
                 forward_dy = True
+                logger.debug("默认处理为转发动态")
         elif "live_rcmd" in self.new_data["items"][id]["modules"]["module_dynamic"]["major"]:
             go = False
+            logger.info("直播推荐动态，跳过处理")
 
         if forward_dy and go:
             title = self.new_data["items"][id]["modules"]["module_dynamic"]["desc"]["text"]
@@ -109,27 +117,27 @@ class BilibiliBot:
             else:
                 bat_text = f"python send_qq.py -t {encoded_text} -p {pic} -a 1"
 
-            process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
+            process = await asyncio.create_subprocess_shell(f'start /wait cmd /c {bat_text}',shell=True)
             logger.info(f"执行命令: {bat_text}")
-            process.wait()
+            return_code = await process.wait()
             return_code = process.returncode
             if return_code == 0:
                 logger.info("命令执行成功")
             else:
                 logger.error(f"命令执行失败，返回码: {return_code}")
 
-# 创建全局实例
-bilibili_bot = BilibiliBot()
-
-async def bot():
-    """主函数，获取动态并处理"""
-    await bilibili_bot.process_dynamics()
-
-if __name__ == "__main__":
+async def main_loop():
+    """主事件循环"""
+    logger.debug("启动主事件循环")
     while True:
         try:
-            asyncio.run(bot())
+            await bilibili_bot.process_dynamics()
         except Exception as e:
             logger.error(f"发生错误: {e}")
-        logger.info(f"等待10秒")
-        sleep(10)
+        logger.info("等待10秒")
+        await asyncio.sleep(10)
+
+if __name__ == "__main__":
+    bilibili_bot = BilibiliBot()
+    logger.debug(f"创建全局实例{bilibili_bot}")
+    asyncio.run(main_loop())
