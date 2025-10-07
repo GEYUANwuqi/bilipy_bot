@@ -1,87 +1,102 @@
-from time import sleep
-from bilibili_api import Credential, sync
-from bilibili_api.live import LiveRoom
-import requests
-import subprocess
-from logger import setup_logger
-import os
+import asyncio
+import base64
 import json
+from bilibili_api import Credential
+from bilibili_api.live import LiveRoom
+from logger import setup_logger
+
 
 logger = setup_logger(filename='live')
 
 # 从配置文件中读取配置
 with open('config.json', 'r', encoding='utf-8') as config_file:
-    config = json.load(config_file)
+    configs:dict = json.load(config_file)
 
-async def test():
-    """主函数，获取直播间信息并处理"""
-    credential_uid = Credential(sessdata=config['live']['sessdata'])
-    live = await LiveRoom.get_room_info(self=LiveRoom(credential=credential_uid, room_display_id=config['live']['room_display_id']))
-    if os.path.getsize("old_live.json") == 0:
-    # 如果 old_live.json 文件为空，则将数据写入 new_live.json 和 old_live.json 文件
-        with open("new_live.json", "w", encoding="utf-8") as new_live, open("old_live.json", "w", encoding="utf-8") as old_live:
-            json.dump(live, new_live, ensure_ascii=False, indent=4)
-            json.dump(live, old_live, ensure_ascii=False, indent=4)
-    else:
-    # 如果 old_live.json 文件不为空，则将 new_live.json 文件的内容移动到 old_live.json 文件中，并将新的数据写入 new_live.json 文件
-        with open("new_live.json", "r", encoding="utf-8") as new_live:
-            new_data = json.load(new_live)
-        with open("old_live.json", "w", encoding="utf-8") as old_live:
-            json.dump(new_data, old_live, ensure_ascii=False, indent=4)
-        with open("new_live.json", "w", encoding="utf-8") as new_live:
-            json.dump(live, new_live, ensure_ascii=False, indent=4)
-    # 读取 new_live.json 和 old_live.json 文件的内容到变量中
-    with open("new_live.json", "r", encoding="utf-8") as new_live, open("old_live.json", "r", encoding="utf-8") as old_live:
-        new_info = json.load(new_live)
-        old_info = json.load(old_live)
+config = configs.get("live",{})
+if not config:
+    logger.error("未在config.json内找到live配置")
+    raise SystemExit(1)
 
-    new_live_info = str(new_info["room_info"]["live_start_time"])
-    old_live_info = str(old_info["room_info"]["live_start_time"])
-    title = new_info["room_info"]["title"]
-    name = new_info["anchor_info"]["base_info"]["uname"]
-    romm_id = new_info["room_info"]["room_id"]
-    pic_url = None
-    online = False
+class BilibiliLive:
+    def __init__(self):
+        self.new_info = None
+        self.old_info = None
 
-    if new_live_info == "0" and old_live_info != "0":
-        pic_url = new_info["room_info"]["cover"]
-        logger.info("下播")
-        live = f"【下播通知】\n{name}下播啦！\n{title}\n直播地址：https://live.bilibili.com/{romm_id}"
-    elif new_live_info == "0" :
-        live = f"未开播"
-    elif new_live_info != "0" and old_live_info == new_live_info :
-        live = f"开播中"
-    else:
-        pic_url = new_info["room_info"]["cover"]
-        logger.info("上播")
-        online = True
-        live = f"\n【直播通知】\n{name}开播啦！\n{title}\n直播地址：https://live.bilibili.com/{romm_id}"
-                
-    if pic_url != None :
-        # 对文本进行转义序列编码（保留\n等字符）
-        encoded_text = live.encode('unicode_escape').decode('utf-8')
-        response = requests.get(pic_url, stream=True)
-        response.raise_for_status()
-        filename = pic_url.split("/")[-1]
-        with open(filename, 'wb') as file:
-            for chunk in response.iter_content(chunk_size=8192):
-                file.write(chunk)
-        if online:
-            bat_text = f'python send_qq.py -t "{encoded_text}" -p {pic_url}'
-        elif not online :
-            bat_text = f'python send_qq.py -t "{encoded_text}" -p {pic_url} -a 0'
+    async def get_room_info(self):
+        """获取直播间信息"""
+        credential_uid = Credential(sessdata=config['sessdata'])
+        live = await LiveRoom.get_room_info(
+            self=LiveRoom(credential=credential_uid, room_display_id=config['room_display_id']))
+        return live
 
-        process = subprocess.Popen(["start", "/wait", "cmd", "/c", bat_text], shell=True)
-        logger.info(f"执行命令: {bat_text}")
-        process.wait()
-        logger.info("命令执行完毕")
-    
+    async def process_live_info(self):
+        """处理直播间信息并发送通知"""
+        live_info = await self.get_room_info()
+        
+        # 初始化数据
+        if self.new_info is None:
+            self.new_info = live_info
+            self.old_info = live_info
+            logger.debug(f"初始化数据{self.new_info}")
+        
+        # 更新数据
+        self.old_info = self.new_info
+        self.new_info = live_info
 
-if __name__ == "__main__":
+        new_live_info = str(self.new_info["room_info"]["live_start_time"])
+        old_live_info = str(self.old_info["room_info"]["live_start_time"])
+        title = self.new_info["room_info"]["title"]
+        name = self.new_info["anchor_info"]["base_info"]["uname"]
+        room_id = self.new_info["room_info"]["room_id"]
+        pic_url = None
+        online = False
+
+        if new_live_info == "0" and old_live_info != "0":
+            pic_url = self.new_info["room_info"]["cover"]
+            logger.info("下播")
+            live = f"【下播通知】\n{name}下播啦！\n{title}\n直播地址：https://live.bilibili.com/{room_id}"
+        elif new_live_info == "0":
+            live = f"未开播"
+        elif new_live_info != "0" and old_live_info == new_live_info:
+            logger.debug("当前直播进行中")
+            live = f"开播中"
+        else:
+            pic_url = self.new_info["room_info"]["cover"]
+            logger.info("上播")
+            online = True
+            live = f"\n【直播通知】\n{name}开播啦！\n{title}\n直播地址：https://live.bilibili.com/{room_id}"
+
+        if pic_url is not None:
+            # 对文本进行转义序列编码（保留\n等字符）
+            logger.info(f"原始文本: {live}")
+            encoded_text = base64.b64encode(live.encode('utf-8')).decode('ascii')
+            logger.debug(f"编码后文本(Base64): {encoded_text}")
+            if online:
+                bat_text = f"python send_qq.py -t {encoded_text} -p {pic_url} -a 1"
+            else:
+                bat_text = f"python send_qq.py -t {encoded_text} -p {pic_url} -a 0"
+
+            process = await asyncio.create_subprocess_shell(f'start /wait cmd /c {bat_text}',shell=True)
+            logger.info(f"执行命令: {bat_text}")
+            return_code = await process.wait()
+            return_code = process.returncode
+            if return_code == 0:
+                logger.info("命令执行成功")
+            else:
+                logger.error(f"命令执行失败，返回码: {return_code}")
+
+async def main_loop():
+    """主事件循环"""
+    logger.debug("启动主事件循环")
     while True:
         try:
-            sync(test())
+            await bilibili_live.process_live_info()
         except Exception as e:
             logger.error(f"发生错误: {e}")
-        logger.info(f"等待10秒")
-        sleep(10)
+        logger.info("等待10秒")
+        await asyncio.sleep(10)
+
+if __name__ == "__main__":
+    bilibili_live = BilibiliLive()
+    logger.debug(f"创建全局实例{bilibili_live}")
+    asyncio.run(main_loop())

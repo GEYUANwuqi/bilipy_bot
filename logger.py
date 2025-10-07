@@ -51,8 +51,10 @@ def setup_logger(filename):
     log_file = os.path.join(log_dir, f'{filename}_{date_str}.log')
     
     file_handler = DailyRotatingFileHandler(log_file, backupCount=10)
+    file_handler.setLevel(logging.DEBUG)  # 文件记录DEBUG及以上级别日志
     
     console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)  # 控制台只输出INFO及以上级别日志
     
     formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
@@ -61,7 +63,7 @@ def setup_logger(filename):
     console_handler.setFormatter(formatter)
     
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
