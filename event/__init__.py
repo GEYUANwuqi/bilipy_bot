@@ -1,3 +1,3 @@
-from .live_data import LiveInfo, RoomInfo
+from .live_data import LiveData, RoomInfo, AnchorInfo
 
-__all__ = ["LiveInfo", "RoomInfo"]
+__all__ = ["LiveData", "RoomInfo", "AnchorInfo"]
