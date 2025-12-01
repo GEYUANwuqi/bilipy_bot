@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Union
 import re
 from html import unescape
 
@@ -76,8 +76,12 @@ class AnchorInfo:
         self.name: str = anchor_info["base_info"]["uname"] # 主播昵称
         self.face_url: str = anchor_info["base_info"]["face"] # 主播头像url
         self.gender: str = anchor_info["base_info"]["gender"] # 主播性别
+        self.official_info: dict[Any, Any] = anchor_info["base_info"]["official_info"]["title"] # 主播官方信息
         self.fansclub_name: str = anchor_info["medal_info"]["medal_name"] # 粉丝牌名称
         self.fansclub_num: str = anchor_info["medal_info"]["fansclub"] # 粉丝团人数
+        self.live_level: int = anchor_info["live_info"]["level"] # 主播等级
+        self.live_score: int = anchor_info["live_info"]["score"] # 直播分数
+        self.live_upgrade_score: int = anchor_info["live_info"]["upgrade_score"] # 升级所需分数
 
     def __str__(self) -> str:
         return f""
@@ -93,7 +97,8 @@ class WatchedShow:
         """
 
         self.data: dict[Any, Any] = watched_show # 原始数据
-        self.num: int = watched_show["num"] # 观看人数
+        self.switch: bool = watched_show["switch"] # 观看榜开关
+        self.num: int = watched_show["num"] # 观看人数/人气值
         self.text_small: str = watched_show["text_small"] # 小文本
         self.text_large: str = watched_show["text_large"] # 大文本
     
@@ -102,18 +107,25 @@ class WatchedShow:
 
 class NoticeBoard:
     """公告栏信息类"""
+    data: Union[dict[Any, Any], None] = None
+    content: Union[str, None] = None
+    ctime: Union[str, None] = None
 
-    def __init__(self, notice_board: dict[Any, Any]):
+    def __init__(self, notice_board: Union[dict[Any, Any], None]):
         """初始化NoticeBoard对象.
 
         Args:
             notice_board (dict): 公告栏信息
         """
+        if notice_board is not None:
+            self.data = notice_board # 原始数据
+            self.content = notice_board.get("content") # 公告内容
+            self.ctime = notice_board.get("ctime") # 公告发布时间
 
-        self.data: dict[Any, Any] = notice_board # 原始数据
-        self.uid: int = notice_board["uid"] # 公告uid
-        self.content: str = notice_board["content"] # 公告内容
-        self.ctime: str = notice_board["ctime"] # 公告发布时间
+    def __getattr__(self, name: str) -> Any:
+        if self.data is not None and name in self.data:
+            return self.data[name]
+        raise AttributeError(f"'NoticeBoard' object has no attribute '{name}'")
 
     def __str__(self) -> str:
         return f""
@@ -140,4 +152,4 @@ class LiveData:
         return f""
 
 info = LiveData({}) # 实际由回调或其他方式传入
-b = info.room_info.online
+b = info.notice_board.cnm
