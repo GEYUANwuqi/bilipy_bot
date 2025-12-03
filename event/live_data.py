@@ -43,7 +43,7 @@ class RoomInfo(BaseData):
         Args:
             room_info (dict): 直播间信息
         """
-        self.data: dict[Any, Any] = room_info # 原始数据
+        self.raw_data: dict[Any, Any] = room_info # 原始数据
         self.uid: int = room_info["uid"] # 用户uid
         self.room_id: int = room_info["room_id"] # 房间号
         self.title: str = room_info["title"] # 直播间标题
@@ -62,9 +62,7 @@ class RoomInfo(BaseData):
         self.online: int = room_info["online"] # 直播间当前在线人数
 
     def get_core_properties_str(self):
-        return super().get_core_properties_str() + [
-
-        ]
+        return super().get_core_properties_str()
 
     def __repr__(self):
         return super().__repr__()
@@ -79,7 +77,7 @@ class AnchorInfo(BaseData):
             anchor_info (dict): 主播信息
         """
 
-        self.data: dict[Any, Any] = anchor_info # 原始数据
+        self.raw_data: dict[Any, Any] = anchor_info # 原始数据
         self.name: str = anchor_info["base_info"]["uname"] # 主播昵称
         self.face_url: str = anchor_info["base_info"]["face"] # 主播头像url
         self.gender: str = anchor_info["base_info"]["gender"] # 主播性别
@@ -91,9 +89,7 @@ class AnchorInfo(BaseData):
         self.live_upgrade_score: int = anchor_info["live_info"]["upgrade_score"] # 升级所需分数
 
     def get_core_properties_str(self):
-        return super().get_core_properties_str() + [
-
-        ]
+        return super().get_core_properties_str()
 
     def __repr__(self):
         return super().__repr__()
@@ -108,16 +104,14 @@ class WatchedShow(BaseData):
             watched_show (dict): 观看榜信息
         """
 
-        self.data: dict[Any, Any] = watched_show # 原始数据
+        self.raw_data: dict[Any, Any] = watched_show # 原始数据
         self.switch: bool = watched_show["switch"] # 观看榜开关
         self.num: int = watched_show["num"] # 观看人数/人气值
         self.text_small: str = watched_show["text_small"] # 小文本
         self.text_large: str = watched_show["text_large"] # 大文本
 
     def get_core_properties_str(self):
-        return super().get_core_properties_str() + [
-
-        ]
+        return super().get_core_properties_str()
 
     def __repr__(self):
         return super().__repr__()
@@ -135,19 +129,17 @@ class NoticeBoard(BaseData):
             notice_board (dict): 公告栏信息
         """
         if notice_board is not None:
-            self.data = notice_board # 原始数据
+            self.raw_data = notice_board # 原始数据
             self.content = notice_board.get("content") # 公告内容
             self.ctime = notice_board.get("ctime") # 公告发布时间
 
     def __getattr__(self, name: str) -> Any:
-        if self.data is not None and name in self.data:
-            return self.data[name]
+        if self.raw_data is not None and name in self.raw_data:
+            return self.raw_data[name]
         raise AttributeError(f"'NoticeBoard' object has no attribute '{name}'")
 
     def get_core_properties_str(self):
-        return super().get_core_properties_str() + [
-
-        ]
+        return super().get_core_properties_str()
 
     def __repr__(self):
         return super().__repr__()
@@ -163,19 +155,18 @@ class LiveData(BaseData):
         """
 
         # 直播间信息
-        self.data: dict[Any, Any] = data # 原始数据
+        self.raw_data: dict[Any, Any] = data # 原始数据
         self.room_info: RoomInfo = RoomInfo(data["room_info"]) # 直播间信息
         self.anchor_info: AnchorInfo = AnchorInfo(data["anchor_info"]) # 主播信息
         self.watched_show: WatchedShow = WatchedShow(data["watched_show"]) # 观看榜信息
         self.notice_board: NoticeBoard = NoticeBoard(data["news_info"]) # 公告栏信息
 
     def get_core_properties_str(self):
-        return super().get_core_properties_str() + [
-
-        ]
+        return super().get_core_properties_str()
 
     def __repr__(self):
         return super().__repr__()
 
-info = LiveData({}) # 实际由回调或其他方式传入
-b = info.room_info.room_id
+if __name__ == "__main__":
+    info = LiveData({}) # 实际由回调或其他方式传入
+    b = info.room_info.room_id
