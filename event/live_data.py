@@ -1,7 +1,8 @@
-from typing import Any, Union
+from typing import Any, Union, Literal
 import re
 from html import unescape
 from .base_data import BaseData
+from time import time
 
 
 def _html2_text(text: str) -> str:
@@ -81,9 +82,9 @@ class AnchorInfo(BaseData):
         self.name: str = anchor_info["base_info"]["uname"] # 主播昵称
         self.face_url: str = anchor_info["base_info"]["face"] # 主播头像url
         self.gender: str = anchor_info["base_info"]["gender"] # 主播性别
-        self.official_info: dict[Any, Any] = anchor_info["base_info"]["official_info"]["title"] # 主播官方信息
-        self.fansclub_name: str = anchor_info["medal_info"]["medal_name"] # 粉丝牌名称
-        self.fansclub_num: str = anchor_info["medal_info"]["fansclub"] # 粉丝团人数
+        self.official_info: dict[Any, Any] = anchor_info["base_info"]["official_info"]["title"] # 主播官方信息(认证信息)
+        self.fanclub_name: str = anchor_info["medal_info"]["medal_name"] # 粉丝牌名称
+        self.fanclub_num: str = anchor_info["medal_info"]["fansclub"] # 粉丝团人数
         self.live_level: int = anchor_info["live_info"]["level"] # 主播等级
         self.live_score: int = anchor_info["live_info"]["score"] # 直播分数
         self.live_upgrade_score: int = anchor_info["live_info"]["upgrade_score"] # 升级所需分数
@@ -161,6 +162,21 @@ class LiveData(BaseData):
         self.watched_show: WatchedShow = WatchedShow(data["watched_show"]) # 观看榜信息
         self.notice_board: NoticeBoard = NoticeBoard(data["news_info"]) # 公告栏信息
 
+    async def get_live_info(self, status: Literal["open", "close", "opening", "default"]) -> str:
+        info = ""
+        if status == "open":
+            info = f"{self.anchor_info.name}开启了直播《{self.room_info.title}》，当前在线人数为{self.room_info.online}人"
+        elif status == "close":
+            info = f"{self.anchor_info.name}下播了"
+        elif status == "default":
+            info = f"{self.anchor_info.name}当前并没有在直播"
+        elif status == "opening":
+            live_time = int(time()) - self.room_info.live_start_time
+            hours, remainder = divmod(live_time, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            info = f"{self.anchor_info.name}已经直播了{hours}小时{minutes}分钟{seconds}秒，当前在线人数为{self.room_info.online}人"
+        return info
+
     def get_core_properties_str(self):
         return super().get_core_properties_str()
 
@@ -168,5 +184,5 @@ class LiveData(BaseData):
         return super().__repr__()
 
 if __name__ == "__main__":
-    info = LiveData({}) # 实际由回调或其他方式传入
-    b = info.room_info.room_id
+    live = LiveData({}) # 实际由回调或其他方式传入
+    b = live.room_info

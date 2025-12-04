@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 
 class BaseData(ABC):
-    _repr_exclude = {"raw_data"}
+    _repr_exclude = {"raw_data"} # 排除在repr中的属性集合
 
     @abstractmethod
     def __repr__(self):
