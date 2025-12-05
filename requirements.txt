@@ -3,3 +3,4 @@ pillow
 pywin32
 requests
 curl_cffi
+tqdm
