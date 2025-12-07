@@ -57,12 +57,6 @@ class RoomInfo(BaseData):
         self.keyframe_url: str = room_info["keyframe"]  # 直播间关键帧url
         self.online: int = room_info["online"]  # 直播间当前在线人数
 
-    def get_core_properties_str(self):
-        return super().get_core_properties_str()
-
-    def __repr__(self):
-        return super().__repr__()
-
 
 class AnchorInfo(BaseData):
     """主播信息类"""
@@ -85,12 +79,6 @@ class AnchorInfo(BaseData):
         self.live_score: int = anchor_info["live_info"]["score"]  # 直播分数
         self.live_upgrade_score: int = anchor_info["live_info"]["upgrade_score"]  # 升级所需分数
 
-    def get_core_properties_str(self):
-        return super().get_core_properties_str()
-
-    def __repr__(self):
-        return super().__repr__()
-
 
 class WatchedShow(BaseData):
     """观看榜信息类"""
@@ -107,12 +95,6 @@ class WatchedShow(BaseData):
         self.num: int = watched_show["num"]  # 观看人数/人气值
         self.text_small: str = watched_show["text_small"]  # 小文本
         self.text_large: str = watched_show["text_large"]  # 大文本
-
-    def get_core_properties_str(self):
-        return super().get_core_properties_str()
-
-    def __repr__(self):
-        return super().__repr__()
 
 
 class NoticeBoard(BaseData):
@@ -136,12 +118,6 @@ class NoticeBoard(BaseData):
         if self.raw_data is not None and name in self.raw_data:
             return self.raw_data[name]
         raise AttributeError(f"'NoticeBoard' object has no attribute '{name}'")
-
-    def get_core_properties_str(self):
-        return super().get_core_properties_str()
-
-    def __repr__(self):
-        return super().__repr__()
 
 
 class LiveData(BaseData):
@@ -175,12 +151,6 @@ class LiveData(BaseData):
             minutes, seconds = divmod(remainder, 60)
             info = f"{self.anchor_info.name}已经直播了{hours}小时{minutes}分钟{seconds}秒，当前在线人数为{self.room_info.online}人"
         return info
-
-    def get_core_properties_str(self):
-        return super().get_core_properties_str()
-
-    def __repr__(self):
-        return super().__repr__()
 
 
 if __name__ == "__main__":
