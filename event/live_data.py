@@ -1,4 +1,4 @@
-from typing import Any, Union, Literal
+from typing import Any, Optional, Literal, Union
 import re
 from html import unescape
 from .base_data import BaseData
@@ -117,11 +117,11 @@ class WatchedShow(BaseData):
 
 class NoticeBoard(BaseData):
     """公告栏信息类"""
-    data: Union[dict[Any, Any], None] = None
-    content: Union[str, None] = None
-    ctime: Union[str, None] = None
+    raw_data: Optional[dict[Any, Any]] = None
+    content: Optional[str] = None
+    ctime: Optional[str] = None
 
-    def __init__(self, notice_board: Union[dict[Any, Any], None]):
+    def __init__(self, notice_board: Optional[dict[Any, Any]] = None):
         """初始化NoticeBoard对象.
 
         Args:
