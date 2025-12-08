@@ -56,6 +56,7 @@ class RoomInfo(BaseData):
         self.area_id: int = room_info["area_id"]  # 直播间子分区ID
         self.keyframe_url: str = room_info["keyframe"]  # 直播间关键帧url
         self.online: int = room_info["online"]  # 直播间当前在线人数
+        self.jump_url: str = f"https://live.bilibili.com/{self.room_id}"  # 直播间跳转链接
 
 
 class AnchorInfo(BaseData):

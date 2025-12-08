@@ -28,6 +28,7 @@ class DynamicBaseData(BaseData):
     like_num: Optional[int] = None
     forward_num: Optional[int] = None
     tag: Optional[str] = None
+    pics_url: Optional[list[str]] = None
 
     def __init__(self, data: dict[Any, Any]):
         """初始化DynamicBaseData对象.
@@ -45,6 +46,9 @@ class DynamicBaseData(BaseData):
         if self.type in ["DYNAMIC_TYPE_WORD","DYNAMIC_TYPE_DRAW"] :
             # 文字内容
             self.text = data["modules"]["module_dynamic"]["major"]["opus"]["summary"]["text"]
+            # 图片列表
+            pics = data["modules"]["module_dynamic"]["major"]["opus"].get("pics", [])
+            self.pics_url = [pic["url"] for pic in pics] if pics else None
         if data["modules"].get("module_stat", None) is not None:
             # 互动数据(评论/点赞/转发)
             _module_stat: dict[Any, Any] = data["modules"]["module_stat"]
@@ -156,6 +160,52 @@ class ArticleData(BaseData):
         self.summary = summary_info.get("text")  # 专栏摘要
         self.has_more = summary_info.get("has_more")  # 是否有更多内容
 
+class LiveRcmdData(BaseData):
+    """直播推荐信息类"""
+    raw_data: Optional[dict[Any, Any]] = None
+    room_id: Optional[int] = None
+    live_status: Optional[int] = None
+    title: Optional[str] = None
+    cover_url: Optional[str] = None
+    online: Optional[int] = None
+    area_name: Optional[str] = None
+    area_id: Optional[int] = None
+    parent_area_id: Optional[int] = None
+    parent_area_name: Optional[str] = None
+    live_start_time: Optional[int] = None
+    jump_url: Optional[str] = None
+    watched_num: Optional[int] = None
+    switch: Optional[bool] = None
+    text_small: Optional[str] = None
+    text_large: Optional[str] = None
+
+    def __init__(self, data: Optional[dict[Any, Any]] = None):
+        """初始化LiveRcmd对象.
+
+        Args:
+            data (dict): module_dynamic/直播推荐信息
+        """
+        import json
+        self.raw_data = json.loads(data["major"]["live_rcmd"]["content"])# 原始数据
+        live_play_info = self.raw_data.get("live_play_info", {})
+        self.room_id = live_play_info.get("room_id")  # 直播间ID
+        self.live_status = live_play_info.get("live_status")  # 直播状态 1:直播中
+        self.title = live_play_info.get("title")  # 直播间标题
+        self.cover_url = live_play_info.get("cover")  # 直播间封面
+        self.online = live_play_info.get("online")  # 在线人数
+        self.area_id = live_play_info.get("area_id")  # 直播分区ID
+        self.area_name = live_play_info.get("area_name")  # 直播分区
+        self.parent_area_id = live_play_info.get("parent_area_id")  # 直播父分区ID
+        self.parent_area_name = live_play_info.get("parent_area_name")  # 直播父分区
+        self.live_start_time = live_play_info.get("live_start_time")  # 开播时间戳
+        self.jump_url = f"https://live.bilibili.com/{self.room_id}"  # 直播间跳转链接
+        watched_show = live_play_info.get("watched_show", {})
+        self.switch = watched_show.get("switch")  # 观看榜开关
+        self.watched_num = watched_show.get("num")  # 观看人数
+        self.text_small = watched_show.get("text_small")  # 小文本
+        self.text_large = watched_show.get("text_large")  # 大文本
+
+
 class ForwardData(BaseData):
     """转发动态信息类"""
     raw_data: Optional[dict[Any, Any]] = None
@@ -178,6 +228,7 @@ class DynamicData(BaseData):
     video_info: Optional[VideoData] = None
     music_info: Optional[MusicData] = None
     article_info: Optional[ArticleData] = None
+    live_rcmd_info: Optional[LiveRcmdData] = None
     forward_info: Optional[ForwardData] = None
 
     def __init__(self, data: dict[Any, Any]):
@@ -204,6 +255,11 @@ class DynamicData(BaseData):
         if data.get("type") == "DYNAMIC_TYPE_ARTICLE":
             article_raw = data["modules"]["module_dynamic"]
             self.article_info = ArticleData(article_raw, self.base_info.id)
+
+        # 解析直播推荐信息
+        if data.get("type") == "DYNAMIC_TYPE_LIVE_RCMD":
+            live_rcmd_raw = data["modules"]["module_dynamic"]
+            self.live_rcmd_info = LiveRcmdData(live_rcmd_raw)
 
         # 解析转发信息
         if data.get("type") == "DYNAMIC_TYPE_FORWARD":
