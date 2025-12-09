@@ -3,6 +3,9 @@ import re
 from html import unescape
 from .base_data import BaseData
 from time import time
+from logging import getLogger
+
+_log = getLogger("LiveData")
 
 
 def _html2_text(text: str) -> str:
@@ -152,8 +155,3 @@ class LiveData(BaseData):
             minutes, seconds = divmod(remainder, 60)
             info = f"{self.anchor_info.name}已经直播了{hours}小时{minutes}分钟{seconds}秒，当前在线人数为{self.room_info.online}人"
         return info
-
-
-if __name__ == "__main__":
-    live = LiveData({})  # 实际由回调或其他方式传入
-    b = live.room_info

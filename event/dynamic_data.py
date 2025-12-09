@@ -1,5 +1,8 @@
 from typing import Any, Optional
 from .base_data import BaseData
+from logging import getLogger
+
+_log = getLogger("DynamicData")
 
 
 def get_max_id(date: dict) -> int:
@@ -38,6 +41,7 @@ class DynamicBaseData(BaseData):
         """
 
         self.type: str = data["type"] # 动态类型
+        _log.debug(f"正在构造{self.type}消息")
         self.id: str = data["id_str"] # 动态ID
         self.visible:bool = data["visible"] # 动态显示状态(false时被折叠)
         self.time:str = data["modules"]["module_author"]["pub_time"] # 动态发布时间
