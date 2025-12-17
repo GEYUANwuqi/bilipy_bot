@@ -27,39 +27,8 @@ async def get_room_info(room_id:int, sessdata:str = "", file:bool = False) -> Li
     return info
 
 if __name__ == '__main__':
-
-    class Test:
-
-        def __init__(self):
-            self.sessdata = ""
-            self.old_info = None
-            self.new_info = None
-
-        async def main(self):
-            while True:
-                info = await get_room_info(room_id = 26498147 , sessdata = self.sessdata)
-                if self.old_info is None:
-                    self.old_info = info
-                    self.new_info = info
-                else:
-                    self.old_info = self.new_info
-                    self.new_info = info
-                #print(self.new_info)
-                if self.old_info.room_info.live_status != 1 and self.new_info.room_info.live_status == 1:
-                    # 开锅
-                    live_info = await self.new_info.get_live_info(status = "open")
-                elif self.old_info.room_info.live_status == 1 and self.new_info.room_info.live_status != 1:
-                    # 关火
-                    live_info = await self.new_info.get_live_info(status = "close")
-                elif self.old_info.room_info.live_status == 1 and self.new_info.room_info.live_status == 1:
-                    # 炖煮中
-                    live_info = await self.new_info.get_live_info(status = "opening")
-                else:
-                    # 未开锅
-                    live_info = await self.new_info.get_live_info(status = "default")
-                print(live_info)
-                #print("休眠12s")
-                await asyncio.sleep(12)
-
-    test = Test()
-    asyncio.run(test.main())
+    asyncio.run(get_room_info(
+        room_id = 26498147,
+        sessdata = "",
+        file = True
+    ))

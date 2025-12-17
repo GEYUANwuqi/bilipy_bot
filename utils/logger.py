@@ -22,42 +22,41 @@ __author__  = "Fish-LP <Fish.zh@outlook.com>"
 __status__  = "dev"
 __version__ = "2.1.1-dev"
 
-# NOTE: 这里保存的是 "针对不同目标（console/file）和不同日志级别的消息格式模板",
-# 也就是说内层的键（如 "DEBUG", "INFO" 等）表示该级别的日志消息应当使用的格式模板，
+# NOTE: 这里保存的是针对不同目标（console/file）和不同日志级别的消息格式模板
 LOG_MESSAGE_FORMATS = {
     "console": {
-        "DEBUG": f"{Color.CYAN}[%(asctime)s]{Color.RESET} "
+        "DEBUG": f"{Color.CYAN}[%(asctime)s.%(msecs)s]{Color.RESET} "
             f"{Color.BLUE}%(colored_levelname)-8s{Color.RESET} "
             f"{Color.GRAY}[%(threadName)s|%(processName)s]{Color.RESET} "
             f"{Color.MAGENTA}%(name)s{Color.RESET} "
-            f"{Color.YELLOW}%(filename)s:%(funcName)s:%(lineno)d{Color.RESET} "
-            "| %(message)s",
+            f"{Color.YELLOW}%(filename)s:%(lineno)d %(funcName)s{Color.RESET} "
+            f"{Color.RESET}| %(message)s{Color.RESET}",
             
         "INFO": f"{Color.CYAN}[%(asctime)s]{Color.RESET} "
             f"{Color.GREEN}%(colored_levelname)-8s{Color.RESET} "
             f"{Color.MAGENTA}%(name)s{Color.RESET} ➜ "
-            f"{Color.WHITE}%(message)s{Color.RESET}",
+            f"{Color.RESET}%(message)s{Color.RESET}",
             
         "WARNING": f"{Color.CYAN}[%(asctime)s]{Color.RESET} "
             f"{Color.YELLOW}%(colored_levelname)-8s{Color.RESET} "
             f"{Color.MAGENTA}%(name)s{Color.RESET} "
-            f"{Color.RED}➜{Color.RESET} "
-            f"{Color.YELLOW}%(message)s{Color.RESET}",
+            f"{Color.YELLOW}➜{Color.RESET} "
+            f"{Color.RESET}%(message)s{Color.RESET}",
             
-        "ERROR": f"{Color.CYAN}[%(asctime)s.%(mctime)s]{Color.RESET} "
+        "ERROR": f"{Color.CYAN}[%(asctime)s]{Color.RESET} "
             f"{Color.RED}%(colored_levelname)-8s{Color.RESET} "
             f"{Color.GRAY}[%(filename)s]{Color.RESET}"
             f"{Color.MAGENTA}%(name)s:%(lineno)d{Color.RESET} "
             f"{Color.RED}➜{Color.RESET} "
-            f"{Color.RED}%(message)s{Color.RESET}",
+            f"{Color.RESET}%(message)s{Color.RESET}",
             
         "CRITICAL": f"{Color.CYAN}[%(asctime)s]{Color.RESET} "
-                f"{Color.BG_RED}{Color.WHITE}%(colored_levelname)-8s{Color.RESET} "
+                f"{Color.RED}{Color.BOLD}%(colored_levelname)-8s{Color.RESET} "
                 f"{Color.GRAY}{{%(module)s}}{Color.RESET}"
                 f"{Color.MAGENTA}[%(filename)s]{Color.RESET}"
                 f"{Color.MAGENTA}%(name)s:%(lineno)d{Color.RESET} "
-                f"{Color.BG_RED}➜{Color.RESET} "
-                f"{Color.BOLD}%(message)s{Color.RESET}"
+                f"{Color.RED}➜{Color.RESET} "
+                f"{Color.RESET}%(message)s{Color.RESET}"
     },
     "file": {
         "DEBUG": "[%(asctime)s] %(levelname)-8s [%(threadName)s|%(processName)s] %(name)s (%(filename)s:%(funcName)s:%(lineno)d) | %(message)s",
@@ -69,7 +68,6 @@ LOG_MESSAGE_FORMATS = {
 }
 
 if not tqdm_original is None:
-    # 定义自定义的 tqdm 类,继承自原生的 tqdm 类
     class tqdm(tqdm_original):
         """
         自定义 tqdm 类的初始化方法
@@ -147,30 +145,57 @@ LOG_LEVEL_TO_COLOR = {
 }
 
 
-# 定义彩色格式化器
-class ColoredFormatter(logging.Formatter):
-    use_color = True
-    def format(self, record):
+# 定义动态格式化器，根据日志级别选择不同的格式
+class DynamicFormatter(logging.Formatter):
+    """根据日志记录级别动态选择格式的格式化器"""
+    
+    def __init__(self, fmt_dict: dict, datefmt: str = None, use_color: bool = True):
+        """
+        初始化动态格式化器
+        
+        Args:
+            fmt_dict: 包含不同日志级别格式字符串的字典，键为级别名称（如"DEBUG"）
+            datefmt: 日期时间格式字符串
+            use_color: 是否使用颜色
+        """
+        super().__init__(datefmt=datefmt)
+        self.fmt_dict = fmt_dict
+        self.use_color = use_color
+        
+        # 为每个级别预创建Formatter实例，提高性能
+        self._formatters = {}
+        for level_name, fmt in fmt_dict.items():
+            self._formatters[level_name] = logging.Formatter(fmt, datefmt=datefmt)
+        
+        # 默认格式（使用第一个可用的格式）
+        self._default_formatter = list(self._formatters.values())[0]
+    
+    def format(self, record: logging.LogRecord) -> str:
+        """格式化日志记录，根据记录级别选择对应的格式"""
+        # 动态颜色处理
+        if self.use_color:
+            record.colored_levelname = (
+                f"{LOG_LEVEL_TO_COLOR.get(record.levelname, Color.RESET)}"
+                f"{record.levelname:8}"
+                f"{Color.RESET}"
+            )
+            # 添加统一颜色字段
+            record.colored_name = f"{Color.MAGENTA}{record.name}{Color.RESET}"
+            # 添加毫秒信息用于ERROR级别格式
+        else:
+            record.colored_levelname = record.levelname
+            record.colored_name = record.name
+        
+        # 根据记录级别选择格式
+        level_name = record.levelname
+        formatter = self._formatters.get(level_name, self._default_formatter)
+        
         try:
-            # 动态颜色处理
-            if self.use_color:
-                record.colored_levelname = (
-                    f"{LOG_LEVEL_TO_COLOR.get(record.levelname, Color.RESET)}"
-                    f"{record.levelname:8}"
-                    f"{Color.RESET}"
-                )
-                # 添加统一颜色字段
-                record.colored_name = f"{Color.MAGENTA}{record.name}{Color.RESET}"
-                record.colored_time = f"{Color.CYAN}{self.formatTime(record)}{Color.RESET}"
-            else:
-                record.colored_levelname = record.levelname
-                record.colored_name = record.name
-                record.colored_time = self.formatTime(record)
-
-            return super().format(record)
+            return formatter.format(record)
         except Exception as e:
             warnings.warn(f"日志格式化错误: {str(e)}")
-            return f"[FORMAT ERROR] {record.getMessage()}"
+            # 使用默认格式作为备选
+            return self._default_formatter.format(record)
 
 
 def _get_valid_log_level(level_name: str, default: str):
@@ -182,24 +207,19 @@ def _get_valid_log_level(level_name: str, default: str):
     return level
 
 
-def setup_logging():
+def setup_logging(console_level = None):
     """设置日志系统，支持根据记录器名称重定向到不同文件"""
     # 环境变量读取
-    console_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    console_level = console_level or os.getenv("LOG_LEVEL", "INFO").upper()
     file_level = os.getenv("FILE_LOG_LEVEL", "DEBUG").upper()
     
     # 验证并转换日志级别
     console_log_level = _get_valid_log_level(console_level, "INFO")
     file_log_level = _get_valid_log_level(file_level, "DEBUG")
     
-    # 日志格式配置（使用更清晰的 LOG_MESSAGE_FORMATS）
-    console_log_format = LOG_MESSAGE_FORMATS["console"][console_level]
-    
-    file_log_format = LOG_MESSAGE_FORMATS["file"][file_level]
-    
-    # 文件路径配置
+    # 文件路径配置 - 使用固定名称，不使用日期
     log_dir = os.getenv("LOG_FILE_PATH", "./logs")
-    file_name = os.getenv("LOG_FILE_NAME", "bot_%Y_%m_%d.log")
+    file_name = os.getenv("LOG_FILE_NAME", "bot.log")  # 改为固定名称
     
     # 备份数量验证
     try:
@@ -211,27 +231,38 @@ def setup_logging():
 
     # 创建日志目录
     os.makedirs(log_dir, exist_ok=True)
-    root_file_path = os.path.join(log_dir, datetime.now().strftime(file_name))
+    root_file_path = os.path.join(log_dir, file_name)  # 直接使用固定名称
 
     # ===== 1. 配置根记录器 =====
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)  # 全局最低级别设为DEBUG
+    root_logger.setLevel(logging.DEBUG)
     
-    # 控制台处理器 - 只添加到根记录器
+    # 控制台处理器 - 使用动态格式化器
     console_handler = logging.StreamHandler()
     console_handler.setLevel(console_log_level)
-    console_handler.setFormatter(ColoredFormatter(console_log_format, datefmt='%H:%M:%S'))
+    console_formatter = DynamicFormatter(
+        fmt_dict=LOG_MESSAGE_FORMATS["console"],
+        datefmt='%H:%M:%S',
+        use_color=True
+    )
+    console_handler.setFormatter(console_formatter)
     
-    # 根记录器的文件处理器
+    # 根记录器的文件处理器 - 使用动态格式化器（无颜色）
     root_file_handler = TimedRotatingFileHandler(
         filename=root_file_path,
         when="midnight",
         interval=1,
         backupCount=backup_count,
-        encoding="utf-8"
+        encoding="utf-8",
+        utc=True  # 使用UTC时间避免时区问题
     )
     root_file_handler.setLevel(file_log_level)
-    root_file_handler.setFormatter(logging.Formatter(file_log_format))
+    file_formatter = DynamicFormatter(
+        fmt_dict=LOG_MESSAGE_FORMATS["file"],
+        datefmt='%Y-%m-%d %H:%M:%S',
+        use_color=False
+    )
+    root_file_handler.setFormatter(file_formatter)
     
     # 添加处理器到根记录器
     root_logger.handlers = [console_handler, root_file_handler]
@@ -245,14 +276,6 @@ def setup_logging():
         redirect_rules = {}
         warnings.warn("Invalid LOG_REDIRECT_RULES format. Using default rules.")
     
-    # 默认重定向规则
-    if not redirect_rules:
-        redirect_rules = {
-            # "database": "database.log",
-            # "network": "network.log",
-            # "security": "security.log"
-        }
-    
     # 为每个重定向规则创建记录器和处理器
     for logger_name, filename in redirect_rules.items():
         # 创建完整的文件路径
@@ -264,10 +287,12 @@ def setup_logging():
             when="midnight",
             interval=1,
             backupCount=backup_count,
-            encoding="utf-8"
+            encoding="utf-8",
+            utc=True
         )
         file_handler.setLevel(file_log_level)
-        file_handler.setFormatter(logging.Formatter(file_log_format))
+        # 为每个重定向记录器也使用动态格式化器
+        file_handler.setFormatter(file_formatter)
         
         # 创建记录器并添加处理器
         logger = logging.getLogger(logger_name)
@@ -289,31 +314,28 @@ def get_log(name='Logger'):
         "use 'logging.getLogger' instead", DeprecationWarning, 2)
     return logging.getLogger(name)
 
-# # 示例用法
-# if __name__ == "__main__":
-#     from time import sleep
-#     from tqdm.contrib.logging import logging_redirect_tqdm
 
-#     # 获取不同记录器的日志
-#     root_logger = get_log()
-#     db_logger = get_log("database")
-#     net_logger = get_log("network")
-#     sec_logger = get_log("security")
+# 示例用法
+if __name__ == "__main__":
+    from time import sleep
+    # 获取不同记录器的日志
+    root_logger = logging.getLogger()
+    db_logger = logging.getLogger("database")
+    net_logger = logging.getLogger("network")
+    sec_logger = logging.getLogger("security")
+    setup_logging("DEBUG")
     
-#     # 测试日志输出
-#     root_logger.debug("根记录器调试信息")
-#     root_logger.info("根记录器普通信息")
-#     db_logger.warning("数据库警告: 连接池接近满负荷")
-#     net_logger.error("网络错误: 连接超时")
-#     sec_logger.critical("安全警报: 检测到异常登录尝试")
-
-#     # 测试进度条日志集成
-#     with logging_redirect_tqdm():
-#         with tqdm(range(0, 100), desc="处理进度") as pbar:
-#             for i in pbar:
-#                 if i % 10 == 0:
-#                     root_logger.info(f"当前进度: {i}%")
-#                     db_logger.debug(f"数据库查询 {i} 次")
-#                 sleep(0.1)
+    print("测试不同级别的日志输出（使用动态格式）：")
+    root_logger.debug("根记录器调试信息")
+    root_logger.info("根记录器普通信息")
+    root_logger.warning("根记录器警告信息")
+    net_logger.error("网络错误: 连接超时")
+    sec_logger.critical("安全警报: 检测到异常登录尝试")
     
-#     root_logger.info("所有任务已完成!")
+    # 测试不同格式的差异
+    print("\n测试不同日志级别的格式差异：")
+    root_logger.debug("调试信息 - 包含文件名、行号和函数名")
+    root_logger.info("普通信息 - 简洁格式")
+    root_logger.warning("警告信息 - 带警告符号")
+    root_logger.error("错误信息 - 包含文件名和行号")
+    root_logger.critical("严重错误 - 包含模块名和文件名")

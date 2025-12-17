@@ -13,15 +13,34 @@ def get_max_id(date: dict) -> int:
         max_id (int): 索引id
 
     """
-    max_timestamp = 0
-    max_id = 0
+    max_timestamp:int = 0
+    max_id:int = 0
     list_data = date["items"]
     for index, item in enumerate(list_data):
-        timestamp = item["modules"]["module_author"]["pub_ts"]
+        timestamp = int(item["modules"]["module_author"]["pub_ts"])
         if timestamp > max_timestamp:
             max_timestamp = timestamp
             max_id = index
     return max_id
+
+def is_new_dynamic(old_data: "DynamicData", new_data: "DynamicData") -> bool:
+    """判断是否有新动态.
+
+    Args:
+        old_data (DynamicData): 旧的动态数据
+        new_data (DynamicData): 新的动态数据
+
+    Returns:
+        bool: 如果新动态的时间戳大于旧动态，返回True，否则返回False
+    """
+    old_timestamp = old_data.base_info.timestamp
+    new_timestamp = new_data.base_info.timestamp
+
+    # 新动态的时间戳大于旧动态，说明有新动态
+    if new_timestamp > old_timestamp:
+        return True
+    else:
+        return False
 
 
 class DynamicBaseData(BaseData):
@@ -101,7 +120,7 @@ class VideoData(BaseData):
         """
         self.raw_data = data  # 原始数据
         video_archive = data["major"]["archive"] # 视频信息
-        self.dynamic_text = data["desc"]["text"]
+        self.dynamic_text = data["desc"]["text"] if data.get("desc") else ""  # 动态文本
         self.av_id = video_archive.get("aid")  # 视频AV号
         self.bv_id = video_archive.get("bvid")  # 视频BV号
         self.title = video_archive.get("title")  # 视频标题

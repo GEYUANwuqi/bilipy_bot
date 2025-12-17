@@ -32,6 +32,32 @@ def _html2_text(text: str) -> str:
     text = re.sub(r'\n+', '\n', text).strip()  # 合并多个换行符并去除首尾空白
     return text
 
+def get_live_status(old_data: "LiveData", new_data: "LiveData") -> Literal["open", "close", "opening", "default"]:
+    """判断直播状态动态变化.
+
+    Args:
+        old_data (LiveData): 旧的直播数据
+        new_data (LiveData): 新的直播数据
+
+    Returns:
+        str: 直播状态 "open"(刚开播), "close"(刚下播), "opening"(直播中), "default"(未开播)
+    """
+    old_status = old_data.room_info.live_status
+    new_status = new_data.room_info.live_status
+
+    # 刚开播：旧状态不是直播中(0或2)，新状态是直播中(1)
+    if old_status != 1 and new_status == 1:
+        return "open"
+    # 刚下播：旧状态是直播中(1)，新状态不是直播中(0或2)
+    elif old_status == 1 and new_status != 1:
+        return "close"
+    # 直播中：新旧状态都是直播中(1)
+    elif old_status == 1 and new_status == 1:
+        return "opening"
+    # 未开播：其他情况(包括一直未开播、轮播等状态)
+    else:
+        return "default"
+
 
 class RoomInfo(BaseData):
     """直播间信息类."""
