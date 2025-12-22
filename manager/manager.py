@@ -5,6 +5,7 @@ from typing import Callable, Optional, Literal
 import asyncio
 import threading
 from functools import wraps
+import inspect
 
 _log = getLogger(__name__)
 
@@ -60,7 +61,7 @@ class BiliManager:
         _log.info(f"轮询间隔已从 {old_interval} 秒更改为 {interval} 秒")
 
     @property
-    def get_poll_interval(self) -> int:
+    def poll_interval(self) -> int:
         """获取当前轮询间隔.
 
         Returns:
@@ -76,13 +77,16 @@ class BiliManager:
 
         Usage:
             @manager.on_get_dynamic(uid=123456)
-            def handle_dynamic(data: DynamicData):
+            async def handle_dynamic(data: DynamicData):
                 print(f"获取到动态: {data}")
         """
         def decorator(func: Callable[[DynamicData], None]):
+            if not inspect.iscoroutinefunction(func):
+                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数 (async def)")
+
             @wraps(func)
-            def wrapper(data: DynamicData):
-                return func(data)
+            async def wrapper(data: DynamicData):
+                return await func(data)
 
             if uid not in self._on_get_dynamic_callbacks:
                 self._on_get_dynamic_callbacks[uid] = []
@@ -100,13 +104,16 @@ class BiliManager:
 
         Usage:
             @manager.on_get_live(room_id=12345)
-            def handle_live(data: LiveData):
+            async def handle_live(data: LiveData):
                 print(f"获取到直播间信息: {data}")
         """
         def decorator(func: Callable[[LiveData], None]):
+            if not inspect.iscoroutinefunction(func):
+                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数 (async def)")
+
             @wraps(func)
-            def wrapper(data: LiveData):
-                return func(data)
+            async def wrapper(data: LiveData):
+                return await func(data)
 
             if room_id not in self._on_get_live_callbacks:
                 self._on_get_live_callbacks[room_id] = []
@@ -124,13 +131,16 @@ class BiliManager:
 
         Usage:
             @manager.on_new_dynamic(uid=123456)
-            def handle_new_dynamic(data: DynamicData):
+            async def handle_new_dynamic(data: DynamicData):
                 print(f"新动态: {data}")
         """
         def decorator(func: Callable[[DynamicData], None]):
+            if not inspect.iscoroutinefunction(func):
+                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数 (async def)")
+
             @wraps(func)
-            def wrapper(data: DynamicData):
-                return func(data)
+            async def wrapper(data: DynamicData):
+                return await func(data)
 
             if uid not in self._on_new_dynamic_callbacks:
                 self._on_new_dynamic_callbacks[uid] = []
@@ -156,33 +166,35 @@ class BiliManager:
         Usage:
             # 所有状态都触发
             @manager.on_live_status(room_id=12345)
-            def handle_all_status(data: LiveData, status: Literal["open", "close", "opening", "default"]):
+            async def handle_all_status(data: LiveData, status: Literal["open", "close", "opening", "default"]):
                 print(f"直播状态: {status}")
 
             # 仅在开播时触发
             @manager.on_live_status(room_id=12345, status="open")
-            def handle_open(data: LiveData):
+            async def handle_open(data: LiveData):
                 print(f"开播了！")
 
             # 仅在下播时触发
             @manager.on_live_status(room_id=12345, status="close")
-            def handle_close(data: LiveData):
+            async def handle_close(data: LiveData):
                 print(f"下播了！")
         """
         def decorator(func: Callable):
+            if not inspect.iscoroutinefunction(func):
+                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数 (async def)")
+
             @wraps(func)
-            def wrapper(data: LiveData, current_status: Literal["open", "close", "opening", "default"]):
+            async def wrapper(data: LiveData, current_status: Literal["open", "close", "opening", "default"]):
                 # 如果指定了status，只在匹配时调用
                 if status is None or current_status == status:
                     # 根据函数签名决定是否传递status参数
-                    import inspect
                     sig = inspect.signature(func)
                     if len(sig.parameters) == 2:
                         # 函数接受两个参数 (data, status)
-                        return func(data, current_status)
+                        return await func(data, current_status)
                     else:
                         # 函数只接受一个参数 (data)
-                        return func(data)
+                        return await func(data)
 
             if room_id not in self._on_live_status_callbacks:
                 self._on_live_status_callbacks[room_id] = []
@@ -219,7 +231,7 @@ class BiliManager:
             if uid in self._on_get_dynamic_callbacks:
                 for callback in self._on_get_dynamic_callbacks[uid]:
                     try:
-                        callback(new_data)
+                        asyncio.create_task(callback(new_data))
                     except Exception as e:
                         _log.error(f"执行获取动态回调时出错: {e}")
 
@@ -230,7 +242,7 @@ class BiliManager:
                 if uid in self._on_new_dynamic_callbacks:
                     for callback in self._on_new_dynamic_callbacks[uid]:
                         try:
-                            callback(new_data)
+                            asyncio.create_task(callback(new_data))
                         except Exception as e:
                             _log.error(f"执行新动态回调时出错: {e}")
 
@@ -265,7 +277,7 @@ class BiliManager:
             if room_id in self._on_get_live_callbacks:
                 for callback in self._on_get_live_callbacks[room_id]:
                     try:
-                        callback(new_data)
+                        asyncio.create_task(callback(new_data))
                     except Exception as e:
                         _log.error(f"执行获取直播回调时出错: {e}")
 
@@ -276,7 +288,7 @@ class BiliManager:
             if room_id in self._on_live_status_callbacks:
                 for callback in self._on_live_status_callbacks[room_id]:
                     try:
-                        callback(new_data, status)
+                        asyncio.create_task(callback(new_data, status))
                     except Exception as e:
                         _log.error(f"执行直播状态回调时出错: {e}")
 
@@ -323,7 +335,7 @@ class BiliManager:
             _log.error(f"事件循环执行错误: {e}")
         finally:
             try:
-                self.loop.close()
+                self.loop.stop()
             except Exception as e:
                 _log.warning(f"关闭事件循环时出现警告: {e}")
 
@@ -338,7 +350,7 @@ class BiliManager:
         self.monitor_thread.start()
         _log.info("BiliManager 监控已启动")
 
-    def stop(self):
+    async def stop(self):
         """停止监控线程."""
         if not self._running:
             _log.warning("监控未在运行")
@@ -346,6 +358,9 @@ class BiliManager:
 
         _log.info("正在停止 BiliManager 监控...")
         self._running = False
+        await self.loop.shutdown_asyncgens()
+        self.loop.stop()
+        self.loop.close()
 
         # 等待监控线程结束（最多等待轮询间隔+2秒）
         if self.monitor_thread and self.monitor_thread.is_alive():
