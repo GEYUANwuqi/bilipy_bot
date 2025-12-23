@@ -1,7 +1,7 @@
 from api import BilibiliApi
 from event import LiveData, DynamicData, get_live_status, is_new_dynamic
 from logging import getLogger
-from typing import Callable, Optional, Literal
+from typing import Callable, Optional, Literal, Coroutine, Iterable
 import asyncio
 import threading
 from functools import wraps
@@ -13,7 +13,7 @@ _log = getLogger(__name__)
 class BiliManager:
     """BiliManager类，管理Bilibili相关功能."""
 
-    def __init__(self, sessdata: str = "", poll_interval: int = 12):
+    def __init__(self, sessdata: str = "", poll_interval: int = 20):
         """初始化BiliManager.
 
         Args:
@@ -228,23 +228,21 @@ class BiliManager:
             self._dynamic_data_new[uid] = new_data
 
             # 触发获取动态回调
-            if uid in self._on_get_dynamic_callbacks:
-                for callback in self._on_get_dynamic_callbacks[uid]:
-                    try:
-                        asyncio.create_task(callback(new_data))
-                    except Exception as e:
-                        _log.error(f"执行获取动态回调时出错: {e}")
+            for callback in self._on_get_dynamic_callbacks[uid]:
+                try:
+                    asyncio.create_task(callback(new_data))
+                except Exception as e:
+                    _log.error(f"执行获取动态回调时出错: {e}")
 
             # 检查是否有新动态
             if is_new_dynamic(self._dynamic_data_old[uid], new_data):
                 _log.info(f"检测到UID '{uid}' 有新动态")
                 # 触发新动态回调
-                if uid in self._on_new_dynamic_callbacks:
-                    for callback in self._on_new_dynamic_callbacks[uid]:
-                        try:
-                            asyncio.create_task(callback(new_data))
-                        except Exception as e:
-                            _log.error(f"执行新动态回调时出错: {e}")
+                for callback in self._on_new_dynamic_callbacks[uid]:
+                    try:
+                        asyncio.create_task(callback(new_data))
+                    except Exception as e:
+                        _log.error(f"执行新动态回调时出错: {e}")
 
         except Exception as e:
             import traceback
@@ -274,54 +272,61 @@ class BiliManager:
             self._live_data_new[room_id] = new_data
 
             # 触发获取直播回调
-            if room_id in self._on_get_live_callbacks:
-                for callback in self._on_get_live_callbacks[room_id]:
-                    try:
-                        asyncio.create_task(callback(new_data))
-                    except Exception as e:
-                        _log.error(f"执行获取直播回调时出错: {e}")
+            for callback in self._on_get_live_callbacks[room_id]:
+                try:
+                    asyncio.create_task(callback(new_data))
+                except Exception as e:
+                    _log.error(f"执行获取直播回调时出错: {e}")
 
             # 获取直播状态
             status = get_live_status(self._live_data_old[room_id], new_data)
 
             # 触发直播状态回调
-            if room_id in self._on_live_status_callbacks:
-                for callback in self._on_live_status_callbacks[room_id]:
-                    try:
-                        asyncio.create_task(callback(new_data, status))
-                    except Exception as e:
-                        _log.error(f"执行直播状态回调时出错: {e}")
+            for callback in self._on_live_status_callbacks[room_id]:
+                try:
+                    asyncio.create_task(callback(new_data, status))
+                except Exception as e:
+                    _log.error(f"执行直播状态回调时出错: {e}")
 
         except Exception as e:
             _log.error(f"轮询房间 '{room_id}' 直播数据时出错: {e}")
 
+    async def _run_tasks(self, task_factories: Iterable[Callable[[], Coroutine]]):
+        """全局锁式轮询运行任务列表."""
+        while self._running:
+            tasks = [
+                asyncio.create_task(factory()) for factory in task_factories
+            ]
+            for task in tasks:
+                await task
+                await asyncio.sleep(self._poll_interval)
+
     async def _monitor_loop(self):
         """监控主循环."""
+
         _log.info("BiliManager 监控循环已启动")
 
-        while self._running:
-            try:
-                # 创建所有轮询任务
-                tasks = []
+        try:
+            # 创建所有轮询任务
+            tasks = []
+            # 动态轮询
+            if self._monitored_uids:
+                dynamic_factories = [
+                    lambda uid = uid: self._poll_dynamic(uid) for uid in self._monitored_uids
+                ]
+                tasks.append(self._run_tasks(dynamic_factories))
 
-                # 添加动态轮询任务
-                for uid in self._monitored_uids:
-                    tasks.append(self._poll_dynamic(uid))
-
-                # 添加直播轮询任务
-                for room_id in self._monitored_room_ids:
-                    tasks.append(self._poll_live(room_id))
-
-                # 并发执行所有任务
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
-
-                # 等待下一次轮询
-                await asyncio.sleep(self._poll_interval)
-
-            except Exception as e:
-                _log.error(f"监控循环执行错误: {e}")
-                await asyncio.sleep(self._poll_interval)
+            # 直播轮询
+            if self._monitored_room_ids:
+                live_factories = [
+                    lambda room_id = room_id: self._poll_live(room_id) for room_id in self._monitored_room_ids
+                ]
+                tasks.append(self._run_tasks(live_factories))
+            # 并行运行所有任务
+            await asyncio.gather(*tasks)
+        except Exception as e:
+            _log.error(f"监控循环执行错误: {e}")
+            await asyncio.sleep(self._poll_interval)
 
     def _run_monitor_loop(self):
         """在线程中运行异步监控循环."""
@@ -339,7 +344,7 @@ class BiliManager:
             except Exception as e:
                 _log.warning(f"关闭事件循环时出现警告: {e}")
 
-    def start(self):
+    async def start(self):
         """启动监控线程."""
         if self._running:
             _log.warning("监控已经在运行中")

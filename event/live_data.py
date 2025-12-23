@@ -170,7 +170,7 @@ class LiveData(BaseData):
     async def get_live_info(self, status: Literal["open", "close", "opening", "default"]) -> str:
         info = ""
         if status == "open":
-            info = f"{self.anchor_info.name}开启了直播《{self.room_info.title}》，当前在线人数为{self.room_info.online}人"
+            info = f"{self.anchor_info.name}开启了直播《{self.room_info.title}》，快速链接：{self.room_info.jump_url}"
         elif status == "close":
             info = f"{self.anchor_info.name}下播了"
         elif status == "default":

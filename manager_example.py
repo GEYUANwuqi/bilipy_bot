@@ -32,7 +32,7 @@ async def send_qq(bat_text):
 
 # 1. 获取当前动态时回调
 @manager.on_get_dynamic(uid=TEST_UID)
-def handle_get_dynamic(data: DynamicData):
+async def handle_get_dynamic(data: DynamicData):
     """每次轮询获取动态时都会触发_log.info"""
     _log.info(f"[获取动态] UP主: {data.up_info.name}, 动态类型: {data.base_info.type}")
     _log.info(f"  时间: {data.base_info.time}, ID: {data.base_info.id}")
@@ -40,7 +40,7 @@ def handle_get_dynamic(data: DynamicData):
 
 # 2. 获取当前直播时回调
 @manager.on_get_live(room_id=TEST_ROOM_ID)
-def handle_get_live(data: LiveData):
+async def handle_get_live(data: LiveData):
     """每次轮询获取直播信息时都会触发"""
     _log.info(f"[获取直播] 主播: {data.anchor_info.name}, 房间标题: {data.room_info.title}")
     _log.info(f"  直播状态: {data.room_info.live_status}, 在线人数: {data.room_info.online}")
@@ -48,7 +48,7 @@ def handle_get_live(data: LiveData):
 
 # 3. 有新动态时回调
 @manager.on_new_dynamic(uid=TEST_UID)
-def handle_new_dynamic(data: DynamicData):
+async def handle_new_dynamic(data: DynamicData):
     """仅当检测到新动态时触发"""
     _log.info(f"[新动态] UP主 {data.up_info.name} 发布了新动态！")
     _log.info(f"  类型: {data.base_info.type}")
@@ -63,7 +63,7 @@ def handle_new_dynamic(data: DynamicData):
 
 # 4. 获取直播状态回调（所有状态）
 @manager.on_live_status(room_id=TEST_ROOM_ID)
-def handle_live_status(data: LiveData, status: Literal["open", "close", "opening", "default"]):
+async def handle_live_status(data: LiveData, status: Literal["open", "close", "opening", "default"]):
     """所有直播状态变化时都会触发"""
     print(f"[直播状态] 当前状态: {status}")
     if status == "open":
@@ -75,7 +75,7 @@ def handle_live_status(data: LiveData, status: Literal["open", "close", "opening
 
 # 4.1 仅在开播时回调
 @manager.on_live_status(room_id=TEST_ROOM_ID, status="open")
-def handle_live_open(data: LiveData):
+async def handle_live_open(data: LiveData):
     """仅在开播时触发"""
     print(f"[开播通知] {data.anchor_info.name} 开播了！")
     print(f"  标题: {data.room_info.title}")
@@ -106,7 +106,7 @@ def handle_live_open(data: LiveData):
 
 # 4.3 仅在直播中时回调（每次轮询都会触发）
 @manager.on_live_status(room_id=TEST_ROOM_ID, status="opening")
-def handle_live_opening(data: LiveData):
+async def handle_live_opening(data: LiveData):
     """直播进行中时触发"""
     print(f"[直播中] 在线人数: {data.room_info.online}")
     # 可以用来更新在线人数等信息
@@ -117,7 +117,7 @@ async def main():
     _log.info("启动BiliManager监控...")
     _log.info(f"监控UID: {manager._monitored_uids}")
     _log.info(f"监控房间: {manager._monitored_room_ids}")
-    _log.info(f"当前轮询间隔: {manager.get_poll_interval} 秒")
+    _log.info(f"当前轮询间隔: {manager.poll_interval} 秒")
 
     # 可以动态调整轮询间隔
     # manager.set_poll_interval(15)  # 修改为15秒
@@ -126,16 +126,16 @@ async def main():
 
     try:
         # 主线程保持运行
-        manager.start()
+        await manager.start()
         _log.info("监控已启动，按Ctrl+C停止...")
-        await asyncio.sleep(30)
-        manager.stop()
+        await asyncio.sleep(30000)
+        await manager.stop()
         #while True:
         #    await asyncio.sleep(1000000)
 
     except KeyboardInterrupt:
         _log.info("\n正在停止监控...")
-        manager.stop()
+        await manager.stop()
         _log.info("监控已停止")
 
 
