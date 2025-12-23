@@ -1,7 +1,7 @@
 from api import BilibiliApi
 from event import LiveData, DynamicData, get_live_status, is_new_dynamic
 from logging import getLogger
-from typing import Callable, Optional, Literal, Coroutine, Iterable
+from typing import Callable, Optional, Literal, Coroutine, Iterable, Any
 import asyncio
 import threading
 from functools import wraps
@@ -206,6 +206,48 @@ class BiliManager:
             return wrapper
         return decorator
 
+    async def _poll_data(
+        self,
+        id_key: int,
+        fetch_func: Callable,
+        old_data_attr: str,
+        new_data_attr: str
+    ) -> Any:
+        """通用的数据轮询处理函数.
+
+        Args:
+            id_key (int): 数据的唯一标识（uid或room_id）
+            fetch_func (Callable): 获取数据的异步函数
+            old_data_attr (str): 存储旧数据的实例属性名称
+            new_data_attr (str): 存储新数据的实例属性名称
+
+        Returns:
+            new_data 新数据
+        """
+        try:
+            # 获取新数据
+            new_data = await fetch_func()
+
+            # 获取实例属性
+            old_data_dict = getattr(self, old_data_attr)
+            new_data_dict = getattr(self, new_data_attr)
+
+            # 初始化数据（首次获取）
+            if id_key not in old_data_dict:
+                old_data_dict[id_key] = new_data
+                new_data_dict[id_key] = new_data
+                _log.info(f"初始化'{id_key}' 的数据")
+            else:
+                # 更新数据
+                old_data_dict[id_key] = new_data_dict[id_key]
+                new_data_dict[id_key] = new_data
+
+            return new_data
+
+        except Exception as e:
+            _log.error(f"获取 '{id_key}' 数据时出错: {e}")
+            raise
+
     async def _poll_dynamic(self, uid: int):
         """轮询动态数据.
 
@@ -213,19 +255,13 @@ class BiliManager:
             uid (int): 用户UID
         """
         try:
-            # 获取新动态数据
-            new_data = await self.api.get_new_dynamic(uid)
-
-            # 初始化旧数据
-            if uid not in self._dynamic_data_old:
-                self._dynamic_data_old[uid] = new_data
-                self._dynamic_data_new[uid] = new_data
-                _log.info(f"初始化UID '{uid}' 的动态数据")
-                return
-
-            # 更新数据
-            self._dynamic_data_old[uid] = self._dynamic_data_new[uid]
-            self._dynamic_data_new[uid] = new_data
+            # 使用通用轮询函数获取数据
+            new_data:DynamicData = await self._poll_data(
+                id_key=uid,
+                fetch_func=lambda: self.api.get_new_dynamic(uid),
+                old_data_attr="_dynamic_data_old",
+                new_data_attr="_dynamic_data_new"
+            )
 
             # 触发获取动态回调
             for callback in self._on_get_dynamic_callbacks[uid]:
@@ -249,7 +285,6 @@ class BiliManager:
             _log.error(f"轮询UID '{uid}' 动态数据时出错: {e}")
             _log.error(traceback.format_exc())
 
-
     async def _poll_live(self, room_id: int):
         """轮询直播数据.
 
@@ -257,48 +292,46 @@ class BiliManager:
             room_id (int): 直播间ID
         """
         try:
-            # 获取新直播数据
-            new_data = await self.api.get_room_info(room_id)
-
-            # 初始化旧数据
-            if room_id not in self._live_data_old:
-                self._live_data_old[room_id] = new_data
-                self._live_data_new[room_id] = new_data
-                _log.info(f"初始化房间 '{room_id}' 的直播数据")
-                return
-
-            # 更新数据
-            self._live_data_old[room_id] = self._live_data_new[room_id]
-            self._live_data_new[room_id] = new_data
+            # 使用通用轮询函数获取数据
+            new_data:LiveData = await self._poll_data(
+                id_key=room_id,
+                fetch_func=lambda: self.api.get_room_info(room_id),
+                old_data_attr="_live_data_old",
+                new_data_attr="_live_data_new"
+            )
 
             # 触发获取直播回调
-            for callback in self._on_get_live_callbacks[room_id]:
-                try:
-                    asyncio.create_task(callback(new_data))
-                except Exception as e:
-                    _log.error(f"执行获取直播回调时出错: {e}")
+            if room_id in self._on_get_live_callbacks:
+                for callback in self._on_get_live_callbacks[room_id]:
+                    try:
+                        asyncio.create_task(callback(new_data))
+                    except Exception as e:
+                        _log.error(f"执行获取直播回调时出错: {e}")
 
             # 获取直播状态
             status = get_live_status(self._live_data_old[room_id], new_data)
 
             # 触发直播状态回调
-            for callback in self._on_live_status_callbacks[room_id]:
-                try:
-                    asyncio.create_task(callback(new_data, status))
-                except Exception as e:
-                    _log.error(f"执行直播状态回调时出错: {e}")
+            if room_id in self._on_live_status_callbacks:
+                for callback in self._on_live_status_callbacks[room_id]:
+                    try:
+                        asyncio.create_task(callback(new_data, status))
+                    except Exception as e:
+                        _log.error(f"执行直播状态回调时出错: {e}")
 
         except Exception as e:
             _log.error(f"轮询房间 '{room_id}' 直播数据时出错: {e}")
 
     async def _run_tasks(self, task_factories: Iterable[Callable[[], Coroutine]]):
-        """全局锁式轮询运行任务列表."""
+        """全局锁式轮询运行任务列表.
+
+        按顺序执行每个任务：执行 -> 等待完成 -> 等待间隔 -> 下一个任务
+        """
         while self._running:
-            tasks = [
-                asyncio.create_task(factory()) for factory in task_factories
-            ]
-            for task in tasks:
-                await task
+            for factory in task_factories:
+                # 执行任务
+                await factory()
+                # 等待间隔时间后再执行下一个任务
                 await asyncio.sleep(self._poll_interval)
 
     async def _monitor_loop(self):
