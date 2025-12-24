@@ -30,10 +30,9 @@ class BiliManager:
         self._live_data_new: dict[int, Optional[LiveData]] = {}
 
         # 回调函数存储
-        self._on_get_dynamic_callbacks: dict[int, list[Callable]] = {}
-        self._on_get_live_callbacks: dict[int, list[Callable]] = {}
+        self._on_dynamic_callbacks: dict[int, list[Callable]] = {}
         self._on_new_dynamic_callbacks: dict[int, list[Callable]] = {}
-        self._on_live_status_callbacks: dict[int, list[Callable]] = {}
+        self._on_live_callbacks: dict[int, list[Callable]] = {}
 
         # 监控的UID和room_id
         self._monitored_uids: set[int] = set()
@@ -44,82 +43,95 @@ class BiliManager:
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self._running = False
 
-    def set_poll_interval(self, interval: int):
-        """设置轮询间隔.
+
+    # 注册回调函数 #
+
+
+    def _register_callback(
+        self,
+        callback_attr: str,
+        key: int,
+        wrapper: Callable
+    ):
+        """注册回调函数的通用方法.
 
         Args:
-            interval (int): 轮询间隔（秒），建议不低于5秒
-
-        Raises:
-            ValueError: 当间隔小于1秒时抛出异常
+            callback_attr (str): 回调函数字典的属性名
+            key (int): 回调的键（uid或room_id）
+            wrapper (Callable): 包装后的回调函数
         """
-        if interval < 1:
-            raise ValueError("轮询间隔不能小于1秒")
+        callback_dict = getattr(self, callback_attr)
+        if key not in callback_dict:
+            callback_dict[key] = []
+        callback_dict[key].append(wrapper)
 
-        old_interval = self._poll_interval
-        self._poll_interval = interval
-        _log.info(f"轮询间隔已从 {old_interval} 秒更改为 {interval} 秒")
+    def _register_uid_callback(
+        self,
+        callback_attr: str,
+        uid: int,
+        wrapper: Callable,
+        func_name: str
+    ):
+        """注册UID相关回调函数.
 
-    @property
-    def poll_interval(self) -> int:
-        """获取当前轮询间隔.
-
-        Returns:
-            int: 当前轮询间隔（秒）
+        Args:
+            callback_attr (str): 回调函数字典的属性名
+            uid (int): 用户UID
+            wrapper (Callable): 包装后的回调函数
+            func_name (str): 原始函数名称
         """
-        return self._poll_interval
+        self._register_callback(callback_attr, uid, wrapper)
+        self._monitored_uids.add(uid)
+        _log.debug(f"为UID '{uid}' 注册回调函数 '{func_name}' (attr={callback_attr})")
 
-    def on_get_dynamic(self, uid: int):
+    def _register_room_callback(
+        self,
+        callback_attr: str,
+        room_id: int,
+        wrapper: Callable,
+        func_name: str
+    ):
+        """注册直播间相关回调函数.
+
+        Args:
+            callback_attr (str): 回调函数字典的属性名
+            room_id (int): 直播间ID
+            wrapper (Callable): 包装后的回调函数
+            func_name (str): 原始函数名称
+        """
+        self._register_callback(callback_attr, room_id, wrapper)
+        self._monitored_room_ids.add(room_id)
+        _log.debug(f"为房间 '{room_id}' 注册回调函数 '{func_name}' (attr={callback_attr})")
+
+
+    # 装饰器方法 #
+
+
+    def on_dynamic(self, uid: int):
         """装饰器：获取当前动态时回调.
 
         Args:
             uid (int): 用户UID
 
         Usage:
-            @manager.on_get_dynamic(uid=123456)
+            @manager.on_dynamic(uid=123456)
             async def handle_dynamic(data: DynamicData):
                 print(f"获取到动态: {data}")
         """
         def decorator(func: Callable[[DynamicData], None]):
             if not inspect.iscoroutinefunction(func):
-                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数 (async def)")
+                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数")
 
             @wraps(func)
             async def wrapper(data: DynamicData):
                 return await func(data)
 
-            if uid not in self._on_get_dynamic_callbacks:
-                self._on_get_dynamic_callbacks[uid] = []
-            self._on_get_dynamic_callbacks[uid].append(wrapper)
-            self._monitored_uids.add(uid)
-            _log.debug(f"为UID '{uid}' 添加获取动态回调函数 '{func.__name__}'")
-            return wrapper
-        return decorator
-
-    def on_get_live(self, room_id: int):
-        """装饰器：获取当前直播时回调.
-
-        Args:
-            room_id (int): 直播间ID
-
-        Usage:
-            @manager.on_get_live(room_id=12345)
-            async def handle_live(data: LiveData):
-                print(f"获取到直播间信息: {data}")
-        """
-        def decorator(func: Callable[[LiveData], None]):
-            if not inspect.iscoroutinefunction(func):
-                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数 (async def)")
-
-            @wraps(func)
-            async def wrapper(data: LiveData):
-                return await func(data)
-
-            if room_id not in self._on_get_live_callbacks:
-                self._on_get_live_callbacks[room_id] = []
-            self._on_get_live_callbacks[room_id].append(wrapper)
-            self._monitored_room_ids.add(room_id)
-            _log.debug(f"为房间 '{room_id}' 添加获取直播回调函数 '{func.__name__}'")
+            self._register_uid_callback(
+                "_on_dynamic_callbacks",
+                uid,
+                wrapper,
+                func.__name__
+            )
             return wrapper
         return decorator
 
@@ -136,21 +148,22 @@ class BiliManager:
         """
         def decorator(func: Callable[[DynamicData], None]):
             if not inspect.iscoroutinefunction(func):
-                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数 (async def)")
+                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数")
 
             @wraps(func)
             async def wrapper(data: DynamicData):
                 return await func(data)
 
-            if uid not in self._on_new_dynamic_callbacks:
-                self._on_new_dynamic_callbacks[uid] = []
-            self._on_new_dynamic_callbacks[uid].append(wrapper)
-            self._monitored_uids.add(uid)
-            _log.debug(f"为UID '{uid}' 添加新动态回调函数 '{func.__name__}'")
+            self._register_uid_callback(
+                "_on_new_dynamic_callbacks",
+                uid,
+                wrapper,
+                func.__name__
+            )
             return wrapper
         return decorator
 
-    def on_live_status(self, room_id: int, status: Optional[Literal["open", "close", "opening", "default"]] = None):
+    def on_live(self, room_id: int, status: Optional[Literal["open", "close", "opening", "default"]] = None):
         """装饰器：获取直播状态回调.
 
         Args:
@@ -165,46 +178,51 @@ class BiliManager:
 
         Usage:
             # 所有状态都触发
-            @manager.on_live_status(room_id=12345)
+            @manager.on_live(room_id=12345)
             async def handle_all_status(data: LiveData, status: Literal["open", "close", "opening", "default"]):
                 print(f"直播状态: {status}")
 
             # 仅在开播时触发
-            @manager.on_live_status(room_id=12345, status="open")
+            @manager.on_live(room_id=12345, status="open")
             async def handle_open(data: LiveData):
                 print(f"开播了！")
 
             # 仅在下播时触发
-            @manager.on_live_status(room_id=12345, status="close")
+            @manager.on_live(room_id=12345, status="close")
             async def handle_close(data: LiveData):
                 print(f"下播了！")
         """
         def decorator(func: Callable):
             if not inspect.iscoroutinefunction(func):
-                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数 (async def)")
+                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数")
+            # 验证参数使用的合法性
+            sig = inspect.signature(func)
+            param_count = len(sig.parameters)
+            if (status is not None and param_count == 2) or (status is None and param_count == 1):
+                raise TypeError(f"注册'{func.__name__}'时出错: 未指定status参数")
 
             @wraps(func)
-            async def wrapper(data: LiveData, current_status: Literal["open", "close", "opening", "default"]):
-                # 如果指定了status，只在匹配时调用
-                if status is None or current_status == status:
-                    # 根据函数签名决定是否传递status参数
-                    sig = inspect.signature(func)
-                    if len(sig.parameters) == 2:
-                        # 函数接受两个参数 (data, status)
-                        return await func(data, current_status)
-                    else:
-                        # 函数只接受一个参数 (data)
-                        return await func(data)
-
-            if room_id not in self._on_live_status_callbacks:
-                self._on_live_status_callbacks[room_id] = []
-            self._on_live_status_callbacks[room_id].append(wrapper)
-            self._monitored_room_ids.add(room_id)
+            async def wrapper(data: LiveData, live_status: Literal["open", "close", "opening", "default"]):
+                if param_count == 2:
+                    # 函数接受两个参数 (data, status)
+                    return await func(data, live_status)
+                else:
+                    # 函数只接受一个参数 (data)
+                    return await func(data)
 
             status_desc = f"状态'{status}'" if status else "所有状态"
-            _log.debug(f"为房间 '{room_id}' 添加直播状态回调函数 '{func.__name__}' ({status_desc})")
+            self._register_room_callback(
+                "_on_live_callbacks",
+                room_id,
+                wrapper,
+                f"{func.__name__} ({status_desc})"
+            )
             return wrapper
         return decorator
+
+
+    # 轮询处理方法 #
+
 
     async def _poll_data(
         self,
@@ -264,7 +282,7 @@ class BiliManager:
             )
 
             # 触发获取动态回调
-            for callback in self._on_get_dynamic_callbacks[uid]:
+            for callback in self._on_dynamic_callbacks[uid]:
                 try:
                     asyncio.create_task(callback(new_data))
                 except Exception as e:
@@ -300,20 +318,12 @@ class BiliManager:
                 new_data_attr="_live_data_new"
             )
 
-            # 触发获取直播回调
-            if room_id in self._on_get_live_callbacks:
-                for callback in self._on_get_live_callbacks[room_id]:
-                    try:
-                        asyncio.create_task(callback(new_data))
-                    except Exception as e:
-                        _log.error(f"执行获取直播回调时出错: {e}")
-
             # 获取直播状态
             status = get_live_status(self._live_data_old[room_id], new_data)
 
             # 触发直播状态回调
-            if room_id in self._on_live_status_callbacks:
-                for callback in self._on_live_status_callbacks[room_id]:
+            if room_id in self._on_live_callbacks:
+                for callback in self._on_live_callbacks[room_id]:
                     try:
                         asyncio.create_task(callback(new_data, status))
                     except Exception as e:
@@ -321,6 +331,10 @@ class BiliManager:
 
         except Exception as e:
             _log.error(f"轮询房间 '{room_id}' 直播数据时出错: {e}")
+
+
+    # 线程运行方法 #
+
 
     async def _run_tasks(self, task_factories: Iterable[Callable[[], Coroutine]]):
         """全局锁式轮询运行任务列表.
@@ -411,3 +425,32 @@ class BiliManager:
                 _log.info("监控线程已正常结束")
 
         _log.info("BiliManager 监控已停止")
+
+
+    # 属性方法 #
+
+
+    def set_poll_interval(self, interval: int):
+        """设置轮询间隔.
+
+        Args:
+            interval (int): 轮询间隔（秒），建议不低于5秒
+
+        Raises:
+            ValueError: 当间隔小于1秒时抛出异常
+        """
+        if interval < 1:
+            raise ValueError("轮询间隔不能小于1秒")
+
+        old_interval = self._poll_interval
+        self._poll_interval = interval
+        _log.info(f"轮询间隔已从 {old_interval} 秒更改为 {interval} 秒")
+
+    @property
+    def poll_interval(self) -> int:
+        """获取当前轮询间隔.
+
+        Returns:
+            int: 当前轮询间隔（秒）
+        """
+        return self._poll_interval
