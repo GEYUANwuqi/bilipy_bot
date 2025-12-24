@@ -288,3 +288,8 @@ class DynamicData(BaseData):
         if data.get("type") == "DYNAMIC_TYPE_FORWARD":
             forward_raw = data.get("orig")
             self.forward_info = ForwardData(forward_raw)
+
+    @property
+    def is_live(self):
+        """判断动态是否为直播推荐类型."""
+        return self.base_info.type == "DYNAMIC_TYPE_LIVE_RCMD"

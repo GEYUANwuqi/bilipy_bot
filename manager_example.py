@@ -6,15 +6,15 @@ from utils import setup_logging
 from logging import getLogger
 import asyncio
 
-setup_logging("DEBUG")
-_log = getLogger("ManagerExample")
+setup_logging("INFO")
+_log = getLogger("BILIBILI")
 
 # 创建管理器实例
 manager = BiliManager(sessdata="", poll_interval=12)
 
 # 示例UID和房间ID
-TEST_UID = 621240130  # 替换为实际的UID
-TEST_ROOM_ID = 26498147  # 替换为实际的房间ID
+TEST_UID = [621240130,1802011210]  # 替换为实际的UID
+TEST_ROOM_ID = [26498147,22758221]  # 替换为实际的房间ID
 
 
 async def send_qq(bat_text):
@@ -34,18 +34,12 @@ async def send_qq(bat_text):
 @manager.on_dynamic(uid=TEST_UID)
 async def handle_get_dynamic(data: DynamicData):
     """每次轮询获取动态时都会触发_log.info"""
-    _log.info(f"[获取动态] UP主: {data.up_info.name}, 动态类型: {data.base_info.type}")
-    _log.info(f"  时间: {data.base_info.time}, ID: {data.base_info.id}")
-
-
-@manager.on_dynamic(uid=1802011210)
-async def handle_get_dynamic(data: DynamicData):
-    """每次轮询获取动态时都会触发_log.info"""
-    _log.info(f"[获取动态] UP主: {data.up_info.name}, 动态类型: {data.base_info.type}")
-    _log.info(f"  时间: {data.base_info.time}, ID: {data.base_info.id}")
+    _log.info(data)
+    #_log.info(f"[获取动态] UP主: {data.up_info.name}, 动态类型: {data.base_info.type}")
+    #_log.info(f"  时间: {data.base_info.time}, ID: {data.base_info.id}")
 
 # 3. 有新动态时回调
-@manager.on_new_dynamic(uid=TEST_UID)
+@manager.on_dynamic(uid=TEST_UID, status="new")
 async def handle_new_dynamic(data: DynamicData):
     """仅当检测到新动态时触发"""
     _log.info(f"[新动态] UP主 {data.up_info.name} 发布了新动态！")
@@ -71,15 +65,11 @@ async def handle_live_status(data: LiveData, status: Literal["open", "close", "o
         print(f"  {data.anchor_info.name} 下播了")
 
 # 4. 获取直播状态回调（所有状态）
-@manager.on_live(room_id=22758221)
-async def handle_live_status(data: LiveData, status: Literal["open", "close", "opening", "default"]):
+@manager.on_live(room_id=TEST_ROOM_ID, status="opening")
+async def handle_live_status(data: LiveData):
     """所有直播状态变化时都会触发"""
-    _log.info(f"[直播状态] 当前状态: {status}")
-    if status == "open":
-        print(f"  {data.anchor_info.name} 开播了！")
-        print(f"  标题: {data.room_info.title}")
-    elif status == "close":
-        print(f"  {data.anchor_info.name} 下播了")
+    _log.info(f"{data.anchor_info.name}在直播")
+
 
 ## 4.2 仅在下播时回调 - 发送QQ消息
 #@manager.on_live_status(room_id=TEST_ROOM_ID, status="close")
