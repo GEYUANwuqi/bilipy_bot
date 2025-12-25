@@ -6,6 +6,7 @@ import asyncio
 import threading
 from functools import wraps
 import inspect
+import traceback
 
 _log = getLogger(__name__)
 
@@ -29,6 +30,8 @@ class BiliManager:
         self._live_data_old: dict[int, Optional[LiveData]] = {}
         self._live_data_new: dict[int, Optional[LiveData]] = {}
 
+        # TODO: 回调函数存储结构优化
+        # 回调函数存储结构
         self._on_dynamic_callbacks: dict[int, list[tuple[Callable, str]]] = {}
         self._on_live_callbacks: dict[int, list[tuple[Callable, str]]] = {}
 
@@ -37,18 +40,44 @@ class BiliManager:
         self._monitored_room_ids: set[int] = set()
 
         # 线程和事件循环
-        self.monitor_thread: Optional[threading.Thread] = None
-        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self._monitor_thread: Optional[threading.Thread] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._running = False
 
 
     # 注册回调函数 #
 
 
+    def _wrap_callback(
+        self,
+        func: Callable
+    ) -> Callable:
+        """检查并包装回调函数
+
+        验证函数是否为协程函数，并用 @wraps 保留原函数元信息
+
+        Args:
+            func (Callable): 原始回调函数
+
+        Returns:
+            Callable: 包装后的回调函数
+
+        Raises:
+            TypeError: 如果回调函数不是协程函数
+        """
+        if not inspect.iscoroutinefunction(func):
+            raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数")
+
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            return await func(*args, **kwargs)
+
+        return wrapper
+
     def _register_callback(
         self,
         callback_attr: str,
-        key: int,
+        keys: list[int],
         wrapper: Callable,
         func_name: str,
         status_filter: str,
@@ -58,32 +87,78 @@ class BiliManager:
 
         Args:
             callback_attr (str): 回调函数字典的属性名
-            key (int): 回调的键（uid或room_id）
+            keys (list[int]): 回调的键列表（uid或room_id）
             wrapper (Callable): 包装后的回调函数
             func_name (str): 原始函数名称
             status_filter (str): 状态过滤器
             monitored_set_attr (str): 监控集合的属性名
         """
         callback_dict = getattr(self, callback_attr)
-        if key not in callback_dict:
-            callback_dict[key] = []
-        # 存储 (callback, status_filter) 元组
-        callback_dict[key].append((wrapper, status_filter))
+        monitored_set = getattr(self, monitored_set_attr)
 
-        # 添加到监控集合
-        if monitored_set_attr:
-            monitored_set = getattr(self, monitored_set_attr)
+        for key in keys:
+            if key not in callback_dict:
+                callback_dict[key] = []
+            # 存储 (callback, status_filter) 元组
+            callback_dict[key].append((wrapper, status_filter))
             monitored_set.add(key)
 
-        status_desc = f"status='{status_filter}'"
-        _log.debug(f"为 '{key}' 注册回调函数 '{func_name}' ({status_desc}, attr={callback_attr})")
+            status_desc = f"status='{status_filter}'"
+            _log.debug(f"为 '{key}' 注册回调函数 '{func_name}' ({status_desc}, attr={callback_attr})")
 
+
+    # 注册器方法 #
+
+
+    # TODO: status应当用枚举常量表达，检查是否可用
+    def add_dynamic_callback(
+        self,
+        uid: list[int],
+        callback: Callable[[DynamicData], None],
+        status: Literal["all", "new"] = "all"
+    ):
+        """直接添加动态回调函数（不使用装饰器）"""
+        wrapper = self._wrap_callback(callback)
+        self._register_callback(
+            "_on_dynamic_callbacks",
+            uid,
+            wrapper,
+            callback.__name__,
+            status,
+            "_monitored_uids"
+        )
+
+    def add_live_callback(
+        self,
+        room_id: list[int],
+        callback: Callable[[LiveData], None],
+        status: Literal["all", "open", "close", "opening", "default"] = "all"
+    ):
+        """直接添加直播回调函数（不使用装饰器）"""
+        # 验证参数使用的合法性
+        sig = inspect.signature(callback)
+        param_count = len(sig.parameters)
+        if (status != "all" and param_count == 2) or (status == "all" and param_count == 1):
+            raise TypeError(f"注册'{callback.__name__}'时出错: 未指定status参数")
+        wrapper = self._wrap_callback(callback)
+        self._register_callback(
+            "_on_live_callbacks",
+            room_id,
+            wrapper,
+            callback.__name__,
+            status,
+            "_monitored_room_ids"
+        )
 
 
     # 装饰器方法 #
 
-
-    def on_dynamic(self, uid: list[int], status: Literal["all", "new"] = "all"):
+    # TODO: 计划status必须传参，否则默认all，应当联动过滤器进行处理
+    def on_dynamic(
+        self,
+        uid: list[int],
+        status: Literal["all", "new"] = "all"
+    ):
         """装饰器：获取动态时回调.
 
         Args:
@@ -104,27 +179,19 @@ class BiliManager:
             async def handle_new_dynamic(data: DynamicData):
                 print(f"新动态: {data}")
         """
-        def decorator(func: Callable[[DynamicData], None]):
-            if not inspect.iscoroutinefunction(func):
-                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数")
-
-            @wraps(func)
-            async def wrapper(data: DynamicData):
-                return await func(data)
-
-            for u in uid:
-                self._register_callback(
-                    "_on_dynamic_callbacks",
-                    u,
-                    wrapper,
-                    func.__name__,
-                    status,
-                    "_monitored_uids"
-                )
-            return wrapper
+        def decorator(
+            func: Callable[[DynamicData], None]
+        ):
+            # 直接使用现有的注册器方法
+            self.add_dynamic_callback(uid, func, status)
+            return func
         return decorator
 
-    def on_live(self, room_id: list[int], status: Literal["all", "open", "close", "opening", "default"] = "all"):
+    def on_live(
+        self,
+        room_id: list[int],
+        status: Literal["all", "open", "close", "opening", "default"] = "all"
+    ):
         """装饰器：获取直播状态回调.
 
         Args:
@@ -148,35 +215,12 @@ class BiliManager:
             async def handle_open(data: LiveData):
                 print(f"开播了！")
         """
-        def decorator(func: Callable):
-            if not inspect.iscoroutinefunction(func):
-                raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数")
-            # 验证参数使用的合法性
-            sig = inspect.signature(func)
-            param_count = len(sig.parameters)
-            if (status != "all" and param_count == 2) or (status == "all" and param_count == 1):
-                raise TypeError(f"注册'{func.__name__}'时出错: 未指定status参数")
-
-            @wraps(func)
-            async def wrapper(data: LiveData, live_status: Literal["open", "close", "opening", "default"]):
-                if param_count == 2:
-                    # 函数接受两个参数 (data, status)
-                    return await func(data, live_status)
-                else:
-                    # 函数只接受一个参数 (data)
-                    return await func(data)
-
-            # 注册回调时传递状态过滤器
-            for rid in room_id:
-                self._register_callback(
-                    "_on_live_callbacks",
-                    rid,
-                    wrapper,
-                    func.__name__,
-                    status,
-                    "_monitored_room_ids"
-                )
-            return wrapper
+        def decorator(
+            func: Callable[[LiveData], None]
+        ):
+            # 直接使用现有的注册器方法
+            self.add_live_callback(room_id, func, status)
+            return func
         return decorator
 
 
@@ -225,6 +269,7 @@ class BiliManager:
             _log.error(f"获取 '{id_key}' 数据时出错: {e}")
             raise
 
+    # TODO: 需要更明确的status过滤实现
     async def _trigger_callbacks(
         self,
         callback_attr: str,
@@ -255,14 +300,17 @@ class BiliManager:
                 except Exception as e:
                     _log.error(f"执行回调时出错 (attr={callback_attr}, key={key}): {e}")
 
-    async def _poll_dynamic(self, uid: int):
+    async def _poll_dynamic(
+        self,
+        uid: int
+    ):
         """轮询动态数据.
 
         Args:
             uid (int): 用户UID
         """
         try:
-            # 使用通用轮询函数获取数据
+            # 获取数据
             new_data:DynamicData = await self._poll_data(
                 id_key=uid,
                 fetch_func=lambda: self.api.get_new_dynamic(uid),
@@ -289,7 +337,10 @@ class BiliManager:
             _log.error(f"轮询UID '{uid}' 动态数据时出错: {e}")
             _log.error(traceback.format_exc())
 
-    async def _poll_live(self, room_id: int):
+    async def _poll_live(
+        self,
+        room_id: int
+    ):
         """轮询直播数据.
 
         Args:
@@ -319,17 +370,39 @@ class BiliManager:
     # 线程运行方法 #
 
 
-    async def _run_tasks(self, task_factories: Iterable[Callable[[], Coroutine]]):
+    async def _run_tasks(
+        self,
+        task_factories: Iterable[Callable[[], Coroutine]]
+    ):
         """全局锁式轮询运行任务列表.
 
         按顺序执行每个任务：执行任务1 -> 等待间隔 -> 执行任务2
         """
         while self._running:
             for factory in task_factories:
+                if not self._running:
+                    _log.debug("检测到停止信号，退出任务循环")
+                    return
                 # 执行任务
-                await factory()
+                try:
+                    await factory()
+                except asyncio.CancelledError:
+                    _log.debug("任务被取消")
+                    return
+                except Exception as e:
+                    _log.error(traceback.format_exc())
+                    _log.error(f"执行任务时出错: {e}")
+
+                # 检查是否需要停止
+                if not self._running:
+                    return
+
                 # 等待间隔时间后再执行下一个任务
-                await asyncio.sleep(self._poll_interval)
+                try:
+                    await asyncio.sleep(self._poll_interval)
+                except asyncio.CancelledError:
+                    _log.debug("等待间隔被取消")
+                    return
 
     async def _monitor_loop(self):
         """监控主循环."""
@@ -354,59 +427,79 @@ class BiliManager:
                 tasks.append(self._run_tasks(live_factories))
             # 并行运行所有任务
             await asyncio.gather(*tasks)
+        except asyncio.CancelledError:
+            _log.info("监控循环已被取消")
         except Exception as e:
+            _log.error(traceback.format_exc())
             _log.error(f"监控循环执行错误: {e}")
-            await asyncio.sleep(self._poll_interval)
 
     def _run_monitor_loop(self):
         """在线程中运行异步监控循环."""
         # 创建新的事件循环
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
 
         try:
-            self.loop.run_until_complete(self._monitor_loop())
+            self._loop.run_until_complete(self._monitor_loop())
         except Exception as e:
             _log.error(f"事件循环执行错误: {e}")
         finally:
             try:
-                self.loop.stop()
+                # 取消所有待处理的任务
+                pending = asyncio.all_tasks(self._loop)
+                for task in pending:
+                    task.cancel()
+
+                # 等待所有任务完成取消
+                if pending:
+                    self._loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True)
+                    )
+
+                # 关闭异步生成器
+                self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+
+                # 关闭事件循环
+                self._loop.close()
+                _log.debug("事件循环已正常关闭")
             except Exception as e:
                 _log.warning(f"关闭事件循环时出现警告: {e}")
 
-    async def start(self):
+    def start(self):
         """启动监控线程."""
         if self._running:
             _log.warning("监控已经在运行中")
             return
 
         self._running = True
-        self.monitor_thread = threading.Thread(target=self._run_monitor_loop, daemon=True)
-        self.monitor_thread.start()
+        self._monitor_thread = threading.Thread(target=self._run_monitor_loop, daemon=True)
+        self._monitor_thread.start()
         _log.info("BiliManager 监控已启动")
 
-    async def stop(self):
-        """停止监控线程."""
+    def stop(self):
+        """终止监控线程."""
         if not self._running:
             _log.warning("监控未在运行")
             return
 
-        _log.info("正在停止 BiliManager 监控...")
+        _log.info("正在终止 BiliManager 监控...")
+        # 设置停止信号
         self._running = False
-        await self.loop.shutdown_asyncgens()
-        self.loop.stop()
-        self.loop.close()
+        # 如果事件循环存在且正在运行，线程安全地停止它
+        if self._loop and self._loop.is_running():
+            def cancel_all_tasks():
+                for task in asyncio.all_tasks(self._loop):
+                    task.cancel()
+            self._loop.call_soon_threadsafe(cancel_all_tasks)
 
         # 等待监控线程结束（最多等待轮询间隔+2秒）
-        if self.monitor_thread and self.monitor_thread.is_alive():
+        if self._monitor_thread and self._monitor_thread.is_alive():
             timeout = self._poll_interval + 2
-            self.monitor_thread.join(timeout=timeout)
+            self._monitor_thread.join(timeout=timeout)
+            _log.info("监控线程已正常结束")
 
-            if self.monitor_thread.is_alive():
-                _log.warning(f"监控线程在 {timeout} 秒内未能正常结束")
-            else:
-                _log.info("监控线程已正常结束")
-
+        self._monitor_thread = None
+        self._loop = None
         _log.info("BiliManager 监控已停止")
 
 
