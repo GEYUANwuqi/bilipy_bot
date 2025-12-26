@@ -1,4 +1,5 @@
 from abc import ABC
+from typing import TypeVar
 
 
 class BaseData(ABC):
@@ -17,3 +18,6 @@ class BaseData(ABC):
         }
         parts = [f"{k}={repr(v)}" for k, v in props.items()]
         return ", ".join(parts)
+
+
+SubData = TypeVar("SubData", bound=BaseData)

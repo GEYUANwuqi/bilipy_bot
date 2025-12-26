@@ -1,5 +1,6 @@
 from typing import Any, Optional
 from .base_data import BaseData
+from utils import DynamicStatus
 from logging import getLogger
 
 _log = getLogger("DynamicData")
@@ -22,25 +23,6 @@ def get_max_id(date: dict) -> int:
             max_timestamp = timestamp
             max_id = index
     return max_id
-
-def is_new_dynamic(old_data: "DynamicData", new_data: "DynamicData") -> bool:
-    """判断是否有新动态.
-
-    Args:
-        old_data (DynamicData): 旧的动态数据
-        new_data (DynamicData): 新的动态数据
-
-    Returns:
-        bool: 如果新动态的时间戳大于旧动态，返回True，否则返回False
-    """
-    old_timestamp = old_data.base_info.timestamp
-    new_timestamp = new_data.base_info.timestamp
-
-    # 新动态的时间戳大于旧动态，说明有新动态
-    if new_timestamp > old_timestamp:
-        return True
-    else:
-        return False
 
 
 class DynamicBaseData(BaseData):
@@ -263,6 +245,7 @@ class DynamicData(BaseData):
         self.raw_data: dict[Any, Any] = data # 原始数据
         self.base_info: DynamicBaseData = DynamicBaseData(data) # 动态基础信息
         self.up_info: UPData = UPData(data) # UP主信息
+        self._status: DynamicStatus = DynamicStatus.ALL  # 私有状态属性
 
         # 解析视频信息
         if data.get("type") == "DYNAMIC_TYPE_AV":
@@ -288,6 +271,40 @@ class DynamicData(BaseData):
         if data.get("type") == "DYNAMIC_TYPE_FORWARD":
             forward_raw = data.get("orig")
             self.forward_info = ForwardData(forward_raw)
+
+    def set_status(self, old_data: "DynamicData") -> DynamicStatus:
+        """根据旧数据设置当前的动态状态, 然后立刻返回当前状态.
+
+        Args:
+            old_data (DynamicData): 旧的动态数据，用于比较状态变化
+        Returns:
+            DynamicStatus: 当前的动态状态
+        """
+        old_timestamp = old_data.base_info.timestamp
+        new_timestamp = self.base_info.timestamp
+
+        # 新动态的时间戳大于旧动态，说明有新动态
+        if new_timestamp > old_timestamp:
+            self._status = DynamicStatus.NEW
+        # 新动态的时间戳早于旧动态，说明动态被删除
+        elif new_timestamp < old_timestamp:
+            # 将旧动态标记为已删除
+            old_data._status = DynamicStatus.DELETED
+            # 将当前（新获取的）动态标记为旧动态
+            self._status = DynamicStatus.OLD
+        # 时间戳相同，没有变化
+        else:
+            self._status = DynamicStatus.NULL
+        return self._status
+
+    @property
+    def status(self) -> DynamicStatus:
+        """获取当前动态状态.
+
+        Returns:
+            DynamicStatus: 当前的动态状态
+        """
+        return self._status
 
     @property
     def is_live(self):

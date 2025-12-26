@@ -1,19 +1,20 @@
 """BiliManager使用示例"""
 from manager import BiliManager
 from event import DynamicData, LiveData
-from typing import Literal
+from utils import LiveStatus, DynamicStatus
 from utils import setup_logging
 from logging import getLogger
 import asyncio
 
-setup_logging("INFO")
+setup_logging("DEBUG")
 _log = getLogger("BILIBILI")
 
 # 创建管理器实例
 manager = BiliManager(sessdata="", poll_interval=12)
 
 # 示例UID和房间ID
-TEST_UID = [621240130,1802011210]  # 替换为实际的UID
+#TEST_UID = [621240130,1802011210,3546729368520811]  # 替换为实际的UID
+TEST_UID = [621240130]
 TEST_ROOM_ID = [26498147,22758221]  # 替换为实际的房间ID
 
 
@@ -34,39 +35,31 @@ async def send_qq(bat_text):
 @manager.on_dynamic(uid=TEST_UID)
 async def handle_get_dynamic(data: DynamicData):
     """每次轮询获取动态时都会触发_log.info"""
-    _log.info(data)
+    _log.info(f"{data.up_info.name}的动态{data.base_info.type}")
     #_log.info(f"[获取动态] UP主: {data.up_info.name}, 动态类型: {data.base_info.type}")
     #_log.info(f"  时间: {data.base_info.time}, ID: {data.base_info.id}")
 
 # 3. 有新动态时回调
-@manager.on_dynamic(uid=TEST_UID, status="new")
+@manager.on_dynamic(uid=TEST_UID, status=DynamicStatus.NEW)
 async def handle_new_dynamic(data: DynamicData):
     """仅当检测到新动态时触发"""
     _log.info(f"[新动态] UP主 {data.up_info.name} 发布了新动态！")
-    _log.info(f"  类型: {data.base_info.type}")
-    _log.info(f"  链接: {data.base_info.jump_url}")
+    _log.info(data)
 
-    # 根据动态类型处理
-    if data.video_info:
-        _log.info(f"  视频: {data.video_info.title}")
-    elif data.base_info.text:
-        _log.info(f"  内容: {data.base_info.text[:50]}...")
-
+@manager.on_dynamic(uid=TEST_UID, status=DynamicStatus.DELETED)
+async def handle_del_dynamic(data: DynamicData):
+    """仅当检测到删除动态时触发"""
+    _log.info(f"[删除动态] UP主 {data.up_info.name} 删除了动态{data.base_info.text}！")
 
 # 4. 获取直播状态回调（所有状态）
 @manager.on_live(room_id=TEST_ROOM_ID)
-async def handle_live_status(data: LiveData, status: Literal["open", "close", "opening", "default"]):
+async def handle_live_status(data: LiveData):
     """所有直播状态变化时都会触发"""
-    _log.info(f"[直播状态] 当前状态: {status}")
-    if status == "open":
-        print(f"  {data.anchor_info.name} 开播了！")
-        print(f"  标题: {data.room_info.title}")
-    elif status == "close":
-        print(f"  {data.anchor_info.name} 下播了")
+    _log.info(f"[直播状态] {data.anchor_info.name}当前{data.status}")
 
 # 4. 获取直播状态回调（所有状态）
-@manager.on_live(room_id=TEST_ROOM_ID, status="opening")
-async def handle_live_status(data: LiveData):
+@manager.on_live(room_id=TEST_ROOM_ID, status=LiveStatus.ONLINE)
+async def handle_live_opening(data: LiveData):
     """所有直播状态变化时都会触发"""
     _log.info(f"{data.anchor_info.name}在直播")
 
@@ -104,16 +97,16 @@ async def main():
 
     try:
         # 主线程保持运行
-        await manager.start()
+        manager.start()
         _log.info("监控已启动，按Ctrl+C停止...")
-        await asyncio.sleep(30000)
-        await manager.stop()
+        await asyncio.sleep(300)
+        manager.stop()
         #while True:
         #    await asyncio.sleep(1000000)
 
     except KeyboardInterrupt:
         _log.info("\n正在停止监控...")
-        await manager.stop()
+        manager.stop()
         _log.info("监控已停止")
 
 

@@ -1,7 +1,8 @@
-from typing import Any, Optional, Literal, Union
+from typing import Any, Optional
 import re
 from html import unescape
 from .base_data import BaseData
+from utils import LiveStatus
 from time import time
 from logging import getLogger
 
@@ -31,32 +32,6 @@ def _html2_text(text: str) -> str:
     text = re.sub(r' *\n *', '\n', text)  # 去除换行符前后的空格
     text = re.sub(r'\n+', '\n', text).strip()  # 合并多个换行符并去除首尾空白
     return text
-
-def get_live_status(old_data: "LiveData", new_data: "LiveData") -> Literal["open", "close", "opening", "default"]:
-    """判断直播状态动态变化.
-
-    Args:
-        old_data (LiveData): 旧的直播数据
-        new_data (LiveData): 新的直播数据
-
-    Returns:
-        str: 直播状态 "open"(刚开播), "close"(刚下播), "opening"(直播中), "default"(未开播)
-    """
-    old_status = old_data.room_info.live_status
-    new_status = new_data.room_info.live_status
-
-    # 刚开播：旧状态不是直播中(0或2)，新状态是直播中(1)
-    if old_status != 1 and new_status == 1:
-        return "open"
-    # 刚下播：旧状态是直播中(1)，新状态不是直播中(0或2)
-    elif old_status == 1 and new_status != 1:
-        return "close"
-    # 直播中：新旧状态都是直播中(1)
-    elif old_status == 1 and new_status == 1:
-        return "opening"
-    # 未开播：其他情况(包括一直未开播、轮播等状态)
-    else:
-        return "default"
 
 
 class RoomInfo(BaseData):
@@ -166,16 +141,51 @@ class LiveData(BaseData):
         self.anchor_info: AnchorInfo = AnchorInfo(data["anchor_info"])  # 主播信息
         self.watched_show: WatchedShow = WatchedShow(data["watched_show"])  # 观看榜信息
         self.notice_board: NoticeBoard = NoticeBoard(data["news_info"])  # 公告栏信息
+        self._status: LiveStatus = LiveStatus.ALL  # 私有状态属性
 
-    async def get_live_info(self, status: Literal["open", "close", "opening", "default"]) -> str:
+    def set_status(self, old_data: "LiveData") -> LiveStatus:
+        """根据旧数据设置当前的直播状态, 然后立刻返回当前状态.
+
+        Args:
+            old_data (LiveData): 旧的直播数据，用于比较状态变化
+        Returns:
+            LiveStatus: 当前的直播状态
+        """
+        old_status = old_data.room_info.live_status
+        new_status = self.room_info.live_status
+
+        # 刚开播：旧状态不是直播中(0或2)，新状态是直播中(1)
+        if old_status != 1 and new_status == 1:
+            self._status = LiveStatus.OPEN
+        # 刚下播：旧状态是直播中(1)，新状态不是直播中(0或2)
+        elif old_status == 1 and new_status != 1:
+            self._status = LiveStatus.CLOSE
+        # 直播中：新旧状态都是直播中(1)
+        elif old_status == 1 and new_status == 1:
+            self._status = LiveStatus.ONLINE
+        # 未开播：其他情况(包括一直未开播、轮播等状态)
+        else:
+            self._status = LiveStatus.OFFLINE
+        return self._status
+
+    @property
+    def status(self) -> LiveStatus:
+        """获取当前直播状态.
+
+        Returns:
+            LiveStatus: 当前的直播状态
+        """
+        return self._status
+
+    async def get_live_info(self, status: LiveStatus) -> str:
         info = ""
-        if status == "open":
+        if status == LiveStatus.OPEN:
             info = f"{self.anchor_info.name}开启了直播《{self.room_info.title}》，快速链接：{self.room_info.jump_url}"
-        elif status == "close":
+        elif status == LiveStatus.CLOSE:
             info = f"{self.anchor_info.name}下播了"
-        elif status == "default":
+        elif status == LiveStatus.OFFLINE:
             info = f"{self.anchor_info.name}当前并没有在直播"
-        elif status == "opening":
+        elif status == LiveStatus.ONLINE:
             live_time = int(time()) - self.room_info.live_start_time
             hours, remainder = divmod(live_time, 3600)
             minutes, seconds = divmod(remainder, 60)

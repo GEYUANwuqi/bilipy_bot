@@ -1,12 +1,14 @@
 from api import BilibiliApi
-from event import LiveData, DynamicData, get_live_status, is_new_dynamic
+from event import LiveData, DynamicData, SubData
+from utils import LiveStatus, DynamicStatus, BaseStatus
 from logging import getLogger
-from typing import Callable, Optional, Literal, Coroutine, Iterable, Any
+from typing import Callable, Optional, Coroutine, Iterable, Any
 import asyncio
 import threading
 from functools import wraps
 import inspect
 import traceback
+
 
 _log = getLogger(__name__)
 
@@ -110,21 +112,26 @@ class BiliManager:
     # 注册器方法 #
 
 
-    # TODO: status应当用枚举常量表达，检查是否可用
     def add_dynamic_callback(
         self,
         uid: list[int],
         callback: Callable[[DynamicData], None],
-        status: Literal["all", "new"] = "all"
+        status: DynamicStatus = DynamicStatus.ALL
     ):
-        """直接添加动态回调函数（不使用装饰器）"""
+        """直接添加动态回调函数（不使用装饰器）
+
+        Args:
+            uid: 用户UID列表
+            callback: 回调函数
+            status: 状态过滤器，默认为 DynamicStatus.ALL（匹配所有状态）
+        """
         wrapper = self._wrap_callback(callback)
         self._register_callback(
             "_on_dynamic_callbacks",
             uid,
             wrapper,
             callback.__name__,
-            status,
+            status.value,
             "_monitored_uids"
         )
 
@@ -132,41 +139,42 @@ class BiliManager:
         self,
         room_id: list[int],
         callback: Callable[[LiveData], None],
-        status: Literal["all", "open", "close", "opening", "default"] = "all"
+        status: LiveStatus = LiveStatus.ALL
     ):
-        """直接添加直播回调函数（不使用装饰器）"""
-        # 验证参数使用的合法性
-        sig = inspect.signature(callback)
-        param_count = len(sig.parameters)
-        if (status != "all" and param_count == 2) or (status == "all" and param_count == 1):
-            raise TypeError(f"注册'{callback.__name__}'时出错: 未指定status参数")
+        """直接添加直播回调函数（不使用装饰器）
+
+        Args:
+            room_id: 直播间ID列表
+            callback: 回调函数，接收 LiveData 参数
+            status: 状态过滤器，默认为 LiveStatus.ALL（匹配所有状态）
+        """
         wrapper = self._wrap_callback(callback)
         self._register_callback(
             "_on_live_callbacks",
             room_id,
             wrapper,
             callback.__name__,
-            status,
+            status.value,
             "_monitored_room_ids"
         )
 
 
     # 装饰器方法 #
 
-    # TODO: 计划status必须传参，否则默认all，应当联动过滤器进行处理
     def on_dynamic(
         self,
         uid: list[int],
-        status: Literal["all", "new"] = "all"
+        status: DynamicStatus = DynamicStatus.ALL
     ):
         """装饰器：获取动态时回调.
 
         Args:
             uid (list[int]): 用户UID列表
-            status (Literal["all", "new"]):
-                指定触发回调的时机
-                - "all": 每次轮询都触发（默认）
-                - "new": 仅在检测到新动态时触发
+            status (DynamicStatus): 指定触发回调的时机
+                - DynamicStatus.ALL: 每次轮询都触发（默认）
+                - DynamicStatus.NEW: 仅在检测到新动态时触发
+                - DynamicStatus.DELETED: 仅在动态被删除时触发
+                - DynamicStatus.NULL: 仅在没有动态时触发
 
         Usage:
             # 每次轮询都触发（默认）
@@ -175,14 +183,13 @@ class BiliManager:
                 print(f"获取到动态: {data}")
 
             # 仅在有新动态时触发
-            @manager.on_dynamic(uid=[123456, 789012], status="new")
+            @manager.on_dynamic(uid=[123456, 789012], status=DynamicStatus.NEW)
             async def handle_new_dynamic(data: DynamicData):
                 print(f"新动态: {data}")
         """
         def decorator(
             func: Callable[[DynamicData], None]
         ):
-            # 直接使用现有的注册器方法
             self.add_dynamic_callback(uid, func, status)
             return func
         return decorator
@@ -190,35 +197,38 @@ class BiliManager:
     def on_live(
         self,
         room_id: list[int],
-        status: Literal["all", "open", "close", "opening", "default"] = "all"
+        status: LiveStatus = LiveStatus.ALL
     ):
         """装饰器：获取直播状态回调.
 
         Args:
             room_id (list[int]): 直播间ID列表
-            status (Literal["all", "open", "close", "opening", "default"]):
-                指定触发回调的状态
-                - "all": 所有状态都触发（默认）
-                - "open": 仅在开播时触发
-                - "close": 仅在下播时触发
-                - "opening": 仅在直播中时触发
-                - "default": 仅在未开播时触发
+            status (LiveStatus): 指定触发回调的状态
+                - LiveStatus.ALL: 所有状态都触发（默认）
+                - LiveStatus.OPEN: 仅在开播时触发
+                - LiveStatus.CLOSE: 仅在下播时触发
+                - LiveStatus.ONLINE: 仅在直播中时触发
+                - LiveStatus.OFFLINE: 仅在未开播时触发
 
         Usage:
-            # 所有状态都触发
-            @manager.on_live(room_id=[12345, 67890])
-            async def handle_all_status(data: LiveData, status: Literal["open", "close", "opening", "default"]):
-                print(f"直播状态: {status}")
+            # 监听所有状态（使用 ALL 通配符）
+            @manager.on_live(room_id=[12345, 67890], status=LiveStatus.ALL)
+            async def handle_all_status(data: LiveData):
+                print(f"直播间数据更新: {data}")
 
             # 仅在开播时触发
-            @manager.on_live(room_id=[12345, 67890], status="open")
+            @manager.on_live(room_id=[12345, 67890], status=LiveStatus.OPEN)
             async def handle_open(data: LiveData):
                 print(f"开播了！")
+
+            # 仅在下播时触发
+            @manager.on_live(room_id=[12345, 67890], status=LiveStatus.CLOSE)
+            async def handle_close(data: LiveData):
+                print(f"下播了！")
         """
         def decorator(
             func: Callable[[LiveData], None]
         ):
-            # 直接使用现有的注册器方法
             self.add_live_callback(room_id, func, status)
             return func
         return decorator
@@ -233,7 +243,7 @@ class BiliManager:
         fetch_func: Callable,
         old_data_attr: str,
         new_data_attr: str
-    ) -> Any:
+    ) -> SubData:
         """获取并更新数据.
 
         Args:
@@ -267,36 +277,38 @@ class BiliManager:
 
         except Exception as e:
             _log.error(f"获取 '{id_key}' 数据时出错: {e}")
-            raise
+            raise e
 
-    # TODO: 需要更明确的status过滤实现
     async def _trigger_callbacks(
         self,
         callback_attr: str,
         key: int,
-        *args,
-        filter_value: str = ""
+        data: Any,
+        filter_value: BaseStatus
     ):
         """批量调用回调函数
 
         Args:
             callback_attr (str): 回调函数字典的属性名
             key (int): 回调的键（uid或room_id）
-            *args: 传递给回调函数的参数
-            filter_value (str): 过滤值，用于匹配带过滤器的回调
+            data (Any): 传递给回调函数的数据（LiveData 或 DynamicData）
+            filter_value (BaseStatus): 当前状态值，用于匹配带过滤器的回调
                 - 回调存储格式为 list[tuple[Callable, str]]
-                - 过滤器为 "all" 时所有状态都触发，否则只在状态匹配时触发
+                - 使用 BaseStatus.matches() 方法进行状态匹配
         """
         callback_dict = getattr(self, callback_attr)
         if key in callback_dict:
             for item in callback_dict[key]:
                 try:
-                    callback, status_filter = item
-                    # status_filter 为 "all" 表示所有状态都触发
-                    # 否则只在状态匹配时触发
-                    if status_filter != "all" and status_filter != filter_value:
+                    callback, status_filter_value = item
+                    # 使用枚举的 matches 方法进行状态匹配
+                    status_enum_class = type(filter_value)
+                    status_filter = status_enum_class(status_filter_value)
+                    # 使用 matches 方法判断是否匹配
+                    if not status_filter.matches(filter_value):
                         continue
-                    asyncio.create_task(callback(*args))
+
+                    asyncio.create_task(callback(data))
                 except Exception as e:
                     _log.error(f"执行回调时出错 (attr={callback_attr}, key={key}): {e}")
 
@@ -311,25 +323,24 @@ class BiliManager:
         """
         try:
             # 获取数据
-            new_data:DynamicData = await self._poll_data(
+            new_data: DynamicData = await self._poll_data(
                 id_key=uid,
                 fetch_func=lambda: self.api.get_new_dynamic(uid),
                 old_data_attr="_dynamic_data_old",
                 new_data_attr="_dynamic_data_new"
             )
 
-            # 检查是否有新动态
-            has_new = is_new_dynamic(self._dynamic_data_old[uid], new_data)
+            # 设置动态状态（通过比较旧数据）
+            status = new_data.set_status(self._dynamic_data_old[uid])
+            data = new_data
+            if status == DynamicStatus.OLD:
+                # 数据重写
+                status = DynamicStatus.DELETED
+                data = self._dynamic_data_old[uid]
 
-            # 确定当前状态：有新动态为 "new"，否则为空（仅 "all" 过滤器会触发）
-            current_status = "new" if has_new else "all"
-
-            if has_new:
-                _log.info(f"检测到UID '{uid}' 有新动态")
-
-            # 触发动态回调（检查状态过滤器）
+            # 触发动态回调（使用枚举状态）
             await self._trigger_callbacks(
-                "_on_dynamic_callbacks", uid, new_data, filter_value=current_status
+                "_on_dynamic_callbacks", uid, data, status
             )
 
         except Exception as e:
@@ -348,19 +359,19 @@ class BiliManager:
         """
         try:
             # 使用通用轮询函数获取数据
-            new_data:LiveData = await self._poll_data(
+            new_data: LiveData = await self._poll_data(
                 id_key=room_id,
                 fetch_func=lambda: self.api.get_room_info(room_id),
                 old_data_attr="_live_data_old",
                 new_data_attr="_live_data_new"
             )
 
-            # 获取直播状态
-            status = get_live_status(self._live_data_old[room_id], new_data)
+            # 设置直播状态（通过比较旧数据）
+            status = new_data.set_status(self._live_data_old[room_id])
 
-            # 触发直播回调（检查状态过滤器）
+            # 触发直播回调（只传递 LiveData，使用 status 进行过滤）
             await self._trigger_callbacks(
-                "_on_live_callbacks", room_id, new_data, status, filter_value=status
+                "_on_live_callbacks", room_id, new_data, status
             )
 
         except Exception as e:
@@ -374,7 +385,7 @@ class BiliManager:
         self,
         task_factories: Iterable[Callable[[], Coroutine]]
     ):
-        """全局锁式轮询运行任务列表.
+        """全局串行锁式轮询运行任务列表.
 
         按顺序执行每个任务：执行任务1 -> 等待间隔 -> 执行任务2
         """
