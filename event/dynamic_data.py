@@ -245,7 +245,7 @@ class DynamicData(BaseData):
         self.raw_data: dict[Any, Any] = data # 原始数据
         self.base_info: DynamicBaseData = DynamicBaseData(data) # 动态基础信息
         self.up_info: UPData = UPData(data) # UP主信息
-        self._status: DynamicStatus = DynamicStatus.ALL  # 私有状态属性
+        self._status: DynamicStatus = DynamicStatus.ALL  # 无状态
 
         # 解析视频信息
         if data.get("type") == "DYNAMIC_TYPE_AV":
@@ -272,30 +272,16 @@ class DynamicData(BaseData):
             forward_raw = data.get("orig")
             self.forward_info = ForwardData(forward_raw)
 
-    def set_status(self, old_data: "DynamicData") -> DynamicStatus:
-        """根据旧数据设置当前的动态状态, 然后立刻返回当前状态.
+    def set_status(self, status: DynamicStatus) -> "DynamicData":
+        """设置当前的动态状态（用于注入）.
 
         Args:
-            old_data (DynamicData): 旧的动态数据，用于比较状态变化
+            status (DynamicStatus): 要设置的状态
         Returns:
-            DynamicStatus: 当前的动态状态
+            DynamicData: 返回自身
         """
-        old_timestamp = old_data.base_info.timestamp
-        new_timestamp = self.base_info.timestamp
-
-        # 新动态的时间戳大于旧动态，说明有新动态
-        if new_timestamp > old_timestamp:
-            self._status = DynamicStatus.NEW
-        # 新动态的时间戳早于旧动态，说明动态被删除
-        elif new_timestamp < old_timestamp:
-            # 将旧动态标记为已删除
-            old_data._status = DynamicStatus.DELETED
-            # 将当前（新获取的）动态标记为旧动态
-            self._status = DynamicStatus.OLD
-        # 时间戳相同，没有变化
-        else:
-            self._status = DynamicStatus.NULL
-        return self._status
+        self._status = status
+        return self
 
     @property
     def status(self) -> DynamicStatus:

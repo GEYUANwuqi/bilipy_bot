@@ -1,6 +1,6 @@
 from api import BilibiliApi
-from event import LiveData, DynamicData, SubData
-from utils import LiveStatus, DynamicStatus, BaseStatus
+from event import LiveData, DynamicData, BaseDataT, DataPair, get_dynamic_status, get_live_status
+from utils import LiveStatus, DynamicStatus, BaseStatusT
 from logging import getLogger
 from typing import Callable, Optional, Coroutine, Iterable, Any
 import asyncio
@@ -26,13 +26,11 @@ class BiliManager:
         self.api = BilibiliApi(sessdata=sessdata)
         self._poll_interval = poll_interval
 
-        # 存储新旧数据的实例属性
-        self._dynamic_data_old: dict[int, Optional[DynamicData]] = {}
-        self._dynamic_data_new: dict[int, Optional[DynamicData]] = {}
-        self._live_data_old: dict[int, Optional[LiveData]] = {}
-        self._live_data_new: dict[int, Optional[LiveData]] = {}
+        # 使用 DataPair 存储新旧数据
+        self._dynamic_data: dict[int, DataPair[DynamicData]] = {}
+        self._live_data: dict[int, DataPair[LiveData]] = {}
 
-        # TODO: 回调函数存储结构优化
+        # TODO: 回调函数存储结构优化，使用dataclass？
         # 回调函数存储结构
         self._on_dynamic_callbacks: dict[int, list[tuple[Callable, str]]] = {}
         self._on_live_callbacks: dict[int, list[tuple[Callable, str]]] = {}
@@ -241,16 +239,14 @@ class BiliManager:
         self,
         id_key: int,
         fetch_func: Callable,
-        old_data_attr: str,
-        new_data_attr: str
-    ) -> SubData:
+        data_attr: str
+    ) -> BaseDataT:
         """获取并更新数据.
 
         Args:
             id_key (int): 数据的唯一标识（uid或room_id）
             fetch_func (Callable): 获取数据的异步函数
-            old_data_attr (str): 存储旧数据的实例属性名称
-            new_data_attr (str): 存储新数据的实例属性名称
+            data_attr (str): 存储 DataPair 的实例属性名称
 
         Returns:
             new_data 新数据
@@ -260,18 +256,14 @@ class BiliManager:
             new_data = await fetch_func()
 
             # 获取实例属性
-            old_data_dict = getattr(self, old_data_attr)
-            new_data_dict = getattr(self, new_data_attr)
+            data_dict = getattr(self, data_attr)
 
-            # 初始化数据（首次获取）
-            if id_key not in old_data_dict:
-                old_data_dict[id_key] = new_data
-                new_data_dict[id_key] = new_data
+            # 初始化或更新数据
+            if id_key not in data_dict:
+                data_dict[id_key] = DataPair()
                 _log.info(f"初始化'{id_key}' 的数据")
-            else:
-                # 更新数据
-                old_data_dict[id_key] = new_data_dict[id_key]
-                new_data_dict[id_key] = new_data
+
+            data_dict[id_key].update(new_data)
 
             return new_data
 
@@ -284,7 +276,7 @@ class BiliManager:
         callback_attr: str,
         key: int,
         data: Any,
-        filter_value: BaseStatus
+        filter_value: BaseStatusT
     ):
         """批量调用回调函数
 
@@ -292,7 +284,7 @@ class BiliManager:
             callback_attr (str): 回调函数字典的属性名
             key (int): 回调的键（uid或room_id）
             data (Any): 传递给回调函数的数据（LiveData 或 DynamicData）
-            filter_value (BaseStatus): 当前状态值，用于匹配带过滤器的回调
+            filter_value (BaseStatusT): 当前状态值，用于匹配带过滤器的回调
                 - 回调存储格式为 list[tuple[Callable, str]]
                 - 使用 BaseStatus.matches() 方法进行状态匹配
         """
@@ -326,21 +318,27 @@ class BiliManager:
             new_data: DynamicData = await self._poll_data(
                 id_key=uid,
                 fetch_func=lambda: self.api.get_new_dynamic(uid),
-                old_data_attr="_dynamic_data_old",
-                new_data_attr="_dynamic_data_new"
+                data_attr="_dynamic_data"
             )
 
-            # 设置动态状态（通过比较旧数据）
-            status = new_data.set_status(self._dynamic_data_old[uid])
-            data = new_data
-            if status == DynamicStatus.OLD:
-                # 数据重写
-                status = DynamicStatus.DELETED
-                data = self._dynamic_data_old[uid]
+            # 获取数据对
+            data_pair = self._dynamic_data[uid]
 
-            # 触发动态回调（使用枚举状态）
+            # 判断状态
+            status = get_dynamic_status(data_pair)
+
+            # 根据状态决定传递哪个数据
+            if status == DynamicStatus.DELETED:
+                # 动态被删除，获取旧数据并注入 DELETED 状态
+                data = data_pair.old
+                callback_data = data.set_status(DynamicStatus.DELETED)
+            else:
+                # 其他情况，传递新数据并注入对应状态
+                callback_data = new_data.set_status(status)
+
+            # 触发动态回调
             await self._trigger_callbacks(
-                "_on_dynamic_callbacks", uid, data, status
+                "_on_dynamic_callbacks", uid, callback_data, status
             )
 
         except Exception as e:
@@ -362,16 +360,19 @@ class BiliManager:
             new_data: LiveData = await self._poll_data(
                 id_key=room_id,
                 fetch_func=lambda: self.api.get_room_info(room_id),
-                old_data_attr="_live_data_old",
-                new_data_attr="_live_data_new"
+                data_attr="_live_data"
             )
 
-            # 设置直播状态（通过比较旧数据）
-            status = new_data.set_status(self._live_data_old[room_id])
+            # 获取数据对
+            data_pair = self._live_data[room_id]
+            # 判断状态
+            status = get_live_status(data_pair)
+            # 传递新数据并注入状态
+            callback_data = new_data.set_status(status)
 
-            # 触发直播回调（只传递 LiveData，使用 status 进行过滤）
+            # 触发直播回调
             await self._trigger_callbacks(
-                "_on_live_callbacks", room_id, new_data, status
+                "_on_live_callbacks", room_id, callback_data, status
             )
 
         except Exception as e:
@@ -380,7 +381,7 @@ class BiliManager:
 
     # 线程运行方法 #
 
-
+    # TODO: 捕捉error，或者在logger里写
     async def _run_tasks(
         self,
         task_factories: Iterable[Callable[[], Coroutine]]
@@ -516,7 +517,6 @@ class BiliManager:
 
     # 属性方法 #
 
-
     def set_poll_interval(self, interval: int):
         """设置轮询间隔.
 
@@ -541,3 +541,21 @@ class BiliManager:
             int: 当前轮询间隔（秒）
         """
         return self._poll_interval
+
+    @property
+    def uids(self) -> list[int]:
+        """获取当前监控的UID列表.
+
+        Returns:
+            list[int]: 当前监控的UID列表
+        """
+        return list(self._monitored_uids)
+
+    @property
+    def room_ids(self) -> list[int]:
+        """获取当前监控的直播间ID列表.
+
+        Returns:
+            list[int]: 当前监控的直播间ID列表
+        """
+        return list(self._monitored_room_ids)

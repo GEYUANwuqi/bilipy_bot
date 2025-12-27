@@ -20,4 +20,4 @@ class BaseData(ABC):
         return ", ".join(parts)
 
 
-SubData = TypeVar("SubData", bound=BaseData)
+BaseDataT = TypeVar("BaseDataT", bound=BaseData)

@@ -141,32 +141,18 @@ class LiveData(BaseData):
         self.anchor_info: AnchorInfo = AnchorInfo(data["anchor_info"])  # 主播信息
         self.watched_show: WatchedShow = WatchedShow(data["watched_show"])  # 观看榜信息
         self.notice_board: NoticeBoard = NoticeBoard(data["news_info"])  # 公告栏信息
-        self._status: LiveStatus = LiveStatus.ALL  # 私有状态属性
+        self._status: LiveStatus = LiveStatus.ALL  # 无状态
 
-    def set_status(self, old_data: "LiveData") -> LiveStatus:
-        """根据旧数据设置当前的直播状态, 然后立刻返回当前状态.
+    def set_status(self, status: LiveStatus) -> "LiveData":
+        """设置当前的直播状态（用于注入）.
 
         Args:
-            old_data (LiveData): 旧的直播数据，用于比较状态变化
+            status (LiveStatus): 要设置的状态
         Returns:
-            LiveStatus: 当前的直播状态
+            LiveData: 返回自身
         """
-        old_status = old_data.room_info.live_status
-        new_status = self.room_info.live_status
-
-        # 刚开播：旧状态不是直播中(0或2)，新状态是直播中(1)
-        if old_status != 1 and new_status == 1:
-            self._status = LiveStatus.OPEN
-        # 刚下播：旧状态是直播中(1)，新状态不是直播中(0或2)
-        elif old_status == 1 and new_status != 1:
-            self._status = LiveStatus.CLOSE
-        # 直播中：新旧状态都是直播中(1)
-        elif old_status == 1 and new_status == 1:
-            self._status = LiveStatus.ONLINE
-        # 未开播：其他情况(包括一直未开播、轮播等状态)
-        else:
-            self._status = LiveStatus.OFFLINE
-        return self._status
+        self._status = status
+        return self
 
     @property
     def status(self) -> LiveStatus:

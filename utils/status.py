@@ -1,4 +1,5 @@
 from enum import StrEnum
+from typing import TypeVar
 
 
 class BaseStatus(StrEnum):
@@ -20,7 +21,6 @@ class DynamicStatus(BaseStatus):
     """动态状态枚举."""
     ALL = "all"  # 表示所有状态，用作通配符
     NEW = "new" # 新动态
-    OLD = "old" # 旧动态(当有动态被删除后新获取的第一个动态为OLD, 仅为标记实际环境应该用不到)
     DELETED = "deleted" # 删除的动态
     NULL = "null" # 无变化
 
@@ -33,4 +33,4 @@ class LiveStatus(BaseStatus):
     OPEN = "open" # 开播
     CLOSE = "close" # 下播
 
-
+BaseStatusT = TypeVar("BaseStatusT", bound=BaseStatus)
