@@ -3,6 +3,7 @@ from typing import Generic, TypeVar, Optional
 from .live_data import LiveData
 from .dynamic_data import DynamicData
 from utils import DynamicStatus, LiveStatus
+import copy
 
 T = TypeVar('T', DynamicData, LiveData)
 
@@ -21,6 +22,14 @@ class DataPair(Generic[T]):
         else:
             self.old = self.new
             self.new = new_data
+
+    def get_old(self) -> T:
+        """获取旧数据"""
+        return copy.copy(self.old)
+
+    def get_new(self) -> T:
+        """获取新数据"""
+        return copy.copy(self.new)
 
 
 def get_dynamic_status(

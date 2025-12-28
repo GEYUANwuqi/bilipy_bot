@@ -330,7 +330,7 @@ class BiliManager:
             # 根据状态决定传递哪个数据
             if status == DynamicStatus.DELETED:
                 # 动态被删除，获取旧数据并注入 DELETED 状态
-                data = data_pair.old
+                data = data_pair.get_old()
                 callback_data = data.set_status(DynamicStatus.DELETED)
             else:
                 # 其他情况，传递新数据并注入对应状态
