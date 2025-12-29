@@ -2,14 +2,14 @@ from enum import StrEnum
 from typing import TypeVar
 
 
-class BaseStatus(StrEnum):
-    """状态枚举基类，提供通用的匹配方法."""
+class BaseType(StrEnum):
+    """标签枚举基类，提供通用的匹配方法."""
 
-    def matches(self, other: "BaseStatus") -> bool:
+    def matches(self, other: "BaseType") -> bool:
         """判断状态是否匹配.
 
         Args:
-            other: 要匹配的状态
+            other: 要匹配的标签
 
         Returns:
             bool: 如果 self 或 other 的值是 "all"，或者两者相等，返回 True
@@ -17,7 +17,7 @@ class BaseStatus(StrEnum):
         return self.value == "all" or other.value == "all" or self == other
 
 
-class DynamicStatus(BaseStatus):
+class DynamicType(BaseType):
     """动态状态枚举."""
     ALL = "all"  # 表示所有状态，用作通配符
     NEW = "new" # 新动态
@@ -25,7 +25,7 @@ class DynamicStatus(BaseStatus):
     NULL = "null" # 无变化
 
 
-class LiveStatus(BaseStatus):
+class LiveType(BaseType):
     """直播状态枚举."""
     ALL = "all"  # 表示所有状态，用作通配符
     ONLINE = "online" # 在线
@@ -33,4 +33,4 @@ class LiveStatus(BaseStatus):
     OPEN = "open" # 开播
     CLOSE = "close" # 下播
 
-BaseStatusT = TypeVar("BaseStatusT", bound=BaseStatus)
+BaseTypeT = TypeVar("BaseTypeT", bound=BaseType)

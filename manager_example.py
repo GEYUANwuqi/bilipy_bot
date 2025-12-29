@@ -1,7 +1,7 @@
 """BiliManager使用示例"""
 from manager import BiliManager
 from event import DynamicData, LiveData
-from utils import LiveStatus, DynamicStatus
+from utils import LiveType, DynamicType
 from utils import setup_logging
 from logging import getLogger
 import asyncio
@@ -35,18 +35,18 @@ async def send_qq(bat_text):
 @manager.on_dynamic(uid=TEST_UID)
 async def handle_get_dynamic(data: DynamicData):
     """每次轮询获取动态时都会触发_log.info"""
-    _log.info(f"{data.up_info.name}的动态{data.base_info.type}")
+    _log.info(f"{data.up_info.name}的动态{data.status}")
     #_log.info(f"[获取动态] UP主: {data.up_info.name}, 动态类型: {data.base_info.type}")
     #_log.info(f"  时间: {data.base_info.time}, ID: {data.base_info.id}")
 
 # 3. 有新动态时回调
-@manager.on_dynamic(uid=TEST_UID, status=DynamicStatus.NEW)
+@manager.on_dynamic(uid=TEST_UID, status=DynamicType.NEW)
 async def handle_new_dynamic(data: DynamicData):
     """仅当检测到新动态时触发"""
     _log.info(f"[新动态] UP主 {data.up_info.name} 发布了新动态！")
     _log.info(data)
 
-@manager.on_dynamic(uid=TEST_UID, status=DynamicStatus.DELETED)
+@manager.on_dynamic(uid=TEST_UID, status=DynamicType.DELETED)
 async def handle_del_dynamic(data: DynamicData):
     """仅当检测到删除动态时触发"""
     _log.info(f"[删除动态] UP主 {data.up_info.name} 删除了动态{data.base_info.text}！")
@@ -57,8 +57,8 @@ async def handle_live_status(data: LiveData):
     """所有直播状态变化时都会触发"""
     _log.info(f"[直播状态] {data.anchor_info.name}当前{data.status}")
 
-# 4. 获取直播状态回调（所有状态）
-@manager.on_live(room_id=TEST_ROOM_ID, status=LiveStatus.ONLINE)
+# 4. 获取直播状态回调（在线）
+@manager.on_live(room_id=TEST_ROOM_ID, status=LiveType.ONLINE)
 async def handle_live_opening(data: LiveData):
     """所有直播状态变化时都会触发"""
     _log.info(f"{data.anchor_info.name}在直播")
@@ -86,8 +86,8 @@ async def handle_live_opening(data: LiveData):
 
 async def main():
     _log.info("启动BiliManager监控...")
-    _log.info(f"监控UID: {manager._monitored_uids}")
-    _log.info(f"监控房间: {manager._monitored_room_ids}")
+    _log.info(f"监控UID: {manager.uids}")
+    _log.info(f"监控房间: {manager.room_ids}")
     _log.info(f"当前轮询间隔: {manager.poll_interval} 秒")
 
     # 可以动态调整轮询间隔

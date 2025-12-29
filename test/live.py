@@ -1,6 +1,5 @@
 from bilibili_api import Credential
 from bilibili_api.live import LiveRoom
-import asyncio
 from event import LiveData
 
 
@@ -21,12 +20,13 @@ async def get_room_info(room_id:int, sessdata:str = "", file:bool = False) -> Li
     if file:
         import json
         import os
-        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'live_info.json')
+        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'live.json')
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(live, f, ensure_ascii=False, indent=4)
     return info
 
 if __name__ == '__main__':
+    import asyncio
     asyncio.run(get_room_info(
         room_id = 26498147,
         sessdata = "",

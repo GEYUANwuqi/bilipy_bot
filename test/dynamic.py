@@ -1,4 +1,3 @@
-import asyncio
 from bilibili_api import Credential
 from bilibili_api.user import User
 from event import DynamicData
@@ -22,7 +21,7 @@ async def get_new_dynamic(uid:int, sessdata:str = "", event: bool = True, file:b
     if file:
         import json
         import os
-        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dynamics_info.json')
+        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dynamic.json')
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(dict_info, f, ensure_ascii=False, indent=4)
     if event:
@@ -35,9 +34,10 @@ async def get_new_dynamic(uid:int, sessdata:str = "", event: bool = True, file:b
     return info
 
 if __name__ == '__main__':
+    import asyncio
     asyncio.run(
         get_new_dynamic(
-            uid = 621240130,
+            uid = 1802011210,
             sessdata = "",
             event = True,
             file = True

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar, Optional
 from .live_data import LiveData
 from .dynamic_data import DynamicData
-from utils import DynamicStatus, LiveStatus
+from utils import DynamicType, LiveType
 import copy
 
 T = TypeVar('T', DynamicData, LiveData)
@@ -23,6 +23,7 @@ class DataPair(Generic[T]):
             self.old = self.new
             self.new = new_data
 
+    # TODO: 干嘛还用两个方法，用一个方法传str再匹配就好了
     def get_old(self) -> T:
         """获取旧数据"""
         return copy.copy(self.old)
@@ -34,50 +35,50 @@ class DataPair(Generic[T]):
 
 def get_dynamic_status(
     data_pair: DataPair[DynamicData]
-) -> DynamicStatus:
+) -> DynamicType:
     """判断动态状态.
     Args:
         data_pair (DataPair[DynamicData]): 动态数据对
 
     Returns:
-        DynamicStatus: 当前的动态状态
+        DynamicType: 当前的动态状态
     """
 
     old_timestamp = data_pair.old.base_info.timestamp
     new_timestamp = data_pair.new.base_info.timestamp
     # 新动态的时间戳大于旧动态，说明有新动态
     if new_timestamp > old_timestamp:
-        return DynamicStatus.NEW
+        return DynamicType.NEW
     # 新动态的时间戳早于旧动态，说明动态被删除
     elif new_timestamp < old_timestamp:
-        return DynamicStatus.DELETED
+        return DynamicType.DELETED
     # 时间戳相同，没有变化
     else:
-        return DynamicStatus.NULL
+        return DynamicType.NULL
 
 
 def get_live_status(
     data_pair: DataPair[LiveData]
-) -> LiveStatus:
+) -> LiveType:
     """判断直播状态.
     Args:
         data_pair (DataPair[LiveData]): 直播数据对
 
     Returns:
-        LiveStatus: 当前的直播状态
+        LiveType: 当前的直播状态
     """
 
     old_status = data_pair.old.room_info.live_status
     new_status = data_pair.new.room_info.live_status
     # 刚开播：旧状态不是直播中(0或2)，新状态是直播中(1)
     if old_status != 1 and new_status == 1:
-        return LiveStatus.OPEN
+        return LiveType.OPEN
     # 刚下播：旧状态是直播中(1)，新状态不是直播中(0或2)
     elif old_status == 1 and new_status != 1:
-        return LiveStatus.CLOSE
+        return LiveType.CLOSE
     # 直播中：新旧状态都是直播中(1)
     elif old_status == 1 and new_status == 1:
-        return LiveStatus.ONLINE
+        return LiveType.ONLINE
     # 未开播：其他情况(包括一直未开播、轮播等状态)
     else:
-        return LiveStatus.OFFLINE
+        return LiveType.OFFLINE

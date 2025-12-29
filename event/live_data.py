@@ -2,7 +2,7 @@ from typing import Any, Optional
 import re
 from html import unescape
 from .base_data import BaseData
-from utils import LiveStatus
+from utils import LiveType
 from time import time
 from logging import getLogger
 
@@ -141,13 +141,13 @@ class LiveData(BaseData):
         self.anchor_info: AnchorInfo = AnchorInfo(data["anchor_info"])  # 主播信息
         self.watched_show: WatchedShow = WatchedShow(data["watched_show"])  # 观看榜信息
         self.notice_board: NoticeBoard = NoticeBoard(data["news_info"])  # 公告栏信息
-        self._status: LiveStatus = LiveStatus.ALL  # 无状态
+        self._status: LiveType = LiveType.ALL  # 无状态
 
-    def set_status(self, status: LiveStatus) -> "LiveData":
+    def set_status(self, status: LiveType) -> "LiveData":
         """设置当前的直播状态（用于注入）.
 
         Args:
-            status (LiveStatus): 要设置的状态
+            status (LiveType): 要设置的状态
         Returns:
             LiveData: 返回自身
         """
@@ -155,23 +155,23 @@ class LiveData(BaseData):
         return self
 
     @property
-    def status(self) -> LiveStatus:
+    def status(self) -> LiveType:
         """获取当前直播状态.
 
         Returns:
-            LiveStatus: 当前的直播状态
+            LiveType: 当前的直播状态
         """
         return self._status
 
-    async def get_live_info(self, status: LiveStatus) -> str:
+    async def get_live_info(self, status: LiveType) -> str:
         info = ""
-        if status == LiveStatus.OPEN:
+        if status == LiveType.OPEN:
             info = f"{self.anchor_info.name}开启了直播《{self.room_info.title}》，快速链接：{self.room_info.jump_url}"
-        elif status == LiveStatus.CLOSE:
+        elif status == LiveType.CLOSE:
             info = f"{self.anchor_info.name}下播了"
-        elif status == LiveStatus.OFFLINE:
+        elif status == LiveType.OFFLINE:
             info = f"{self.anchor_info.name}当前并没有在直播"
-        elif status == LiveStatus.ONLINE:
+        elif status == LiveType.ONLINE:
             live_time = int(time()) - self.room_info.live_start_time
             hours, remainder = divmod(live_time, 3600)
             minutes, seconds = divmod(remainder, 60)

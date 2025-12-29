@@ -1,10 +1,10 @@
 from .logger import setup_logging
-from .status import LiveStatus, DynamicStatus, BaseStatus, BaseStatusT
+from .status import LiveType, DynamicType, BaseType, BaseTypeT
 
 __all__ = [
     "setup_logging",
-    "LiveStatus",
-    "DynamicStatus",
-    "BaseStatus",
-    "BaseStatusT",
+    "LiveType",
+    "DynamicType",
+    "BaseType",
+    "BaseTypeT",
 ]

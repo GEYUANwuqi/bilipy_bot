@@ -1,6 +1,6 @@
 from api import BilibiliApi
 from event import LiveData, DynamicData, BaseDataT, DataPair, get_dynamic_status, get_live_status
-from utils import LiveStatus, DynamicStatus, BaseStatusT
+from utils import LiveType, DynamicType, BaseTypeT
 from logging import getLogger
 from typing import Callable, Optional, Coroutine, Iterable, Any
 import asyncio
@@ -30,7 +30,9 @@ class BiliManager:
         self._dynamic_data: dict[int, DataPair[DynamicData]] = {}
         self._live_data: dict[int, DataPair[LiveData]] = {}
 
+        # TODO: EventBus, 是时候使用事件总线了
         # TODO: 回调函数存储结构优化，使用dataclass？
+        # TODO: str应该换成状态了
         # 回调函数存储结构
         self._on_dynamic_callbacks: dict[int, list[tuple[Callable, str]]] = {}
         self._on_live_callbacks: dict[int, list[tuple[Callable, str]]] = {}
@@ -114,14 +116,14 @@ class BiliManager:
         self,
         uid: list[int],
         callback: Callable[[DynamicData], None],
-        status: DynamicStatus = DynamicStatus.ALL
+        status: DynamicType = DynamicType.ALL
     ):
         """直接添加动态回调函数（不使用装饰器）
 
         Args:
             uid: 用户UID列表
             callback: 回调函数
-            status: 状态过滤器，默认为 DynamicStatus.ALL（匹配所有状态）
+            status: 状态过滤器，默认为 DynamicType.ALL（匹配所有状态）
         """
         wrapper = self._wrap_callback(callback)
         self._register_callback(
@@ -137,14 +139,14 @@ class BiliManager:
         self,
         room_id: list[int],
         callback: Callable[[LiveData], None],
-        status: LiveStatus = LiveStatus.ALL
+        status: LiveType = LiveType.ALL
     ):
         """直接添加直播回调函数（不使用装饰器）
 
         Args:
             room_id: 直播间ID列表
             callback: 回调函数，接收 LiveData 参数
-            status: 状态过滤器，默认为 LiveStatus.ALL（匹配所有状态）
+            status: 状态过滤器，默认为 LiveType.ALL（匹配所有状态）
         """
         wrapper = self._wrap_callback(callback)
         self._register_callback(
@@ -162,13 +164,13 @@ class BiliManager:
     def on_dynamic(
         self,
         uid: list[int],
-        status: DynamicStatus = DynamicStatus.ALL
+        status: DynamicType = DynamicType.ALL
     ):
         """装饰器：获取动态时回调.
 
         Args:
             uid (list[int]): 用户UID列表
-            status (DynamicStatus): 指定触发回调的时机
+            status (DynamicType): 指定触发回调的时机
                 - DynamicStatus.ALL: 每次轮询都触发（默认）
                 - DynamicStatus.NEW: 仅在检测到新动态时触发
                 - DynamicStatus.DELETED: 仅在动态被删除时触发
@@ -195,13 +197,13 @@ class BiliManager:
     def on_live(
         self,
         room_id: list[int],
-        status: LiveStatus = LiveStatus.ALL
+        status: LiveType = LiveType.ALL
     ):
         """装饰器：获取直播状态回调.
 
         Args:
             room_id (list[int]): 直播间ID列表
-            status (LiveStatus): 指定触发回调的状态
+            status (LiveType): 指定触发回调的状态
                 - LiveStatus.ALL: 所有状态都触发（默认）
                 - LiveStatus.OPEN: 仅在开播时触发
                 - LiveStatus.CLOSE: 仅在下播时触发
@@ -276,7 +278,7 @@ class BiliManager:
         callback_attr: str,
         key: int,
         data: Any,
-        filter_value: BaseStatusT
+        filter_value: BaseTypeT
     ):
         """批量调用回调函数
 
@@ -286,7 +288,7 @@ class BiliManager:
             data (Any): 传递给回调函数的数据（LiveData 或 DynamicData）
             filter_value (BaseStatusT): 当前状态值，用于匹配带过滤器的回调
                 - 回调存储格式为 list[tuple[Callable, str]]
-                - 使用 BaseStatus.matches() 方法进行状态匹配
+                - 使用 BaseType.matches() 方法进行状态匹配
         """
         callback_dict = getattr(self, callback_attr)
         if key in callback_dict:
@@ -328,10 +330,10 @@ class BiliManager:
             status = get_dynamic_status(data_pair)
 
             # 根据状态决定传递哪个数据
-            if status == DynamicStatus.DELETED:
+            if status == DynamicType.DELETED:
                 # 动态被删除，获取旧数据并注入 DELETED 状态
                 data = data_pair.get_old()
-                callback_data = data.set_status(DynamicStatus.DELETED)
+                callback_data = data.set_status(DynamicType.DELETED)
             else:
                 # 其他情况，传递新数据并注入对应状态
                 callback_data = new_data.set_status(status)

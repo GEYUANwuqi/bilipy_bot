@@ -1,6 +1,6 @@
 from typing import Any, Optional
 from .base_data import BaseData
-from utils import DynamicStatus
+from utils import DynamicType
 from logging import getLogger
 
 _log = getLogger("DynamicData")
@@ -245,7 +245,7 @@ class DynamicData(BaseData):
         self.raw_data: dict[Any, Any] = data # 原始数据
         self.base_info: DynamicBaseData = DynamicBaseData(data) # 动态基础信息
         self.up_info: UPData = UPData(data) # UP主信息
-        self._status: DynamicStatus = DynamicStatus.ALL  # 无状态
+        self._status: DynamicType = DynamicType.ALL  # 无状态
 
         # 解析视频信息
         if data.get("type") == "DYNAMIC_TYPE_AV":
@@ -272,11 +272,11 @@ class DynamicData(BaseData):
             forward_raw = data.get("orig")
             self.forward_info = ForwardData(forward_raw)
 
-    def set_status(self, status: DynamicStatus) -> "DynamicData":
+    def set_status(self, status: DynamicType) -> "DynamicData":
         """设置当前的动态状态（用于注入）.
 
         Args:
-            status (DynamicStatus): 要设置的状态
+            status (DynamicType): 要设置的状态
         Returns:
             DynamicData: 返回自身
         """
@@ -284,11 +284,11 @@ class DynamicData(BaseData):
         return self
 
     @property
-    def status(self) -> DynamicStatus:
+    def status(self) -> DynamicType:
         """获取当前动态状态.
 
         Returns:
-            DynamicStatus: 当前的动态状态
+            DynamicType: 当前的动态状态
         """
         return self._status
 
