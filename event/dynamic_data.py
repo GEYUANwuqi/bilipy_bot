@@ -14,8 +14,8 @@ def get_max_id(date: dict) -> int:
         max_id (int): 索引id
 
     """
-    max_timestamp:int = 0
-    max_id:int = 0
+    max_timestamp: int = 0
+    max_id: int = 0
     list_data = date["items"]
     for index, item in enumerate(list_data):
         timestamp = int(item["modules"]["module_author"]["pub_ts"])
@@ -41,14 +41,14 @@ class DynamicBaseData(BaseData):
             data(dict): 单条动态信息
         """
 
-        self.type: str = data["type"] # 动态类型
+        self.type: str = data["type"]  # 动态类型
         _log.debug(f"正在构造{self.type}消息")
-        self.id: str = data["id_str"] # 动态ID
-        self.visible:bool = data["visible"] # 动态显示状态(false时被折叠)
-        self.time:str = data["modules"]["module_author"]["pub_time"] # 动态发布时间
-        self.timestamp:int = data["modules"]["module_author"]["pub_ts"] # 动态发布时间戳
-        self.jump_url: str = f"https://t.bilibili.com/{self.id}" # 动态跳转链接
-        if self.type in ["DYNAMIC_TYPE_WORD","DYNAMIC_TYPE_DRAW"] :
+        self.id: str = data["id_str"]  # 动态ID
+        self.visible: bool = data["visible"]  # 动态显示状态(false时被折叠)
+        self.time: str = data["modules"]["module_author"]["pub_time"]  # 动态发布时间
+        self.timestamp: int = data["modules"]["module_author"]["pub_ts"]  # 动态发布时间戳
+        self.jump_url: str = f"https://t.bilibili.com/{self.id}"  # 动态跳转链接
+        if self.type in ["DYNAMIC_TYPE_WORD", "DYNAMIC_TYPE_DRAW"]:
             # 文字内容
             self.text = data["modules"]["module_dynamic"]["major"]["opus"]["summary"]["text"]
             # 图片列表
@@ -75,10 +75,10 @@ class UPData(BaseData):
             data(dict): 单条动态信息
         """
         author_info: dict[Any, Any] = data["modules"]["module_author"]
-        self.uid: int = author_info["mid"] # UP主UID
-        self.name: str = author_info["name"] # UP主昵称
-        self.face_url: str = author_info["face"] # UP主头像url
-        self.jump_url: str = f"https://space.bilibili.com/{self.uid}" # UP主空间链接
+        self.uid: int = author_info["mid"]  # UP主UID
+        self.name: str = author_info["name"]  # UP主昵称
+        self.face_url: str = author_info["face"]  # UP主头像url
+        self.jump_url: str = f"https://space.bilibili.com/{self.uid}"  # UP主空间链接
 
 
 class VideoData(BaseData):
@@ -101,7 +101,7 @@ class VideoData(BaseData):
             data (dict): module_dynamic/视频信息
         """
         self.raw_data = data  # 原始数据
-        video_archive = data["major"]["archive"] # 视频信息
+        video_archive = data["major"]["archive"]  # 视频信息
         self.dynamic_text = data["desc"]["text"] if data.get("desc") else ""  # 动态文本
         self.av_id = video_archive.get("aid")  # 视频AV号
         self.bv_id = video_archive.get("bvid")  # 视频BV号
@@ -110,7 +110,7 @@ class VideoData(BaseData):
         self.desc = video_archive.get("desc")  # 视频简介
         self.duration_text = video_archive.get("duration_text")  # 视频时长
         self.jump_url = f"www.bilibili.com/video/{self.bv_id}/"  # 视频跳转链接
-        stat = video_archive.get("stat", {}) # 互动数据
+        stat = video_archive.get("stat", {})  # 互动数据
         self.play_count = stat.get("play")  # 播放数
         self.danmaku_count = stat.get("danmaku")  # 弹幕数
 
@@ -165,6 +165,7 @@ class ArticleData(BaseData):
         self.summary = summary_info.get("text")  # 专栏摘要
         self.has_more = summary_info.get("has_more")  # 是否有更多内容
 
+
 class LiveRcmdData(BaseData):
     """直播推荐信息类"""
     raw_data: Optional[dict[Any, Any]] = None
@@ -191,7 +192,7 @@ class LiveRcmdData(BaseData):
             data (dict): module_dynamic/直播推荐信息
         """
         import json
-        self.raw_data = json.loads(data["major"]["live_rcmd"]["content"])# 原始数据
+        self.raw_data = json.loads(data["major"]["live_rcmd"]["content"])  # 原始数据
         live_play_info = self.raw_data.get("live_play_info", {})
         self.room_id = live_play_info.get("room_id")  # 直播间ID
         self.live_status = live_play_info.get("live_status")  # 直播状态 1:直播中
@@ -225,7 +226,7 @@ class ForwardData(BaseData):
         Args:
             orig (dict): 被转发动态信息
         """
-        self.orig_dynamic = DynamicData(orig) # 直接嵌套
+        self.orig_dynamic = DynamicData(orig)  # 直接嵌套
 
 
 class DynamicData(BaseData):
@@ -242,9 +243,9 @@ class DynamicData(BaseData):
         Args:
             data(dict): 单条动态信息
         """
-        self.raw_data: dict[Any, Any] = data # 原始数据
-        self.base_info: DynamicBaseData = DynamicBaseData(data) # 动态基础信息
-        self.up_info: UPData = UPData(data) # UP主信息
+        self.raw_data: dict[Any, Any] = data  # 原始数据
+        self.base_info: DynamicBaseData = DynamicBaseData(data)  # 动态基础信息
+        self.up_info: UPData = UPData(data)  # UP主信息
         self._status: DynamicType = DynamicType.ALL  # 无状态
 
         # 解析视频信息

@@ -3,7 +3,7 @@ from bilibili_api.dynamic import get_dynamic_page_info
 from event import DynamicData
 
 
-async def get_new_dynamic_list(sessdata:str, event: bool = True, file:bool = False) -> list[DynamicData]:
+async def get_new_dynamic_list(sessdata: str, event: bool = True, file: bool = False) -> list[DynamicData]:
     """获取动态主页的动态列表
     Args:
         sessdata (str): cookie信息-SESSDATA

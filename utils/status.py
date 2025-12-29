@@ -20,17 +20,18 @@ class BaseType(StrEnum):
 class DynamicType(BaseType):
     """动态状态枚举."""
     ALL = "all"  # 表示所有状态，用作通配符
-    NEW = "new" # 新动态
-    DELETED = "deleted" # 删除的动态
-    NULL = "null" # 无变化
+    NEW = "new"  # 新动态
+    DELETED = "deleted"  # 删除的动态
+    NULL = "null"  # 无变化
 
 
 class LiveType(BaseType):
     """直播状态枚举."""
     ALL = "all"  # 表示所有状态，用作通配符
-    ONLINE = "online" # 在线
-    OFFLINE = "offline" # 离线
-    OPEN = "open" # 开播
-    CLOSE = "close" # 下播
+    ONLINE = "online"  # 在线
+    OFFLINE = "offline"  # 离线
+    OPEN = "open"  # 开播
+    CLOSE = "close"  # 下播
+
 
 BaseTypeT = TypeVar("BaseTypeT", bound=BaseType)

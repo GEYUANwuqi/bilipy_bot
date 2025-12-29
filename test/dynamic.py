@@ -3,7 +3,7 @@ from bilibili_api.user import User
 from event import DynamicData
 
 
-async def get_new_dynamic(uid:int, sessdata:str = "", event: bool = True, file:bool = False) -> DynamicData:
+async def get_new_dynamic(uid: int, sessdata: str = "", event: bool = True, file: bool = False) -> DynamicData:
     """获取最新的一条动态
     Args:
         uid (int): 用户uid

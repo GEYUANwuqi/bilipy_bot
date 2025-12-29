@@ -3,7 +3,7 @@ from bilibili_api.live import LiveRoom
 from event import LiveData
 
 
-async def get_room_info(room_id:int, sessdata:str = "", file:bool = False) -> LiveData:
+async def get_room_info(room_id: int, sessdata: str = "", file: bool = False) -> LiveData:
     """获取直播间信息
     Args:
         room_id (int): 直播间ID

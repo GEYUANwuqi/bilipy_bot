@@ -46,9 +46,7 @@ class BiliManager:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._running = False
 
-
     # 注册回调函数 #
-
 
     def _wrap_callback(
         self,
@@ -108,9 +106,7 @@ class BiliManager:
             status_desc = f"status='{status_filter}'"
             _log.debug(f"为 '{key}' 注册回调函数 '{func_name}' ({status_desc}, attr={callback_attr})")
 
-
     # 注册器方法 #
-
 
     def add_dynamic_callback(
         self,
@@ -157,7 +153,6 @@ class BiliManager:
             status.value,
             "_monitored_room_ids"
         )
-
 
     # 装饰器方法 #
 
@@ -233,9 +228,7 @@ class BiliManager:
             return func
         return decorator
 
-
     # 轮询处理方法 #
-
 
     async def _poll_data(
         self,
@@ -380,7 +373,6 @@ class BiliManager:
         except Exception as e:
             _log.error(f"轮询房间 '{room_id}' 直播数据时出错: {e}")
 
-
     # 线程运行方法 #
 
     # TODO: 捕捉error，或者在logger里写
@@ -515,7 +507,6 @@ class BiliManager:
         self._monitor_thread = None
         self._loop = None
         _log.info("BiliManager 监控已停止")
-
 
     # 属性方法 #
 

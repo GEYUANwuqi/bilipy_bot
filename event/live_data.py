@@ -21,8 +21,8 @@ def _html2_text(text: str) -> str:
 
     # 将<br>标签替换为换行符
     text = re.sub(r'<br\s*/?>', '\n', text)
-    ## 将</div>等块级元素替换为换行符(考虑到实际数据结构中较少出现，暂时注释掉)
-    #text = re.sub(r'</(p|div|h[1-6]|li|tr)>', '\n', text)
+    # 将</div>等块级元素替换为换行符(考虑到实际数据结构中较少出现，暂时注释掉)
+    # text = re.sub(r'</(p|div|h[1-6]|li|tr)>', '\n', text)
     # 去除其他HTML标签
     text = re.sub(r'<[^>]*>', '', text)
     # 处理HTML实体

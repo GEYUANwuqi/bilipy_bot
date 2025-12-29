@@ -9,7 +9,7 @@ _log = getLogger("BilibiliApi")
 
 class BilibiliApi:
 
-    def __init__(self, sessdata:str = "") -> None:
+    def __init__(self, sessdata: str = "") -> None:
         self.credential = Credential(sessdata = sessdata)
 
     async def get_all_dynamic(self, uid: int) -> list[DynamicData]:
