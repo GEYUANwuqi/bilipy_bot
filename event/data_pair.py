@@ -3,6 +3,7 @@ from typing import Generic, TypeVar, Optional
 from .live_data import LiveData
 from .dynamic_data import DynamicData
 from utils import DynamicType, LiveType
+from typing import Literal
 import copy
 
 T = TypeVar('T', DynamicData, LiveData)
@@ -23,14 +24,10 @@ class DataPair(Generic[T]):
             self.old = self.new
             self.new = new_data
 
-    # TODO: 干嘛还用两个方法，用一个方法传str再匹配就好了
-    def get_old(self) -> T:
+    def get_data(self, value: Literal["old", "new"]) -> T:
         """获取旧数据"""
-        return copy.copy(self.old)
-
-    def get_new(self) -> T:
-        """获取新数据"""
-        return copy.copy(self.new)
+        data = getattr(self, value)
+        return copy.copy(data)
 
 
 def get_dynamic_status(

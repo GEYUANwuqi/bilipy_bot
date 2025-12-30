@@ -1,6 +1,6 @@
 """BiliManager使用示例"""
 from manager import BiliManager
-from event import DynamicData, LiveData
+from event import Event
 from utils import LiveType, DynamicType
 from utils import setup_logging
 from logging import getLogger
@@ -33,36 +33,36 @@ async def send_qq(bat_text):
 
 
 @manager.on_dynamic(uid=TEST_UID)
-async def handle_get_dynamic(data: DynamicData):
-    """每次轮询获取动态时都会触发_log.info"""
-    _log.info(f"{data.up_info.name}的动态{data.status}")
-    # _log.info(f"[获取动态] UP主: {data.up_info.name}, 动态类型: {data.base_info.type}")
-    # _log.info(f"  时间: {data.base_info.time}, ID: {data.base_info.id}")
+async def handle_get_dynamic(event: Event):
+    """每次轮询获取动态时都会触发"""
+    _log.info(f"{event.data.up_info.name}的动态状态: {event.status}")
+    # _log.info(f"[获取动态] UP主: {event.data.up_info.name}, 动态类型: {event.data.base_info.type}")
+    # _log.info(f"  时间: {event.data.base_info.time}, ID: {event.data.base_info.id}")
 
 
 @manager.on_dynamic(uid=TEST_UID, status=DynamicType.NEW)
-async def handle_new_dynamic(data: DynamicData):
+async def handle_new_dynamic(event: Event):
     """仅当检测到新动态时触发"""
-    _log.info(f"[新动态] UP主 {data.up_info.name} 发布了新动态！")
-    _log.info(data)
+    _log.info(f"[新动态] UP主 {event.data.up_info.name} 发布了新动态！")
+    _log.info(event.data)
 
 
 @manager.on_dynamic(uid=TEST_UID, status=DynamicType.DELETED)
-async def handle_del_dynamic(data: DynamicData):
+async def handle_del_dynamic(event: Event):
     """仅当检测到删除动态时触发"""
-    _log.info(f"[删除动态] UP主 {data.up_info.name} 删除了动态{data.base_info.text}！")
+    _log.info(f"[删除动态] UP主 {event.data.up_info.name} 删除了动态{event.data.base_info.text}！")
 
 
 @manager.on_live(room_id=TEST_ROOM_ID)
-async def handle_live_status(data: LiveData):
+async def handle_live_status(event: Event):
     """所有直播状态变化时都会触发"""
-    _log.info(f"[直播状态] {data.anchor_info.name}当前{data.status}")
+    _log.info(f"[直播状态] {event.data.anchor_info.name}当前状态: {event.status}")
 
 
 @manager.on_live(room_id=TEST_ROOM_ID, status=LiveType.ONLINE)
-async def handle_live_opening(data: LiveData):
-    """所有直播状态变化时都会触发"""
-    _log.info(f"{data.anchor_info.name}在直播")
+async def handle_live_opening(event: Event):
+    """直播中时触发"""
+    _log.info(f"{event.data.anchor_info.name}在直播")
 
 
 # 4.2 仅在下播时回调 - 发送QQ消息

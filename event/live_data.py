@@ -141,27 +141,6 @@ class LiveData(BaseData):
         self.anchor_info: AnchorInfo = AnchorInfo(data["anchor_info"])  # 主播信息
         self.watched_show: WatchedShow = WatchedShow(data["watched_show"])  # 观看榜信息
         self.notice_board: NoticeBoard = NoticeBoard(data["news_info"])  # 公告栏信息
-        self._status: LiveType = LiveType.ALL  # 无状态
-
-    def set_status(self, status: LiveType) -> "LiveData":
-        """设置当前的直播状态（用于注入）.
-
-        Args:
-            status (LiveType): 要设置的状态
-        Returns:
-            LiveData: 返回自身
-        """
-        self._status = status
-        return self
-
-    @property
-    def status(self) -> LiveType:
-        """获取当前直播状态.
-
-        Returns:
-            LiveType: 当前的直播状态
-        """
-        return self._status
 
     async def get_live_info(self, status: LiveType) -> str:
         info = ""
