@@ -1,6 +1,6 @@
 from bilibili_api import Credential
 from bilibili_api.dynamic import get_dynamic_page_info
-from event import DynamicData
+from bili_data import DynamicData
 
 
 async def get_new_dynamic_list(sessdata: str, event: bool = True, file: bool = False) -> list[DynamicData]:

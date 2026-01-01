@@ -1,5 +1,5 @@
 from typing import Any, Optional
-from .base_data import BaseData
+from bili_data.base_data import BaseData
 from logging import getLogger
 
 _log = getLogger("DynamicData")

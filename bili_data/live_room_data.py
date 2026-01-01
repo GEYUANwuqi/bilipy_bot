@@ -1,12 +1,12 @@
 from typing import Any, Optional
 import re
 from html import unescape
-from .base_data import BaseData
+from bili_data.base_data import BaseData
 from utils import LiveType
 from time import time
 from logging import getLogger
 
-_log = getLogger("LiveData")
+_log = getLogger("LiveRoomData")
 
 
 def _html2_text(text: str) -> str:
@@ -125,11 +125,11 @@ class NoticeBoard(BaseData):
         raise AttributeError(f"'NoticeBoard' object has no attribute '{name}'")
 
 
-class LiveData(BaseData):
+class LiveRoomData(BaseData):
     """直播数据类"""
 
     def __init__(self, data: dict[Any, Any]):
-        """初始化LiveInfo对象.
+        """初始化LiveRoomData对象.
 
         Args:
             data (dict): API返回数据

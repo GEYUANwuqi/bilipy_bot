@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from typing import Generic, TypeVar, Optional
-from .live_data import LiveData
-from .dynamic_data import DynamicData
+from bili_data.live_room_data import LiveRoomData
+from bili_data.dynamic_data import DynamicData
 from utils import DynamicType, LiveType
 from typing import Literal
 import copy
 
-T = TypeVar('T', DynamicData, LiveData)
+T = TypeVar('T', DynamicData, LiveRoomData)
 
 
 @dataclass
@@ -55,11 +55,11 @@ def get_dynamic_status(
 
 
 def get_live_status(
-    data_pair: DataPair[LiveData]
+    data_pair: DataPair[LiveRoomData]
 ) -> LiveType:
     """判断直播状态.
     Args:
-        data_pair (DataPair[LiveData]): 直播数据对
+        data_pair (DataPair[LiveRoomData]): 直播数据对
 
     Returns:
         LiveType: 当前的直播状态

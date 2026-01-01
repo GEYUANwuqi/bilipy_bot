@@ -1,7 +1,7 @@
 from bilibili_api import Credential
 from bilibili_api.user import User
 from bilibili_api.live import LiveRoom
-from event import DynamicData, LiveData, get_max_id
+from bili_data import DynamicData, LiveRoomData, get_max_id
 from logging import getLogger
 
 _log = getLogger("BilibiliApi")
@@ -43,16 +43,16 @@ class BilibiliApi:
         info = DynamicData(dynamic_info)
         return info
 
-    async def get_room_info(self, room_id: int) -> LiveData:
+    async def get_room_info(self, room_id: int) -> LiveRoomData:
         """
         获取直播间信息
         Args:
             room_id (int): 直播间ID
         Returns:
-            LiveData: 直播间信息对象
+            LiveRoomData: 直播间信息对象
         """
 
         live_room = LiveRoom(credential = self.credential, room_display_id = room_id)
         live = await live_room.get_room_info()
-        info = LiveData(live)
+        info = LiveRoomData(live)
         return info

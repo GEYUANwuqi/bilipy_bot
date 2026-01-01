@@ -1,22 +1,22 @@
 from bilibili_api import Credential
 from bilibili_api.live import LiveRoom
-from event import LiveData
+from bili_data import LiveRoomData
 
 
-async def get_room_info(room_id: int, sessdata: str = "", file: bool = False) -> LiveData:
+async def get_room_info(room_id: int, sessdata: str = "", file: bool = False) -> LiveRoomData:
     """获取直播间信息
     Args:
         room_id (int): 直播间ID
         sessdata (str): cookie信息-SESSDATA
         file (bool): 保存数据到本地文件，默认False
     Returns:
-        LiveData: 直播间信息对象
+        LiveRoomData: 直播间信息对象
     """
 
     credential_uid = Credential(sessdata=sessdata)
     live_room = LiveRoom(credential = credential_uid, room_display_id = room_id)
     live = await live_room.get_room_info()
-    info = LiveData(live)
+    info = LiveRoomData(live)
     if file:
         import json
         import os

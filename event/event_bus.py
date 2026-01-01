@@ -6,7 +6,7 @@ import asyncio
 import inspect
 from uuid import uuid4
 
-from utils import BaseType
+from utils import BaseType, BaseTypeT
 from .event import Event
 
 
@@ -231,7 +231,7 @@ class SubscriberGroup:
         """
         return key in self._subscribers_by_key
 
-    def get_subscriber_count(self, key: int, status_type: Optional[Type[BaseType]] = None) -> int:
+    def get_subscriber_count(self, key: int, status_type: BaseTypeT) -> int:
         """获取指定 key 的订阅者数量.
 
         Args:
@@ -241,12 +241,6 @@ class SubscriberGroup:
         Returns:
             订阅者数量
         """
-        if status_type is None:
-            # 不指定类型，返回该 key 的所有订阅者数量
-            if key not in self._subscribers_by_key:
-                return 0
-            return len(self._subscribers_by_key[key])
-
         # 指定类型，从类型索引中查询
         if status_type not in self._subscribers_by_type:
             return 0
@@ -454,7 +448,7 @@ class EventBus:
         """
         return self._subscriber_group.get_all_monitored_keys()
 
-    def get_subscriber_count(self, key: int, status_type: Optional[Type[BaseType]] = None) -> int:
+    def get_subscriber_count(self, key: int, status_type: BaseTypeT) -> int:
         """获取指定 key 的订阅者数量.
 
         Args:
@@ -470,5 +464,3 @@ class EventBus:
         """清除所有订阅."""
         self._subscriber_group.clear()
         _log.debug("已清除所有订阅")
-
-

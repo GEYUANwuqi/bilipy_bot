@@ -1,6 +1,6 @@
 from bilibili_api import Credential
 from bilibili_api.user import User
-from event import DynamicData
+from bili_data import DynamicData
 
 
 async def get_new_dynamic(uid: int, sessdata: str = "", event: bool = True, file: bool = False) -> DynamicData:

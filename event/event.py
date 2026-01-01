@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Generic
 from utils import BaseTypeT
-from .base_data import BaseDataT
+from bili_data.base_data import BaseDataT
 
 
 @dataclass
@@ -19,7 +19,7 @@ class Event(Generic[BaseDataT, BaseTypeT]):
         event = Event(data=dynamic_data, status=DynamicType.NEW)
 
         # 创建直播事件
-        from event import LiveData
+        from event import LiveRoomData
         from utils import LiveType
         event = Event(data=live_data, status=LiveType.OPEN)
     """

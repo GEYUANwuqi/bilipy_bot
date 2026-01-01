@@ -1,8 +1,9 @@
 from api import BilibiliApi
-from event import (
-    LiveData, DynamicData, BaseDataT, DataPair,
+from event import Event, EventBus
+
+from bili_data import (
+    LiveRoomData, DynamicData, BaseDataT, DataPair,
     get_dynamic_status, get_live_status,
-    Event, EventBus
 )
 from utils import LiveType, DynamicType
 from logging import getLogger
@@ -30,7 +31,7 @@ class BiliManager:
 
         # 使用 DataPair 存储新旧数据
         self._dynamic_data: dict[int, DataPair[DynamicData]] = {}
-        self._live_data: dict[int, DataPair[LiveData]] = {}
+        self._live_data: dict[int, DataPair[LiveRoomData]] = {}
 
         # 使用统一的 EventBus 管理事件订阅和发布
         # 通过 status 的类型（LiveType/DynamicType）区分不同的事件类别
@@ -235,7 +236,7 @@ class BiliManager:
         """
         try:
             # 使用通用轮询函数获取数据
-            new_data: LiveData = await self._poll_data(
+            new_data: LiveRoomData = await self._poll_data(
                 id_key=room_id,
                 fetch_func=lambda: self.api.get_room_info(room_id),
                 data_attr="_live_data"
