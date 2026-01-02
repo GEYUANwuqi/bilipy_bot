@@ -37,7 +37,7 @@ class DanmakuMsgDTO:
     """
     弹幕消息DTO
     """
-    room_display_id: int  # 房间短号
+    room_display_id: int  # 房间号
     room_real_id: int  # 房间真实ID
     message: str  # 弹幕内容
     user: UserInfoDto  # 用户信息

@@ -3,7 +3,8 @@ from .dynamic_data import DynamicData, get_max_id
 from .base_data import BaseData, BaseDataT
 from .data_pair import DataPair, get_dynamic_status, get_live_status
 from .danmaku_msg_data import DanmakuMsgData
-from .dto import DanmakuMsgDTO
+from .danmaku_gift import DanmakuGiftData, GiftMedalData, BlindGiftData
+from .dto import DanmakuMsgDTO, DanmakuGiftDTO
 
 __all__ = [
     "BaseData",
@@ -20,4 +21,6 @@ __all__ = [
     "get_live_status",
     "DanmakuMsgDTO",
     "DanmakuMsgData",
+    "DanmakuGiftDTO",
+    "DanmakuGiftData",
 ]
