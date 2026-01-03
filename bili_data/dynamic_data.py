@@ -1,8 +1,16 @@
-from typing import Any, Optional
-from bili_data.base_data import BaseData
-from logging import getLogger
+from typing import Optional
+from dataclasses import dataclass
 
-_log = getLogger("DynamicData")
+from .base_data import BaseData
+from .dto import (
+    DynamicDTO,
+    AuthorDto,
+    StatDto,
+    VideoDto,
+    MusicDto,
+    ArticleDto,
+    LiveRcmdDto,
+)
 
 
 def get_max_id(date: dict) -> int:
@@ -24,254 +32,291 @@ def get_max_id(date: dict) -> int:
     return max_id
 
 
-class DynamicBaseData(BaseData):
-    """动态基础数据类."""
-    text: Optional[str] = None
-    comment_num: Optional[int] = None
-    like_num: Optional[int] = None
-    forward_num: Optional[int] = None
-    tag: Optional[str] = None
-    pics_url: Optional[list[str]] = None
+@dataclass(frozen=True)
+class AuthorData(BaseData):
+    """
+    作者信息数据
+    """
+    uid: int  # UP主UID
+    name: str  # UP主昵称
+    face: str  # UP主头像URL
 
-    def __init__(self, data: dict[Any, Any]):
-        """初始化DynamicBaseData对象.
-
-        Args:
-            data(dict): 单条动态信息
-        """
-
-        self.type: str = data["type"]  # 动态类型
-        _log.debug(f"正在构造{self.type}消息")
-        self.id: str = data["id_str"]  # 动态ID
-        self.visible: bool = data["visible"]  # 动态显示状态(false时被折叠)
-        self.time: str = data["modules"]["module_author"]["pub_time"]  # 动态发布时间
-        self.timestamp: int = data["modules"]["module_author"]["pub_ts"]  # 动态发布时间戳
-        self.jump_url: str = f"https://t.bilibili.com/{self.id}"  # 动态跳转链接
-        if self.type in ["DYNAMIC_TYPE_WORD", "DYNAMIC_TYPE_DRAW"]:
-            # 文字内容
-            self.text = data["modules"]["module_dynamic"]["major"]["opus"]["summary"]["text"]
-            # 图片列表
-            pics = data["modules"]["module_dynamic"]["major"]["opus"].get("pics", [])
-            self.pics_url = [pic["url"] for pic in pics] if pics else None
-        if data["modules"].get("module_stat", None) is not None:
-            # 互动数据(评论/点赞/转发)
-            _module_stat: dict[Any, Any] = data["modules"]["module_stat"]
-            self.comment_num = _module_stat["comment"]["count"]
-            self.like_num = _module_stat["like"]["count"]
-            self.forward_num = _module_stat["forward"]["count"]
-        if data["modules"].get("module_tag", None) is not None:
-            # 置顶
-            self.tag = data["modules"]["module_tag"]["text"]
-
-
-class UPData(BaseData):
-    """UP主数据类."""
-
-    def __init__(self, data: dict[Any, Any]):
-        """初始化UPData对象.
-
-        Args:
-            data(dict): 单条动态信息
-        """
-        author_info: dict[Any, Any] = data["modules"]["module_author"]
-        self.uid: int = author_info["mid"]  # UP主UID
-        self.name: str = author_info["name"]  # UP主昵称
-        self.face_url: str = author_info["face"]  # UP主头像url
-        self.jump_url: str = f"https://space.bilibili.com/{self.uid}"  # UP主空间链接
-
-
-class VideoData(BaseData):
-    """视频信息类"""
-    raw_data: Optional[dict[Any, Any]] = None
-    av_id: Optional[str] = None
-    bv_id: Optional[str] = None
-    title: Optional[str] = None
-    cover_url: Optional[str] = None
-    desc: Optional[str] = None
-    duration_text: Optional[str] = None
-    jump_url: Optional[str] = None
-    play_count: Optional[str] = None
-    danmaku_count: Optional[str] = None
-
-    def __init__(self, data: Optional[dict[Any, Any]] = None):
-        """初始化Video对象.
-
-        Args:
-            data (dict): module_dynamic/视频信息
-        """
-        self.raw_data = data  # 原始数据
-        video_archive = data["major"]["archive"]  # 视频信息
-        self.dynamic_text = data["desc"]["text"] if data.get("desc") else ""  # 动态文本
-        self.av_id = video_archive.get("aid")  # 视频AV号
-        self.bv_id = video_archive.get("bvid")  # 视频BV号
-        self.title = video_archive.get("title")  # 视频标题
-        self.cover_url = video_archive.get("cover")  # 视频封面
-        self.desc = video_archive.get("desc")  # 视频简介
-        self.duration_text = video_archive.get("duration_text")  # 视频时长
-        self.jump_url = f"www.bilibili.com/video/{self.bv_id}/"  # 视频跳转链接
-        stat = video_archive.get("stat", {})  # 互动数据
-        self.play_count = stat.get("play")  # 播放数
-        self.danmaku_count = stat.get("danmaku")  # 弹幕数
-
-
-class MusicData(BaseData):
-    """音乐信息类"""
-    raw_data: Optional[dict[Any, Any]] = None
-    music_id: Optional[str] = None
-    title: Optional[str] = None
-    cover_url: Optional[str] = None
-    label: Optional[str] = None
-    jump_url: Optional[str] = None
-    dynamic_text: Optional[str] = None
-
-    def __init__(self, data: Optional[dict[Any, Any]] = None):
-        """初始化Music对象.
-
-        Args:
-            data (dict): module_dynamic/音乐信息
-        """
-        self.raw_data = data  # 原始数据
-        music_info = data["major"]["music"]  # 音乐信息
-        self.dynamic_text = data.get("desc", {}).get("text", "")  # 动态文本
-        self.music_id = music_info.get("id")  # 音乐ID
-        self.title = music_info.get("title")  # 音乐标题
-        self.cover_url = music_info.get("cover")  # 音乐封面
-        self.label = music_info.get("label")  # 音乐标签（作者/歌手）
-        self.jump_url = f"https://www.bilibili.com/audio/au{self.music_id}"  # 音乐跳转链接
-
-
-class ArticleData(BaseData):
-    """专栏信息类"""
-    raw_data: Optional[dict[Any, Any]] = None
-    article_id: Optional[str] = None
-    title: Optional[str] = None
-    jump_url: Optional[str] = None
-    summary: Optional[str] = None
-    has_more: Optional[bool] = None
-
-    def __init__(self, data: Optional[dict[Any, Any]] = None, dy_id: str = ""):
-        """初始化Article对象.
-
-        Args:
-            data (dict): module_dynamic/专栏信息
-            dy_id (str): 动态id
-        """
-        self.raw_data = data  # 原始数据
-        opus_info: dict = data["major"]["opus"]  # 专栏信息
-        self.title = opus_info.get("title")  # 专栏标题
-        self.jump_url = f"https://www.bilibili.com/opus/{dy_id}"  # 专栏跳转链接
-        summary_info = opus_info.get("summary")
-        self.summary = summary_info.get("text")  # 专栏摘要
-        self.has_more = summary_info.get("has_more")  # 是否有更多内容
-
-
-class LiveRcmdData(BaseData):
-    """直播推荐信息类"""
-    raw_data: Optional[dict[Any, Any]] = None
-    room_id: Optional[int] = None
-    live_status: Optional[int] = None
-    title: Optional[str] = None
-    cover_url: Optional[str] = None
-    online: Optional[int] = None
-    area_name: Optional[str] = None
-    area_id: Optional[int] = None
-    parent_area_id: Optional[int] = None
-    parent_area_name: Optional[str] = None
-    live_start_time: Optional[int] = None
-    jump_url: Optional[str] = None
-    watched_num: Optional[int] = None
-    switch: Optional[bool] = None
-    text_small: Optional[str] = None
-    text_large: Optional[str] = None
-
-    def __init__(self, data: Optional[dict[Any, Any]] = None):
-        """初始化LiveRcmd对象.
-
-        Args:
-            data (dict): module_dynamic/直播推荐信息
-        """
-        import json
-        self.raw_data = json.loads(data["major"]["live_rcmd"]["content"])  # 原始数据
-        live_play_info = self.raw_data.get("live_play_info", {})
-        self.room_id = live_play_info.get("room_id")  # 直播间ID
-        self.live_status = live_play_info.get("live_status")  # 直播状态 1:直播中
-        self.title = live_play_info.get("title")  # 直播间标题
-        self.cover_url = live_play_info.get("cover")  # 直播间封面
-        self.online = live_play_info.get("online")  # 在线人数
-        self.area_id = live_play_info.get("area_id")  # 直播分区ID
-        self.area_name = live_play_info.get("area_name")  # 直播分区
-        self.parent_area_id = live_play_info.get("parent_area_id")  # 直播父分区ID
-        self.parent_area_name = live_play_info.get("parent_area_name")  # 直播父分区
-        self.live_start_time = live_play_info.get("live_start_time")  # 开播时间戳
-        self.jump_url = f"https://live.bilibili.com/{self.room_id}"  # 直播间跳转链接
-        watched_show = live_play_info.get("watched_show", {})
-        self.switch = watched_show.get("switch")  # 观看榜开关
-        self.watched_num = watched_show.get("num")  # 观看人数
-        self.text_small = watched_show.get("text_small")  # 小文本
-        self.text_large = watched_show.get("text_large")  # 大文本
-
-
-class ForwardData(BaseData):
-    """转发动态信息类"""
-    raw_data: Optional[dict[Any, Any]] = None
-    orig_id: Optional[str] = None
-    orig_type: Optional[str] = None
-    orig_visible: Optional[bool] = None
-    orig_dynamic: Optional['DynamicData'] = None
-
-    def __init__(self, orig: Optional[dict[Any, Any]] = None):
-        """初始化Forward对象.
-
-        Args:
-            orig (dict): 被转发动态信息
-        """
-        self.orig_dynamic = DynamicData(orig)  # 直接嵌套
-
-
-class DynamicData(BaseData):
-    """动态数据类."""
-    video_info: Optional[VideoData] = None
-    music_info: Optional[MusicData] = None
-    article_info: Optional[ArticleData] = None
-    live_rcmd_info: Optional[LiveRcmdData] = None
-    forward_info: Optional[ForwardData] = None
-
-    def __init__(self, data: dict[Any, Any]):
-        """初始化DynamicData对象.
-
-        Args:
-            data(dict): 单条动态信息
-        """
-        self.raw_data: dict[Any, Any] = data  # 原始数据
-        self.base_info: DynamicBaseData = DynamicBaseData(data)  # 动态基础信息
-        self.up_info: UPData = UPData(data)  # UP主信息
-
-        # 解析视频信息
-        if data.get("type") == "DYNAMIC_TYPE_AV":
-            video_raw = data["modules"]["module_dynamic"]
-            self.video_info = VideoData(video_raw)
-
-        # 解析音乐信息
-        if data.get("type") == "DYNAMIC_TYPE_MUSIC":
-            music_raw = data["modules"]["module_dynamic"]
-            self.music_info = MusicData(music_raw)
-
-        # 解析专栏信息
-        if data.get("type") == "DYNAMIC_TYPE_ARTICLE":
-            article_raw = data["modules"]["module_dynamic"]
-            self.article_info = ArticleData(article_raw, self.base_info.id)
-
-        # 解析直播推荐信息
-        if data.get("type") == "DYNAMIC_TYPE_LIVE_RCMD":
-            live_rcmd_raw = data["modules"]["module_dynamic"]
-            self.live_rcmd_info = LiveRcmdData(live_rcmd_raw)
-
-        # 解析转发信息
-        if data.get("type") == "DYNAMIC_TYPE_FORWARD":
-            forward_raw = data.get("orig")
-            self.forward_info = ForwardData(forward_raw)
+    @classmethod
+    def from_dto(cls, author: AuthorDto) -> "AuthorData":
+        """从AuthorDto构造AuthorData实例"""
+        return cls(
+            uid=author.uid,
+            name=author.name,
+            face=author.face,
+        )
 
     @property
-    def is_live(self):
-        """判断动态是否为直播推荐类型."""
-        return self.base_info.type == "DYNAMIC_TYPE_LIVE_RCMD"
+    def jump_url(self) -> str:
+        """作者空间跳转链接"""
+        return f"https://space.bilibili.com/{self.uid}"
+
+
+@dataclass(frozen=True)
+class StatData(BaseData):
+    """
+    动态统计信息数据
+    """
+    comment_count: int  # 评论数
+    like_count: int  # 点赞数
+    forward_count: int  # 转发数
+
+    @classmethod
+    def from_dto(cls, stat: StatDto) -> "StatData":
+        """从StatDto构造StatData实例"""
+        return cls(
+            comment_count=stat.comment_count,
+            like_count=stat.like_count,
+            forward_count=stat.forward_count
+        )
+
+
+@dataclass(frozen=True)
+class VideoData(BaseData):
+    """
+    视频信息数据
+    """
+    av_id: str  # 视频AV号
+    bv_id: str  # 视频BV号
+    title: str  # 视频标题
+    cover: str  # 视频封面
+    desc: str  # 视频简介
+    duration_text: str  # 视频时长
+    dynamic_text: str  # 动态文本
+    play_count: Optional[str]  # 播放数
+    danmaku_count: Optional[str]  # 弹幕数
+
+    @classmethod
+    def from_dto(cls, video: VideoDto) -> "VideoData":
+        """从VideoDto构造VideoData实例"""
+        return cls(
+            av_id=video.av_id,
+            bv_id=video.bv_id,
+            title=video.title,
+            cover=video.cover,
+            desc=video.desc,
+            duration_text=video.duration_text,
+            dynamic_text=video.dynamic_text,
+            play_count=video.play_count,
+            danmaku_count=video.danmaku_count
+        )
+
+    @property
+    def jump_url(self) -> str:
+        """视频跳转链接"""
+        return f"https://www.bilibili.com/video/{self.bv_id}/"
+
+
+@dataclass(frozen=True)
+class MusicData(BaseData):
+    """
+    音乐信息数据
+    """
+    music_id: str  # 音乐ID
+    title: str  # 音乐标题
+    cover: str  # 音乐封面
+    label: str  # 音乐标签（作者/歌手）
+    dynamic_text: str  # 动态文本
+
+    @classmethod
+    def from_dto(cls, music: MusicDto) -> "MusicData":
+        """从MusicDto构造MusicData实例"""
+        return cls(
+            music_id=music.music_id,
+            title=music.title,
+            cover=music.cover,
+            label=music.label,
+            dynamic_text=music.dynamic_text
+        )
+
+    @property
+    def jump_url(self) -> str:
+        """音乐跳转链接"""
+        return f"https://www.bilibili.com/audio/au{self.music_id}"
+
+
+@dataclass(frozen=True)
+class ArticleData(BaseData):
+    """
+    专栏信息数据
+    """
+    title: str  # 专栏标题
+    summary: str  # 专栏摘要
+    has_more: bool  # 是否有更多内容
+    article_id: int  # 专栏ID
+
+    @classmethod
+    def from_dto(cls, article: ArticleDto) -> "ArticleData":
+        """从ArticleDto构造ArticleData实例"""
+        return cls(
+            title=article.title,
+            summary=article.summary,
+            has_more=article.has_more,
+            article_id=article.id
+        )
+
+    @property
+    def jump_url(self) -> str:
+        """专栏跳转链接"""
+        return f"https://www.bilibili.com/opus/{self.article_id}"
+
+
+@dataclass(frozen=True)
+class LiveRcmdData(BaseData):
+    """
+    直播推荐信息数据
+    """
+    room_id: int  # 直播间ID
+    live_status: int  # 直播状态 1:直播中
+    title: str  # 直播间标题
+    cover: str  # 直播间封面
+    online: int  # 在线人数
+    area_id: int  # 直播分区ID
+    area_name: str  # 直播分区
+    parent_area_id: int  # 直播父分区ID
+    parent_area_name: str  # 直播父分区
+    live_start_time: int  # 开播时间戳
+    watched_num: Optional[int]  # 观看人数
+    switch: Optional[bool]  # 观看榜开关
+    text_small: Optional[str]  # 小文本
+    text_large: Optional[str]  # 大文本
+
+    @classmethod
+    def from_dto(cls, live_rcmd: LiveRcmdDto) -> "LiveRcmdData":
+        """从LiveRcmdDto构造LiveRcmdData实例"""
+        return cls(
+            room_id=live_rcmd.room_id,
+            live_status=live_rcmd.live_status,
+            title=live_rcmd.title,
+            cover=live_rcmd.cover,
+            online=live_rcmd.online,
+            area_id=live_rcmd.area_id,
+            area_name=live_rcmd.area_name,
+            parent_area_id=live_rcmd.parent_area_id,
+            parent_area_name=live_rcmd.parent_area_name,
+            live_start_time=live_rcmd.live_start_time,
+            watched_num=live_rcmd.watched_num,
+            switch=live_rcmd.switch,
+            text_small=live_rcmd.text_small,
+            text_large=live_rcmd.text_large
+        )
+
+    @property
+    def jump_url(self) -> str:
+        """直播间跳转链接"""
+        return f"https://live.bilibili.com/{self.room_id}"
+
+
+@dataclass(frozen=True)
+class DynamicData(BaseData):
+    """
+    动态数据
+    """
+    dynamic_id: str  # 动态ID
+    dynamic_type: str  # 动态类型
+    visible: bool  # 动态显示状态(false时被折叠)
+    pub_time: str  # 发布时间
+    pub_ts: int  # 发布时间戳
+    author: AuthorData  # 作者信息
+    stat: Optional[StatData]  # 统计信息
+    tag: Optional[str]  # 标签（如置顶）
+    text: Optional[str]  # 文字内容
+    pics_url: Optional[list[str]]  # 图片列表
+    video: Optional[VideoData]  # 视频信息
+    music: Optional[MusicData]  # 音乐信息
+    article: Optional[ArticleData]  # 专栏信息
+    live_rcmd: Optional[LiveRcmdData]  # 直播推荐信息
+    forward_orig: Optional['DynamicData']  # 转发的原动态
+
+    @classmethod
+    def from_dto(cls, dto: DynamicDTO) -> "DynamicData":
+        """从DTO对象构造DynamicData实例
+
+        Args:
+            dto: DynamicDTO对象
+
+        Returns:
+            DynamicData实例
+        """
+        # 构造作者数据
+        author_data = AuthorData.from_dto(dto.author)
+
+        # 构造统计数据
+        stat_data = StatData.from_dto(dto.stat) if dto.stat else None
+
+        # 构造视频数据
+        video_data = VideoData.from_dto(dto.video) if dto.video else None
+
+        # 构造音乐数据
+        music_data = MusicData.from_dto(dto.music) if dto.music else None
+
+        # 构造专栏数据
+        article_data = ArticleData.from_dto(dto.article) if dto.article else None
+
+        # 构造直播推荐数据
+        live_rcmd_data = LiveRcmdData.from_dto(dto.live_rcmd) if dto.live_rcmd else None
+
+        # 递归构造转发动态数据
+        forward_orig_data = cls.from_dto(dto.forward_orig) if dto.forward_orig else None
+
+        return cls(
+            dynamic_id=dto.dynamic_id,
+            dynamic_type=dto.dynamic_type,
+            visible=dto.visible,
+            pub_time = dto.pub_time,
+            pub_ts = dto.pub_ts,
+            author=author_data,
+            stat=stat_data,
+            tag=dto.tag,
+            text=dto.text,
+            pics_url=dto.pics_url,
+            video=video_data,
+            music=music_data,
+            article=article_data,
+            live_rcmd=live_rcmd_data,
+            forward_orig=forward_orig_data
+        )
+
+    @property
+    def jump_url(self) -> str:
+        """动态跳转链接"""
+        return f"https://t.bilibili.com/{self.dynamic_id}"
+
+    @property
+    def is_live(self) -> bool:
+        """判断动态是否为直播推荐类型"""
+        return self.dynamic_type == "DYNAMIC_TYPE_LIVE_RCMD"
+
+    @property
+    def is_video(self) -> bool:
+        """判断动态是否为视频类型"""
+        return self.dynamic_type == "DYNAMIC_TYPE_AV"
+
+    @property
+    def is_music(self) -> bool:
+        """判断动态是否为音乐类型"""
+        return self.dynamic_type == "DYNAMIC_TYPE_MUSIC"
+
+    @property
+    def is_article(self) -> bool:
+        """判断动态是否为专栏类型"""
+        return self.dynamic_type == "DYNAMIC_TYPE_ARTICLE"
+
+    @property
+    def is_word(self) -> bool:
+        """判断动态是否为纯文字类型"""
+        return self.dynamic_type == "DYNAMIC_TYPE_WORD"
+
+    @property
+    def is_draw(self) -> bool:
+        """判断动态是否为图文类型"""
+        return self.dynamic_type == "DYNAMIC_TYPE_DRAW"
+
+    @property
+    def is_forward(self) -> bool:
+        """判断动态是否为转发类型"""
+        return self.dynamic_type == "DYNAMIC_TYPE_FORWARD"

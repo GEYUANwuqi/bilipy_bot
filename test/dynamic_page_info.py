@@ -1,6 +1,6 @@
 from bilibili_api import Credential
 from bilibili_api.dynamic import get_dynamic_page_info
-from bili_data import DynamicData
+from bili_data import DynamicData, DynamicDTO
 
 
 async def get_new_dynamic_list(sessdata: str, event: bool = True, file: bool = False) -> list[DynamicData]:
@@ -25,9 +25,12 @@ async def get_new_dynamic_list(sessdata: str, event: bool = True, file: bool = F
     if event:
         info = []
         for i in info_list:
-            data = DynamicData(i)
+            dto = DynamicDTO.from_dict(i)
+            data = DynamicData.from_dto(dto)
             info.append(data)
-        print(info)
+            info.append(f"{data}")
+            print(data)
+            print(f"\n")
     else:
         info = info_list
         if not file:
@@ -40,5 +43,5 @@ if __name__ == '__main__':
         get_new_dynamic_list(
             sessdata = "",
             event = True,
-            file = True
+            file = False
         ))

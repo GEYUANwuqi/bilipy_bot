@@ -1,7 +1,7 @@
 from bilibili_api import Credential
 from bilibili_api.user import User
 from bilibili_api.live import LiveRoom
-from bili_data import DynamicData, LiveRoomData, get_max_id
+from bili_data import DynamicData, LiveRoomData, get_max_id, DynamicDTO
 from logging import getLogger
 
 _log = getLogger("BilibiliApi")
@@ -40,7 +40,10 @@ class BilibiliApi:
         max_id = get_max_id(dict_info)
         _log.debug(f"获取到最大时间戳的索引为'{max_id}'")
         dynamic_info = dict_info["items"][max_id]
-        info = DynamicData(dynamic_info)
+        dto = DynamicDTO.from_dict(dynamic_info)
+        if not dto:
+            raise ValueError(f"Failed to parse dynamic data for uid {uid}")
+        info = DynamicData.from_dto(dto)
         return info
 
     async def get_room_info(self, room_id: int) -> LiveRoomData:
