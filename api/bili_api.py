@@ -23,7 +23,8 @@ class BilibiliApi:
 
         user = User(credential = self.credential, uid = uid)
         dict_info = await user.get_dynamics_new()
-        info = [DynamicData(item) for item in dict_info["items"]]
+        info_dto = [DynamicDTO.from_dict(item) for item in dict_info["items"]]
+        info = [DynamicData.from_dto(dto) for dto in info_dto if dto is not None]
         return info
 
     async def get_new_dynamic(self, uid: int) -> DynamicData:

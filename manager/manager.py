@@ -29,6 +29,10 @@ class BiliManager:
         self.api = BilibiliApi(sessdata=sessdata)
         self._poll_interval = poll_interval
 
+        # 管理器需要用到的uid
+        self._uid: list = []
+        self._room_id: list = []
+
         # 使用 DataPair 存储新旧数据
         self._dynamic_data: dict[int, DataPair[DynamicData]] = {}
         self._live_data: dict[int, DataPair[LiveRoomData]] = {}
@@ -57,6 +61,7 @@ class BiliManager:
             callback: 回调函数，接收 Event 参数
             status: 状态过滤器，默认为 DynamicType.ALL（匹配所有状态）
         """
+        self._uid.extend(uid)
         self._event_bus.add_subscriber(uid, callback, status)
 
     def add_live_callback(
@@ -72,6 +77,7 @@ class BiliManager:
             callback: 回调函数，接收 Event 参数
             status: 状态过滤器，默认为 LiveType.ALL（匹配所有状态）
         """
+        self._room_id.extend(room_id)
         self._event_bus.add_subscriber(room_id, callback, status)
 
     # 装饰器方法 #
@@ -301,7 +307,7 @@ class BiliManager:
             # 创建所有轮询任务
             tasks = []
             # 动态轮询（通过 DynamicType 获取监控的 UID）
-            monitored_uids = self._event_bus.get_monitored_keys(DynamicType)
+            monitored_uids = self._uid
             if monitored_uids:
                 dynamic_factories = [
                     lambda uid = uid: self._poll_dynamic(uid) for uid in monitored_uids
@@ -309,7 +315,7 @@ class BiliManager:
                 tasks.append(self._run_tasks(dynamic_factories))
 
             # 直播轮询（通过 LiveType 获取监控的房间 ID）
-            monitored_room_ids = self._event_bus.get_monitored_keys(LiveType)
+            monitored_room_ids = self._room_id
             if monitored_room_ids:
                 live_factories = [
                     lambda room_id = room_id: self._poll_live(room_id) for room_id in monitored_room_ids
@@ -419,20 +425,20 @@ class BiliManager:
         """
         return self._poll_interval
 
-    @property
-    def uids(self) -> list[int]:
-        """获取当前监控的UID列表.
-
-        Returns:
-            list[int]: 当前监控的UID列表
-        """
-        return list(self._event_bus.get_monitored_keys(DynamicType))
-
-    @property
-    def room_ids(self) -> list[int]:
-        """获取当前监控的直播间ID列表.
-
-        Returns:
-            list[int]: 当前监控的直播间ID列表
-        """
-        return list(self._event_bus.get_monitored_keys(LiveType))
+    # @property
+    # def uids(self) -> list[int]:
+    #     """获取当前监控的UID列表.
+#
+    #     Returns:
+    #         list[int]: 当前监控的UID列表
+    #     """
+    #     return list(self._event_bus.get_monitored_keys(DynamicType))
+#
+    # @property
+    # def room_ids(self) -> list[int]:
+    #     """获取当前监控的直播间ID列表.
+#
+    #     Returns:
+    #         list[int]: 当前监控的直播间ID列表
+    #     """
+    #     return list(self._event_bus.get_monitored_keys(LiveType))

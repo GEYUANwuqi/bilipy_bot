@@ -1,9 +1,8 @@
 from enum import Enum
 from typing import TypeVar
-from abc import ABC
 
 
-class BaseType(str, Enum, ABC):
+class BaseType(str, Enum):
     """标签枚举基类，提供通用的匹配方法."""
 
     @property

@@ -41,8 +41,8 @@ def get_dynamic_status(
         DynamicType: 当前的动态状态
     """
 
-    old_timestamp = data_pair.old.author.pub_ts
-    new_timestamp = data_pair.new.author.pub_ts
+    old_timestamp = data_pair.old.pub_ts
+    new_timestamp = data_pair.new.pub_ts
     # 新动态的时间戳大于旧动态，说明有新动态
     if new_timestamp > old_timestamp:
         return DynamicType.NEW
