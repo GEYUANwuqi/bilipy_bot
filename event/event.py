@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Generic
 from utils import BaseTypeT
-from bili_data.base_data import BaseDataT
+from bili_data import BaseDataT
 
 
 @dataclass
@@ -29,4 +29,5 @@ class Event(Generic[BaseDataT, BaseTypeT]):
     def __repr__(self) -> str:
         return f"Event(data={self.data}, status={self.status})"
 
-
+    def __str__(self) -> str:
+        return self.__repr__()
