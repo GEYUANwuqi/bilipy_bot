@@ -1,14 +1,13 @@
 from logging import getLogger
 from typing import Optional, Any
-from dataclasses import dataclass
 import json
+from .base_dto import BaseDto
 
 
 _log = getLogger("DynamicDTO")
 
 
-@dataclass
-class AuthorDto:
+class AuthorDto(BaseDto):
     """
     作者信息DTO
     """
@@ -17,8 +16,7 @@ class AuthorDto:
     face: str  # UP主头像URL
 
 
-@dataclass
-class StatDto:
+class StatDto(BaseDto):
     """
     动态统计信息DTO
     """
@@ -27,8 +25,7 @@ class StatDto:
     forward_count: int = 0  # 转发数
 
 
-@dataclass
-class VideoDto:
+class VideoDto(BaseDto):
     """
     视频信息DTO
     """
@@ -38,14 +35,12 @@ class VideoDto:
     cover: str  # 视频封面
     desc: str  # 视频简介
     duration_text: str  # 视频时长
+    play_count: str  # 播放数
+    danmaku_count: str  # 弹幕数
     dynamic_text: str = ""  # 动态文本
-    play_count: Optional[str] = None  # 播放数
-    danmaku_count: Optional[str] = None  # 弹幕数
-    #  TODO: why这里可能是none, 其实也可以用int的
 
 
-@dataclass
-class MusicDto:
+class MusicDto(BaseDto):
     """
     音乐信息DTO
     """
@@ -56,8 +51,7 @@ class MusicDto:
     dynamic_text: str = ""  # 动态文本
 
 
-@dataclass
-class ArticleDto:
+class ArticleDto(BaseDto):
     """
     专栏信息DTO
     """
@@ -67,8 +61,7 @@ class ArticleDto:
     id: int
 
 
-@dataclass
-class LiveRcmdDto:
+class LiveRcmdDto(BaseDto):
     """
     直播推荐信息DTO
     """
@@ -88,8 +81,7 @@ class LiveRcmdDto:
     text_large: Optional[str] = None  # 大文本
 
 
-@dataclass
-class DynamicDTO:
+class DynamicDTO(BaseDto):
     """
     动态消息DTO
     """

@@ -87,8 +87,8 @@ class VideoData(BaseData):
     desc: str  # 视频简介
     duration_text: str  # 视频时长
     dynamic_text: str  # 动态文本
-    play_count: Optional[str]  # 播放数
-    danmaku_count: Optional[str]  # 弹幕数
+    play_count: str  # 播放数
+    danmaku_count: str  # 弹幕数
 
     @classmethod
     def from_dto(cls, video: VideoDto) -> "VideoData":

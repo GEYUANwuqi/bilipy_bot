@@ -14,7 +14,7 @@ class BilibiliApi:
 
     async def get_all_dynamic(self, uid: int) -> list[DynamicData]:
         """
-        获取所有动态(谨慎使用)
+        获取单页动态(谨慎使用)
         Args:
             uid (int): 用户uid
         Returns:
