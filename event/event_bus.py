@@ -3,6 +3,7 @@ from logging import getLogger
 from functools import wraps
 import asyncio
 import inspect
+from uuid import UUID
 from utils import BaseType
 from .event import Event
 from .subscriber import Subscriber, SubscriberGroup
@@ -13,22 +14,6 @@ _log = getLogger(__name__)
 
 class EventBus:
     """事件总线，管理事件的订阅和发布.
-
-    Usage:
-        bus = EventBus()
-
-        # 订阅直播事件
-        @bus.subscribe(keys=[123456], status=LiveType.OPEN)
-        async def on_live_open(event: Event):
-            print(f"开播了: {event.data}")
-
-        # 订阅动态事件
-        @bus.subscribe(keys=[123456], status=DynamicType.NEW)
-        async def on_new_dynamic(event: Event):
-            print(f"新动态: {event.data}")
-
-        # 发布事件
-        await bus.publish(key=123456, event=live_event)
     """
 
     def __init__(self):
@@ -64,41 +49,39 @@ class EventBus:
 
     def add_subscriber(
         self,
-        keys: list[int],
+        uuid: UUID,
         callback: Callable[[Event], Coroutine[Any, Any, None]],
         status: BaseType
     ) -> None:
         """添加订阅者.
 
         Args:
-            keys: 订阅的 key 列表（uid 或 room_id）
+            uuid: 发布器的唯一标识符
             callback: 回调函数，接收 Event 参数
             status: 状态过滤器（同时用于确定事件类别）
         """
         wrapper = self._wrap_callback(callback)
-        status_type = type(status)  # 获取状态的类型作为事件类别标记
 
-        for key in keys:
-            subscriber = Subscriber(
-                callback = wrapper,
-                status_filter = status,
-            )
-            self._subscriber_group.add(key, subscriber)
-            _log.debug(
-                f"为 '{key}' 注册订阅者 (id={subscriber.id}, "
-                f"callback={callback.__name__}, "
-                f"status_filter={status.value})"
-            )
+        subscriber = Subscriber(
+            callback = wrapper,
+            status_filter = status,
+        )
+        self._subscriber_group.add(uuid, subscriber)
+        _log.debug(
+            f"为 '{uuid}' 注册订阅者"
+            f"callback={callback.__name__}, "
+            f"status_filter={status.value})"
+        )
 
     def subscribe(
         self,
-        keys: list[int],
+        uuid: UUID,
         status: BaseType
     ) -> Callable:
         """装饰器：订阅事件.
 
         Args:
-            keys: 订阅的 key 列表（uid 或 room_id）
+            uuid: 发布器的唯一标识符
             status: 状态过滤器（同时用于确定事件类别）
 
         Returns:
@@ -109,38 +92,36 @@ class EventBus:
             async def on_open(event: Event):
                 print(event)
         """
-        def decorator(func: Callable) -> Callable:
-            self.add_subscriber(keys, func, status)
+        def decorator(func: Callable[[Event], Coroutine[Any, Any, None]]) -> Callable:
+            self.add_subscriber(uuid, func, status)
             return func
         return decorator
 
     async def publish(
         self,
-        key: int,
+        uuid: UUID,
         event: Event
     ) -> None:
         """发布事件.
 
-        根据 key 和 event.status 的类型匹配订阅者并触发回调。
-        使用 isinstance() 检查事件状态是否属于订阅者的状态类型。
+        发布指定发布器的事件，触发所有匹配的订阅者回调。
 
         Args:
-            key: 事件的 key（uid 或 room_id）
+            uuid: 发布器的唯一标识符
             event: 要发布的事件
         """
-
-        for subscriber in self._subscriber_group._subscribers[key]:
+        for subscriber in self._subscriber_group.get_subscriber(uuid):
             try:
                 if not event.status.matches(subscriber.status_filter):
                     continue
                 # 异步执行回调
                 asyncio.create_task(subscriber.callback(event))
                 _log.debug(
-                    f"触发订阅者 (id={subscriber.id}, "
-                    f"key={key}, status={event.status.value})"
+                    f"触发订阅者 (uuid={uuid}, "
+                    f"callback={subscriber.callback.__name__}, status={event.status.value})"
                 )
             except Exception as e:
                 _log.error(
                     f"执行订阅者回调时出错 "
-                    f"(key={key}, subscriber_id={subscriber.id}): {e}"
+                    f"(发布器uuid={uuid}, callback={subscriber.callback.__name__}): {e}"
                 )

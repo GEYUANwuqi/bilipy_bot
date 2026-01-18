@@ -1,19 +1,12 @@
 from typing import Callable, Coroutine, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from logging import getLogger
-from uuid import uuid4
-from enum import Enum
+from uuid import UUID
 from utils import BaseType
 from .event import Event
 
 
 _log = getLogger(__name__)
-
-
-class SubType(str, Enum):
-    """订阅类型枚举."""
-    Dynamic = "dynamic"
-    Live = "live"
 
 
 @dataclass
@@ -23,11 +16,9 @@ class Subscriber:
     Attributes:
         callback: 回调函数
         status_filter: 状态过滤器
-        id: 订阅者唯一标识（自动生成的 UUID）
     """
     callback: Callable[[Event], Coroutine[Any, Any, None]]
     status_filter: BaseType
-    id: str = field(default_factory=lambda: str(uuid4()))  # 自动生成唯一 ID
 
 
 class SubscriberGroup:
@@ -36,47 +27,31 @@ class SubscriberGroup:
     负责存储同一类订阅者。
 
     Attributes:
-        _subscribers: 订阅者存储字典 dict[int, list[Subscriber]]
+        _subscribers: 订阅者存储字典 dict[UUID, list[Subscriber]]
     """
 
     def __init__(self):
         """初始化订阅组."""
         # 维护一个id - Subscriber 列表的键值对
-        self._subscribers: dict[int, list[Subscriber]] = {}
+        self._subscribers: dict[UUID, list[Subscriber]] = {}
 
-    def add(self, key: int, subscriber: Subscriber) -> None:
-        """添加订阅者到指定 key.
+    def add(self, uuid: UUID, subscriber: Subscriber) -> None:
+        """添加订阅者到指定发布器.
 
         Args:
-            key: 订阅的 key（uid 或 room_id）
+            uuid: 发布器的唯一标识符
             subscriber: 订阅者对象
         """
 
-        if key not in self._subscribers:
-            self._subscribers[key] = []
-        self._subscribers[key].append(subscriber)
+        if uuid not in self._subscribers:
+            self._subscribers[uuid] = []
+        self._subscribers[uuid].append(subscriber)
 
     @property
-    def uids(self) -> list[int]:
-        """获取所有订阅的 key 列表."""
+    def uids(self) -> list[UUID]:
+        """获取所有订阅的发布器列表."""
         return list(self._subscribers.keys())
 
-
-class SubscriberRegistry:
-    """订阅者注册表，管理不同类型的订阅组.
-
-    Attributes:
-        _subscribers: 订阅组存储字典 dict[SubType, SubscriberGroup]
-    """
-
-    def __init__(self):
-        self._subscribers: dict[SubType, SubscriberGroup] = {}
-
-    def add_subscriber(self, sub_type: SubType, key: int):
-        pass
-
-    def remove_subscriber(self, sub_type: SubType, key: int):
-        pass
-
-    def get_sub_id(self, sub_type: SubType) -> list[int]:
-        return self._subscribers[sub_type].uids
+    def get_subscriber(self, uuid: UUID) -> list[Subscriber]:
+        """获取对应发布器的所有订阅者."""
+        return self._subscribers[uuid]

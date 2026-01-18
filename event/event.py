@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Generic
-from utils import BaseTypeT
+from utils import BaseType
 from bili_data import BaseDataT
 
 
 @dataclass
-class Event(Generic[BaseDataT, BaseTypeT]):
+class Event(Generic[BaseDataT]):
     """事件类，包含数据和状态.
 
     Attributes:
@@ -24,7 +24,7 @@ class Event(Generic[BaseDataT, BaseTypeT]):
         event = Event(data=live_data, status=LiveType.OPEN)
     """
     data: BaseDataT
-    status: BaseTypeT
+    status: BaseType
 
     def __repr__(self) -> str:
         return f"Event(data={self.data}, status={self.status})"
