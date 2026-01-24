@@ -2,15 +2,28 @@ from bilibili_api import Credential
 from bilibili_api.user import User
 from bilibili_api.live import LiveRoom
 from bili_data import DynamicData, LiveRoomData, get_max_id, DynamicDTO
+from .base_api import BaseApi
+from .context import APIContext
 from logging import getLogger
+from typing import Optional
 
 _log = getLogger("BilibiliApi")
 
 
-class BilibiliApi:
+class BilibiliApi(BaseApi):
 
-    def __init__(self, sessdata: str = "") -> None:
-        self.credential = Credential(sessdata = sessdata)
+    def __init__(self, credential: Optional[Credential]) -> None:
+        """初始化BilibiliApi客户端
+        Args:
+            credential: Optional[Credential]: B站用户凭证
+        """
+        self.credential = credential
+
+    @classmethod
+    def create(cls, ctx: APIContext) -> "BilibiliApi":
+        return cls(
+            ctx.config.get_config("bilibili")
+        )
 
     async def get_all_dynamic(self, uid: int) -> list[DynamicData]:
         """
