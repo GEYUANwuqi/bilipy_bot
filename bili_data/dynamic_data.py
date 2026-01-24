@@ -13,22 +13,54 @@ from .dto import (
 )
 
 
-def get_max_id(date: dict) -> int:
+def get_max_id(date: dict) -> Optional[int]:
     """获取最新动态的索引ID
     Args:
         date (dict): 原始动态数据
     Returns:
-        max_id (int): 索引id
+        max_id (int): 索引id，如果数据不存在则返回None
 
     """
-    max_timestamp: int = 0
-    max_id: int = 0
+    # 数据校验：检查 items 键是否存在
+    if not date or "items" not in date:
+        return None
+
     list_data = date["items"]
+
+    # 数据校验：检查 items 是否为空
+    if not list_data:
+        return None
+
+    max_timestamp: int = 0
+    max_id: Optional[int] = None
+
     for index, item in enumerate(list_data):
-        timestamp = int(item["modules"]["module_author"]["pub_ts"])
-        if timestamp > max_timestamp:
-            max_timestamp = timestamp
-            max_id = index
+        # 数据校验：检查 item 是否为字典
+        if not isinstance(item, dict):
+            continue
+
+        # 数据校验：检查嵌套的 key 是否存在
+        modules = item.get("modules")
+        if not modules or not isinstance(modules, dict):
+            continue
+
+        module_author = modules.get("module_author")
+        if not module_author or not isinstance(module_author, dict):
+            continue
+
+        pub_ts = module_author.get("pub_ts")
+        if pub_ts is None:
+            continue
+
+        try:
+            timestamp = int(pub_ts)
+            if timestamp > max_timestamp:
+                max_timestamp = timestamp
+                max_id = index
+        except (ValueError, TypeError):
+            # 如果转换失败，跳过该项
+            continue
+
     return max_id
 
 

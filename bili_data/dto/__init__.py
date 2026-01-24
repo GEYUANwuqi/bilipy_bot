@@ -20,6 +20,16 @@ from .dynamic_dto import (
     ArticleDto,
     LiveRcmdDto,
 )
+from .video_part_dto import (
+    VideoPartDto
+)
+from .live_room_dto import (
+    LiveRoomDTO,
+    RoomInfoDto,
+    AnchorInfoDto,
+    WatchedShowDto,
+    NoticeBoardDto,
+)
 
 #  TODO: pydantic BaseModel版本的DTO
 __all__ = [
@@ -39,4 +49,10 @@ __all__ = [
     "MusicDto",
     "ArticleDto",
     "LiveRcmdDto",
+    "VideoPartDto",
+    "LiveRoomDTO",
+    "RoomInfoDto",
+    "AnchorInfoDto",
+    "WatchedShowDto",
+    "NoticeBoardDto",
 ]
