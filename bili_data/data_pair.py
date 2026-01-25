@@ -1,21 +1,18 @@
 from dataclasses import dataclass
 from typing import Generic, TypeVar, Optional
-from bili_data.live_room_data import LiveRoomData
-from bili_data.dynamic_data import DynamicData
+from bili_data import LiveRoomData, DynamicData, BaseDataT
 from utils import DynamicType, LiveType
 from typing import Literal
-import copy
-
-T = TypeVar('T', DynamicData, LiveRoomData)
+from copy import copy
 
 
 @dataclass
-class DataPair(Generic[T]):
+class DataPair(Generic[BaseDataT]):
     """存储新旧数据对"""
-    old: Optional[T] = None
-    new: Optional[T] = None
+    old: Optional[BaseDataT] = None
+    new: Optional[BaseDataT] = None
 
-    def update(self, new_data: T):
+    def update(self, new_data: BaseDataT):
         """更新数据"""
         if self.old is None:
             self.old = new_data
@@ -24,10 +21,10 @@ class DataPair(Generic[T]):
             self.old = self.new
             self.new = new_data
 
-    def get_data(self, value: Literal["old", "new"]) -> T:
-        """获取旧数据"""
+    def get_data(self, value: Literal["old", "new"]) -> BaseDataT:
+        """获取数据浅拷贝"""
         data = getattr(self, value)
-        return copy.copy(data)
+        return copy(data)
 
 
 def get_dynamic_status(

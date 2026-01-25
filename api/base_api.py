@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TypeVar
+from typing import TypeVar, Self
 from .context import APIContext
 
 
@@ -11,7 +11,7 @@ class BaseApi(ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls, ctx: APIContext) -> "BaseApi":
+    def create(cls, ctx: APIContext) -> Self:
         """API实例工厂方法"""
         pass
 
