@@ -1,3 +1,3 @@
-from .manager import BiliManager
+from .bilibili_manager import BiliBiliManager
 
-__all__ = ["BiliManager"]
+__all__ = ["BiliBiliManager"]

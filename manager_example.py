@@ -1,115 +1,129 @@
-"""BiliManager使用示例"""
-from manager import BiliManager
+"""BiliBiliManager 使用示例
+
+展示如何使用重构后的 BiliBiliManager 架构：
+1. 创建 BiliBiliManager 和 Source
+2. 注册订阅者
+3. 管理生命周期
+"""
+from bilibili_api import Credential
+
+from manager import BiliBiliManager
+from source import BiliDynamicSource, BiliLiveSource
 from event import Event
+from bili_data import DynamicData, LiveRoomData
 from utils import LiveType, DynamicType
 from utils import setup_logging
+from api.context import RuntimeConfig
 from logging import getLogger
 import asyncio
+
 
 setup_logging("DEBUG")
 _log = getLogger("BILIBILI")
 
-# 创建管理器实例
-manager = BiliManager(sessdata="", poll_interval=12)
 
-# 示例UID和房间ID
-# TEST_UID = [621240130,1802011210,3546729368520811]  # 替换为实际的UID
-TEST_UID = [621240130]
-TEST_ROOM_ID = [26498147, 22758221]  # 替换为实际的房间ID
+# ============ 配置 ============ #
+
+# B站凭证（可选）
+credential = Credential(
+    sessdata="",
+    bili_jct="",
+    buvid3=""
+)
+
+# 创建运行时配置
+config = RuntimeConfig(
+    bilibili=credential,
+)
+
+# 创建管理器
+manager = BiliBiliManager(config)
+
+# ============ 创建事件源 ============ #
+# TODO: 用依赖注入重构这里的创建过程
+# 动态监控源
+dynamic_source = BiliDynamicSource(poll_interval=12)
+dynamic_source.add_members([1802011210])
+
+# 直播监控源
+live_source = BiliLiveSource(poll_interval=12)
+live_source.add_members([22758221])
+
+# 注册事件源并获取 UUID
+dynamic_id = manager.add_source(dynamic_source)
+live_id = manager.add_source(live_source)
 
 
-async def send_qq(bat_text):
-    """发送QQ消息"""
-    _log.info(f"开始执行命令: {bat_text}")
-    try:
-        process = await asyncio.create_subprocess_shell(f'start /wait cmd /c {bat_text}', shell = True)
-        return_code = await process.wait()
-        if return_code == 0:
-            _log.info("命令执行成功")
-        else:
-            _log.error(f"命令执行失败，返回码: {return_code}")
-    except Exception as e:
-        _log.error(f"命令执行异常: {e}")
+# ============ 订阅事件 ============ #
 
-
-@manager.on_dynamic(uid=TEST_UID)
-async def handle_get_dynamic(event: Event):
+@manager.subscribe(dynamic_id, DynamicType.ALL)
+async def handle_get_dynamic(event: Event[DynamicData]):
     """每次轮询获取动态时都会触发"""
-    _log.info(f"{event.data.up_info.name}的动态状态: {event.status}")
-    # _log.info(f"[获取动态] UP主: {event.data.up_info.name}, 动态类型: {event.data.base_info.type}")
-    # _log.info(f"  时间: {event.data.base_info.time}, ID: {event.data.base_info.id}")
+    _log.info(f"{event.data.author.name} 的动态状态: {event.status}")
 
 
-@manager.on_dynamic(uid=TEST_UID, status=DynamicType.NEW)
-async def handle_new_dynamic(event: Event):
+@manager.subscribe(dynamic_id, DynamicType.NEW)
+async def handle_new_dynamic(event: Event[DynamicData]):
     """仅当检测到新动态时触发"""
-    _log.info(f"[新动态] UP主 {event.data.up_info.name} 发布了新动态！")
+    _log.info(f"[新动态] UP主 {event.data.author.name} 发布了新动态！")
     _log.info(event.data)
 
 
-@manager.on_dynamic(uid=TEST_UID, status=DynamicType.DELETED)
-async def handle_del_dynamic(event: Event):
+@manager.subscribe(dynamic_id, DynamicType.DELETED)
+async def handle_del_dynamic(event: Event[DynamicData]):
     """仅当检测到删除动态时触发"""
-    _log.info(f"[删除动态] UP主 {event.data.up_info.name} 删除了动态{event.data.base_info.text}！")
+    _log.info(f"[删除动态] UP主 {event.data.author.name} 删除了动态 {event.data.text}！")
 
 
-@manager.on_live(room_id=TEST_ROOM_ID)
-async def handle_live_status(event: Event):
-    """所有直播状态变化时都会触发"""
-    _log.info(f"[直播状态] {event.data.anchor_info.name}当前状态: {event.status}")
-
-
-@manager.on_live(room_id=TEST_ROOM_ID, status=LiveType.ONLINE)
-async def handle_live_opening(event: Event):
+@manager.subscribe(live_id, LiveType.ONLINE)
+async def handle_live_online(event: Event[LiveRoomData]):
     """直播中时触发"""
-    _log.info(f"{event.data.anchor_info.name}在直播")
+    _log.info(f"{event.data.anchor_info.name} 在直播")
 
 
-# 4.2 仅在下播时回调 - 发送QQ消息
-# @manager.on_live_status(room_id=TEST_ROOM_ID, status="close")
-# def handle_live_close(data: LiveData):
-#    """仅在下播时触发，发送QQ消息"""
-#    name = data.anchor_info.name
-#    title = data.room_info.title
-#    room_id = data.room_info.room_id
-#    pic_url = data.room_info.cover_url
-#
-#    # 参考app.py的下播消息格式
-#    live_msg = f"【下播通知】\n{name}下播啦！\n{title}\n直播地址：https://live.bilibili.com/{room_id}"
-#
-#    _log.info(f"[下播通知] {name} 下播了")
-#
-#    # 参考app.py发送QQ消息（下播不@全体成员）
-#    encoded_text = base64.b64encode(live_msg.encode('utf-8')).decode('ascii')
-#    bat_text = f'python send_qq.py -t "{encoded_text}" -p {pic_url} -a 0'
-#
-#    asyncio.create_task(send_qq(bat_text))
+@manager.subscribe(live_id, LiveType.ALL)
+async def handle_live_status(event: Event[LiveRoomData]):
+    """所有直播状态变化时都会触发"""
+    _log.info(f"[直播状态] {event.data.anchor_info.name} 当前状态: {event.status}")
+
+
+@manager.subscribe(live_id, LiveType.OPEN)
+async def handle_live_open(event: Event[LiveRoomData]):
+    """开播时触发"""
+    name = event.data.anchor_info.name
+    title = event.data.room_info.title
+    room_id = event.data.room_info.room_id
+    _log.info(f"[开播通知] {name} 开播了！{title} https://live.bilibili.com/{room_id}")
+
+
+@manager.subscribe(live_id, LiveType.CLOSE)
+async def handle_live_close(event: Event[LiveRoomData]):
+    """下播时触发"""
+    name = event.data.anchor_info.name
+    _log.info(f"[下播通知] {name} 下播了")
+
+
+# ============ 主函数 ============ #
 
 async def main():
-    _log.info("启动BiliManager监控...")
-    _log.info(f"监控UID: {manager.uids}")
-    _log.info(f"监控房间: {manager.room_ids}")
-    _log.info(f"当前轮询间隔: {manager.poll_interval} 秒")
+    _log.info("启动 BiliBiliManager 监控...")
+    _log.info(f"动态监控轮询间隔: {dynamic_source.poll_interval} 秒")
+    _log.info(f"直播监控轮询间隔: {live_source.poll_interval} 秒")
 
-    # 可以动态调整轮询间隔
-    # manager.set_poll_interval(15)  # 修改为15秒
+    # 使用异步上下文管理器
+    async with manager:
+        _log.info("监控已启动，按 Ctrl+C 停止...")
+        try:
+            # 保持运行 300 秒
+            await asyncio.sleep(300)
+        except asyncio.CancelledError:
+            _log.info("收到取消信号")
 
-    # 启动监控
-
-    try:
-        # 主线程保持运行
-        manager.start()
-        _log.info("监控已启动，按Ctrl+C停止...")
-        await asyncio.sleep(300)
-        manager.stop()
-        # while True:
-        #    await asyncio.sleep(1000000)
-
-    except KeyboardInterrupt:
-        _log.info("\n正在停止监控...")
-        manager.stop()
-        _log.info("监控已停止")
+    _log.info("监控已停止")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        _log.info("\n程序被中断")
