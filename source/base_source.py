@@ -13,6 +13,8 @@ class SourceMeta(ABCMeta):
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
             cls._instances[cls] = super().__call__(*args, **kwargs)
+        else:
+            raise RuntimeError(f"Source 类 {cls.__name__} 只能实例化一次")
         return cls._instances[cls]
 
 
