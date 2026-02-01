@@ -5,7 +5,7 @@ import asyncio
 
 from api.context import RuntimeConfig, APIContext, AppContext, BaseApiT
 from event import EventBus, Event
-from source import BaseSource
+from source import BaseSource, BaseSourceT
 from utils import BaseType
 
 
@@ -79,28 +79,35 @@ class BiliBiliManager:
 
     # ============ Source 管理 ============ #
 
-    def add_source(self, source: BaseSource) -> UUID:
+    def add_source(
+        self,
+        source_cls: Type[BaseSourceT],
+        watch_targets: Optional[list] = None,
+        **kwargs: Any
+    ) -> BaseSourceT:
         """添加事件源.
 
         Args:
-            source: 事件源实例
+            source_cls: 事件源类
+            watch_targets: 监控目标列表（可选）
+            **kwargs: 事件源初始化关键字参数
 
         Returns:
-            事件源的 UUID
+            事件源实例
 
         Raises:
-            ValueError: 如果事件源已存在
             RuntimeError: 如果 BiliBiliManager 已关闭
         """
         if self._closed:
             raise RuntimeError("BiliBiliManager 已关闭，无法添加事件源")
 
-        if source.uuid in self._sources:
-            raise ValueError(f"事件源 {source.uuid} 已存在")
+        source = source_cls(**kwargs)
+        if watch_targets is not None:
+            source.add_members(watch_targets)
 
         self._sources[source.uuid] = source
         _log.info(f"添加事件源: {source.__class__.__name__} (uuid={source.uuid})")
-        return source.uuid
+        return source
 
     def remove_source(self, source_id: UUID) -> Optional[BaseSource]:
         """移除事件源.

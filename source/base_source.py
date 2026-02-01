@@ -1,12 +1,22 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, ABCMeta
 from uuid import uuid4, UUID
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
     from api.context import AppContext
 
 
-class BaseSource(ABC):
+class SourceMeta(ABCMeta):
+    _instances = {}
+    # 可能需要一个锁
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class BaseSource(ABC, metaclass=SourceMeta):
     """事件源基类.
 
     Source 负责：
@@ -19,28 +29,12 @@ class BaseSource(ABC):
         running: 运行状态
     """
 
-    def __init__(self):
+    @abstractmethod
+    def __init__(self, **kwargs):
         """初始化事件源."""
         self.uuid: UUID = uuid4()
         self.running: bool = False
         self._ctx: "AppContext | None" = None
-
-    def bind(self, ctx: "AppContext") -> None:
-        """绑定应用上下文.
-
-        由 BiliBiliManager 在启动时调用，注入依赖。
-
-        Args:
-            ctx: 应用上下文
-        """
-        self._ctx = ctx
-
-    @property
-    def ctx(self) -> "AppContext":
-        """获取应用上下文."""
-        if self._ctx is None:
-            raise RuntimeError("Source 尚未绑定上下文，请先调用 bind()")
-        return self._ctx
 
     @abstractmethod
     async def start(self) -> None:
@@ -76,7 +70,27 @@ class BaseSource(ABC):
         """
         pass
 
+    def bind(self, ctx: "AppContext") -> None:
+        """绑定应用上下文.
+
+        由 BiliBiliManager 在启动时调用，注入依赖。
+
+        Args:
+            ctx: 应用上下文
+        """
+        self._ctx = ctx
+
+    @property
+    def ctx(self) -> "AppContext":
+        """获取应用上下文."""
+        if self._ctx is None:
+            raise RuntimeError("Source 尚未绑定上下文，请先调用 bind()")
+        return self._ctx
+
     @property
     def is_running(self) -> bool:
         """检查是否正在运行."""
         return self.running
+
+
+BaseSourceT = TypeVar("BaseSourceT", bound=BaseSource)

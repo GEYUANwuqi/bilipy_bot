@@ -1,6 +1,5 @@
 """BiliBiliManager 使用示例
 
-展示如何使用重构后的 BiliBiliManager 架构：
 1. 创建 BiliBiliManager 和 Source
 2. 注册订阅者
 3. 管理生命周期
@@ -40,18 +39,19 @@ config = RuntimeConfig(
 manager = BiliBiliManager(config)
 
 # ============ 创建事件源 ============ #
-# TODO: 用依赖注入重构这里的创建过程
-# 动态监控源
-dynamic_source = BiliDynamicSource(poll_interval=12)
-dynamic_source.add_members([1802011210])
-
-# 直播监控源
-live_source = BiliLiveSource(poll_interval=12)
-live_source.add_members([22758221])
-
 # 注册事件源并获取 UUID
-dynamic_id = manager.add_source(dynamic_source)
-live_id = manager.add_source(live_source)
+dynamic_source = manager.add_source(
+    source_cls = BiliDynamicSource,
+    watch_targets = [1802011210],
+    poll_interval=12
+)
+dynamic_id = dynamic_source.uuid
+live_source = manager.add_source(
+    source_cls = BiliLiveSource,
+    watch_targets = [22758221],
+    poll_interval=12
+)
+live_id = live_source.uuid
 
 
 # ============ 订阅事件 ============ #
