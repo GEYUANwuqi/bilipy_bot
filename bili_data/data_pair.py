@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Generic, TypeVar, Optional
+from typing import Generic, Optional
 from bili_data import LiveRoomData, DynamicData, BaseDataT
 from utils import DynamicType, LiveType
 from typing import Literal

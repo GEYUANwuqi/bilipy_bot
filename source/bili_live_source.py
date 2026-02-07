@@ -17,7 +17,7 @@ class BiliLiveSource(BaseSource):
     负责轮询B站直播状态并发布事件。
     """
 
-    def __init__(self, poll_interval: Union[float, int] = 20):
+    def __init__(self, poll_interval: Union[float, int] = 20, watch_targets: Optional[list[int]] = None):
         """初始化直播事件源.
 
         Args:
@@ -29,6 +29,8 @@ class BiliLiveSource(BaseSource):
         self._room_list: list[int] = []
         self._live_data: dict[int, DataPair[LiveRoomData]] = {}
         self._task: Optional[asyncio.Task] = None
+        if watch_targets is not None:
+            self.add_members(watch_targets)
 
     async def start(self) -> None:
         """启动直播监控."""

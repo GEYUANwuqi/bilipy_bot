@@ -82,14 +82,12 @@ class BiliBiliManager:
     def add_source(
         self,
         source_cls: Type[BaseSourceT],
-        watch_targets: Optional[list] = None,
         **kwargs: Any
     ) -> BaseSourceT:
         """添加事件源.
 
         Args:
             source_cls: 事件源类
-            watch_targets: 监控目标列表（可选）
             **kwargs: 事件源初始化关键字参数
 
         Returns:
@@ -102,8 +100,6 @@ class BiliBiliManager:
             raise RuntimeError("BiliBiliManager 已关闭，无法添加事件源")
 
         source = source_cls(**kwargs)
-        if watch_targets is not None:
-            source.add_members(watch_targets)
 
         self._sources[source.uuid] = source
         _log.info(f"添加事件源: {source.__class__.__name__} (uuid={source.uuid})")

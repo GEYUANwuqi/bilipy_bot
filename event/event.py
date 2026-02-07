@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from uuid import uuid4, UUID
 from typing import Generic
 from utils import BaseType
 from bili_data import BaseDataT
@@ -11,6 +12,7 @@ class Event(Generic[BaseDataT]):
     Attributes:
         data: 事件数据
         status: 事件状态
+        id: 事件唯一标识符
 
     Usage:
         # 创建动态事件
@@ -25,6 +27,7 @@ class Event(Generic[BaseDataT]):
     """
     data: BaseDataT
     status: BaseType
+    id: UUID = field(default_factory=lambda: str(uuid4()))
 
     def __repr__(self) -> str:
         return f"Event(data={self.data}, status={self.status})"

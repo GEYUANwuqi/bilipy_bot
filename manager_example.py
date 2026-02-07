@@ -111,13 +111,19 @@ async def main():
     _log.info(f"直播监控轮询间隔: {live_source.poll_interval} 秒")
 
     # 使用异步上下文管理器
-    async with manager:
-        _log.info("监控已启动，按 Ctrl+C 停止...")
-        try:
-            # 保持运行 300 秒
-            await asyncio.sleep(300)
-        except asyncio.CancelledError:
-            _log.info("收到取消信号")
+    #async with manager:
+    #    _log.info("监控已启动，按 Ctrl+C 停止...")
+    #    try:
+    #        # 保持运行 300 秒
+    #        await asyncio.sleep(300)
+    #    except asyncio.CancelledError:
+    #        _log.info("收到取消信号")
+
+    # 或使直接使用方法
+    await manager.start()
+    await asyncio.sleep(300)
+    await manager.stop()
+    await manager.close()  # 也可以直接调用close
 
     _log.info("监控已停止")
 

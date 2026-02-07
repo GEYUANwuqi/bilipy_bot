@@ -13,9 +13,9 @@ class SourceMeta(ABCMeta):
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
             cls._instances[cls] = super().__call__(*args, **kwargs)
+            return cls._instances[cls]
         else:
             raise RuntimeError(f"Source 类 {cls.__name__} 只能实例化一次")
-        return cls._instances[cls]
 
 
 class BaseSource(ABC, metaclass=SourceMeta):
@@ -51,24 +51,6 @@ class BaseSource(ABC, metaclass=SourceMeta):
         """停止事件源.
 
         子类实现具体的停止逻辑。
-        """
-        pass
-
-    @abstractmethod
-    def add_members(self, keys: list) -> None:
-        """添加监控成员.
-
-        Args:
-            keys: 监控成员标识列表
-        """
-        pass
-
-    @abstractmethod
-    def remove_members(self, keys: list) -> None:
-        """移除监控成员.
-
-        Args:
-            keys: 监控成员标识列表
         """
         pass
 
