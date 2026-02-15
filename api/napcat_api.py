@@ -5,7 +5,7 @@ from logging import getLogger
 from dataclasses import dataclass
 from uuid import uuid4
 
-from api.context import APIContext
+from manager.context import APIContext
 from api.base_api import BaseApi
 from utils.wsclient import AsyncWebSocketClient, MessageType, ListenerId
 

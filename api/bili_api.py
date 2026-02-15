@@ -4,7 +4,7 @@ from bilibili_api.live import LiveRoom
 from bilibili_api.dynamic import get_dynamic_page_info
 from bili_data import DynamicData, LiveRoomData, get_max_id, DynamicDTO, LiveRoomDTO
 from .base_api import BaseApi
-from .context import APIContext
+from manager.context import APIContext
 from logging import getLogger
 from typing import Optional
 

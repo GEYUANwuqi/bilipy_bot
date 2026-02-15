@@ -3,7 +3,7 @@ from uuid import uuid4, UUID
 from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
-    from api.context import AppContext
+    from manager.context import AppContext
 
 
 class SourceMeta(ABCMeta):

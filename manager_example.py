@@ -12,7 +12,7 @@ from event import Event
 from bili_data import DynamicData, LiveRoomData
 from utils import LiveType, DynamicType
 from utils import setup_logging
-from api.context import RuntimeConfig
+from manager.context import RuntimeConfig
 from logging import getLogger
 import asyncio
 
@@ -132,4 +132,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        _log.info("\n程序被中断")
+        _log.info("程序被中断")

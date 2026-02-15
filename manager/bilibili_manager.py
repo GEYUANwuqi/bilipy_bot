@@ -3,7 +3,7 @@ from typing import Type, Callable, Coroutine, Any, Optional
 from logging import getLogger
 import asyncio
 
-from api.context import RuntimeConfig, APIContext, AppContext, BaseApiT
+from .context import RuntimeConfig, APIContext, AppContext, BaseApiT
 from event import EventBus, Event
 from source import BaseSource, BaseSourceT
 from utils import BaseType

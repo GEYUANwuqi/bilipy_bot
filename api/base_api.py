@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Self
-from .context import APIContext
+from manager.context import APIContext
 
 
 class BaseApi(ABC):

@@ -24,11 +24,11 @@
 
 ```python
 from bilibili_api import Credential
-from api.context.config import RuntimeConfig
+from manager.context import RuntimeConfig
 
 config = RuntimeConfig(
-  bilibili = Credential(sessdata = "xxx", bili_jct = "yyy"),
-  deepseek = {"key": "abc"},
+    bilibili = Credential(sessdata = "xxx", bili_jct = "yyy"),
+    deepseek = {"key": "abc"},
 )
 # config.bilibili -> Credential 实例
 # config.deepseek= -> dict
@@ -46,7 +46,7 @@ config = RuntimeConfig(
 - **用法示例**：
 
 ```python
-from api.context.api_context import APIContext
+from manager.context.api_context import APIContext
 from api.bili_api import BilibiliApi
 
 ctx = APIContext(config)
@@ -70,8 +70,8 @@ main.py
 
 ## 3. 两者如何协作？
 
-- Manager 持有 APIContext：`self.api_context = APIContext(config)`
-- EventSource/Handler 通过 Manager 间接访问 APIContext。
+- BiliBiliManager 持有 APIContext：`self.api_context = APIContext(config)`
+- EventSource/Handler 通过 BiliBiliManager 间接访问 APIContext。
 - API 构造时只关心 ctx.config.xxx，不关心 config 结构。
 
 ---
@@ -100,7 +100,7 @@ class BilibiliSource(EventSource):
 
 ### Handler
 ```python
-class Manager:
+class BiliBiliManager:
     def get_api(self, api_cls):
         return self.api_context.get_api(api_cls, api_cls.create)
 
