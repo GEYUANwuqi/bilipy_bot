@@ -106,6 +106,7 @@ class NapcatClient:
         if self._task and not self._task.done():
             try:
                 self._task.cancel()
+                await self._task
             except asyncio.CancelledError:
                 # 任务被取消是预期行为，忽略异常
                 pass
@@ -173,7 +174,7 @@ class NapcatClient:
                                 break
                             _log.debug(data)
                             # noinspection PyCallingNonCallable
-                            await self._handler(data)  # type: ignore (运行时设置 handler)
+                            await self._handler(data)  # post_type: ignore (运行时设置 handler)
                         except json.JSONDecodeError:
                             _log.error(f"Failed to parse message: {message}")
                         except Exception as e:
