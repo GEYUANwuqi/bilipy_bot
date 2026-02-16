@@ -10,13 +10,9 @@ import logging
 import os
 import json
 import warnings
-from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from .color import Color
-try:
-    from tqdm import tqdm as tqdm_original # type: ignore
-except ImportError:
-    tqdm_original = None
+tqdm_original = None
 
 __author__  = "Fish-LP <Fish.zh@outlook.com>"
 __status__  = "dev"

@@ -1,8 +1,7 @@
 from dataclasses import dataclass, field
 from uuid import uuid4, UUID
 from typing import Generic
-from utils import BaseType
-from bili_data import BaseDataT
+from base_cls import BaseDataT, BaseType
 
 
 @dataclass

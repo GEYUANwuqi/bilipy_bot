@@ -1,18 +1,16 @@
-"""BiliBiliManager 使用示例
+"""SourceManager 使用示例
 
-1. 创建 BiliBiliManager 和 Source
+1. 创建 SourceManager 和 Source
 2. 注册订阅者
 3. 管理生命周期
 """
 from bilibili_api import Credential
 
-from manager import BiliBiliManager
-from source import BiliDynamicSource, BiliLiveSource
+from manager import SourceManager, RuntimeConfig
+from bilibili import BiliDynamicSource, BiliLiveSource, LiveType, DynamicType
 from event import Event
-from bili_data import DynamicData, LiveRoomData
-from utils import LiveType, DynamicType
+from bilibili.data import DynamicData, LiveRoomData
 from utils import setup_logging
-from manager.context import RuntimeConfig
 from logging import getLogger
 import asyncio
 
@@ -36,7 +34,7 @@ config = RuntimeConfig(
 )
 
 # 创建管理器
-manager = BiliBiliManager(config)
+manager = SourceManager(config)
 
 # ============ 创建事件源 ============ #
 # 注册事件源并获取 UUID
@@ -106,7 +104,7 @@ async def handle_live_close(event: Event[LiveRoomData]):
 # ============ 主函数 ============ #
 
 async def main():
-    _log.info("启动 BiliBiliManager 监控...")
+    _log.info("启动 SourceManager 监控...")
     _log.info(f"动态监控轮询间隔: {dynamic_source.poll_interval} 秒")
     _log.info(f"直播监控轮询间隔: {live_source.poll_interval} 秒")
 

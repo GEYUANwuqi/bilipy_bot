@@ -10,9 +10,13 @@ from logging import getLogger
 
 from manager import SourceManager
 from manager.context import RuntimeConfig
-from source import NapcatSource
+from napcat import (
+    NapcatSource,
+    NapcatConfig,
+    NapcatType,
+)
 from event import Event
-from napcat_data import (
+from napcat.napcat_data import (
     GroupMessageData,
     PrivateMessageData,
     NoticeEventData,
@@ -20,10 +24,7 @@ from napcat_data import (
     HeartbeatEventData,
     LifecycleEventData,
 )
-from utils import NapcatType
 from utils import setup_logging
-from api.napcat_api import NapcatConfig
-
 
 # 设置日志级别
 setup_logging("INFO")
@@ -256,4 +257,3 @@ if __name__ == "__main__":
         _log.info("程序被中断")
     except Exception as e:
         _log.error(f"程序异常: {e}", exc_info=True)
-

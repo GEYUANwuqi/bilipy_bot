@@ -1,10 +1,6 @@
 from typing import Type, Dict, Any, TypeVar, TYPE_CHECKING
 from .config import RuntimeConfig
-
-if TYPE_CHECKING:
-    from api import BaseApi
-
-BaseApiT = TypeVar("BaseApiT", bound="BaseApi")
+from base_cls import BaseApiT
 
 
 class APIContext:

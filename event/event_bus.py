@@ -4,7 +4,7 @@ from functools import wraps
 import asyncio
 import inspect
 from uuid import UUID
-from utils import BaseType
+from base_cls import BaseType
 from .event import Event
 from .subscriber import Subscriber, SubscriberGroup
 

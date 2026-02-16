@@ -2,7 +2,7 @@ from typing import Callable, Coroutine, Any
 from dataclasses import dataclass
 from logging import getLogger
 from uuid import UUID
-from utils import BaseType
+from base_cls import BaseType
 from .event import Event
 
 
