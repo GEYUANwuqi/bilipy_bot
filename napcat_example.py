@@ -16,7 +16,7 @@ from napcat import (
     NapcatType,
 )
 from event import Event
-from napcat.napcat_data import (
+from napcat.data import (
     GroupMessageData,
     PrivateMessageData,
     NoticeEventData,

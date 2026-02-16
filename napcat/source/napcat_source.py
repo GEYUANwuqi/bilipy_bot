@@ -2,7 +2,7 @@ from typing import Any, Optional
 from logging import getLogger
 
 from base_cls import BaseSource
-from napcat.napcat_data import (
+from napcat.data import (
     GroupMessageData,
     PrivateMessageData,
     NoticeEventData,
@@ -10,7 +10,7 @@ from napcat.napcat_data import (
     LifecycleEventData,
     HeartbeatEventData,
 )
-from napcat.napcat_data.dto import (
+from napcat.data.dto import (
     GroupMessageDTO,
     PrivateMessageDTO,
     NoticeEventDTO,
