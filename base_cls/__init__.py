@@ -3,17 +3,12 @@ from .base_filter import (
     AndFilter,
     OrFilter,
 )
-from .base_dto import (
-    BaseDto,
-    BaseDtoT,
+from .base_model import (
+    BaseDataModel
 )
 from .base_api import (
     BaseApi,
     BaseApiT,
-)
-from .base_data import (
-    BaseData,
-    BaseDataT,
 )
 from .base_type import (
     BaseType,
@@ -30,15 +25,12 @@ __all__ = [
     "AndFilter",
     "OrFilter",
     # abc
-    "BaseDto",
     "BaseApi",
-    "BaseData",
     "BaseType",
     "BaseSource",
+    "BaseDataModel",
     # 泛型
-    "BaseDtoT",
     "BaseApiT",
-    "BaseDataT",
     "BaseTypeT",
     "BaseSourceT",
 ]

@@ -1,8 +1,10 @@
-from abc import ABC
 from typing import TypeVar
 
 
-class BaseData(ABC):
+class BaseDataMixin:
+    """
+    框架内约束的数据类混入类, 用于标记框架内数据
+    """
     _repr_exclude = {"raw_data"}  # 排除在repr中的属性集合
 
     def __repr__(self):
@@ -23,4 +25,4 @@ class BaseData(ABC):
         return ", ".join(parts)
 
 
-BaseDataT = TypeVar("BaseDataT", bound=BaseData)
+BaseDataT = TypeVar("BaseDataT", bound=BaseDataMixin)
