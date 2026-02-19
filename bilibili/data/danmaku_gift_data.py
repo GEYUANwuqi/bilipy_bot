@@ -1,12 +1,12 @@
 from typing import Optional
 from dataclasses import dataclass
 
-from base_cls import BaseData
+from base_cls import BaseDataMixin
 from .dto import DanmakuGiftDTO, GiftMedalInfoDto, BlindGiftInfoDto
 
 
 @dataclass(frozen=True)
-class GiftMedalData(BaseData):
+class GiftMedalData(BaseDataMixin):
     """
     送礼用户粉丝牌数据
     """
@@ -33,7 +33,7 @@ class GiftMedalData(BaseData):
 
 
 @dataclass(frozen=True)
-class BlindGiftData(BaseData):
+class BlindGiftData(BaseDataMixin):
     """
     盲盒礼物数据（从盲盒中开出的礼物信息）
     """
@@ -58,7 +58,7 @@ class BlindGiftData(BaseData):
 
 
 @dataclass(frozen=True)
-class DanmakuGiftData(BaseData):
+class DanmakuGiftData(BaseDataMixin):
     """
     礼物消息数据
     """

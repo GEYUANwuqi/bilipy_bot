@@ -65,7 +65,7 @@ class BilibiliApi(BaseApi):
         if max_id is None:
             raise ValueError("未获取到动态数据或者动态数据为不完整")
         dynamic_info = dict_info["items"][max_id]
-        dto = DynamicDTO.from_dict(dynamic_info)
+        dto = DynamicDTO.from_raw(dynamic_info)
         if not dto:
             raise ValueError(f"构造 {uid} 用户动态DTO对象失败")
         info = DynamicData.from_dto(dto)
@@ -94,7 +94,7 @@ class BilibiliApi(BaseApi):
 
         live_room = LiveRoom(credential = self.credential, room_display_id = room_id)
         live = await live_room.get_room_info()
-        dto = LiveRoomDTO.from_dict(live)
+        dto = LiveRoomDTO.from_raw(live)
         if dto is None:
             raise ValueError(f"构造直播间 {room_id} DTO对象失败")
         info = LiveRoomData.from_dto(dto)

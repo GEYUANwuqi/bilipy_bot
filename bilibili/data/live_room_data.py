@@ -1,7 +1,7 @@
 from typing import Optional
 from dataclasses import dataclass
 
-from base_cls import BaseData
+from base_cls import BaseDataMixin
 from .dto import (
     LiveRoomDTO,
     RoomInfoDto,
@@ -12,7 +12,7 @@ from .dto import (
 
 
 @dataclass(frozen=True)
-class RoomInfoData(BaseData):
+class RoomInfoData(BaseDataMixin):
     """直播间信息数据"""
     uid: int  # 用户uid
     room_id: int  # 房间号
@@ -58,7 +58,7 @@ class RoomInfoData(BaseData):
 
 
 @dataclass(frozen=True)
-class AnchorInfoData(BaseData):
+class AnchorInfoData(BaseDataMixin):
     """主播信息数据"""
     name: str  # 主播昵称
     face_url: str  # 主播头像url
@@ -87,7 +87,7 @@ class AnchorInfoData(BaseData):
 
 
 @dataclass(frozen=True)
-class WatchedShowData(BaseData):
+class WatchedShowData(BaseDataMixin):
     """观看榜信息数据"""
     switch: bool  # 观看榜开关
     num: int  # 观看人数/人气值
@@ -106,7 +106,7 @@ class WatchedShowData(BaseData):
 
 
 @dataclass(frozen=True)
-class NoticeBoardData(BaseData):
+class NoticeBoardData(BaseDataMixin):
     """公告栏信息数据"""
     content: str  # 公告内容
     ctime: str  # 公告发布时间
@@ -121,7 +121,7 @@ class NoticeBoardData(BaseData):
 
 
 @dataclass(frozen=True)
-class LiveRoomData(BaseData):
+class LiveRoomData(BaseDataMixin):
     """直播间数据"""
     room_info: RoomInfoData  # 直播间信息
     anchor_info: AnchorInfoData  # 主播信息

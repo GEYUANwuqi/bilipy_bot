@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 
-from base_cls import BaseData
+from base_cls import BaseDataMixin
 from .dto import (
     VideoPartDto,
 )
 
 
 @dataclass(frozen=True)
-class VideoPartData(BaseData):
+class VideoPartData(BaseDataMixin):
     """
     视频字幕数据
     """

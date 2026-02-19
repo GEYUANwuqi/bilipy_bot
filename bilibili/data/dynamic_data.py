@@ -1,7 +1,7 @@
 from typing import Optional
 from dataclasses import dataclass
 
-from base_cls import BaseData
+from base_cls import BaseDataMixin
 from .dto import (
     DynamicDTO,
     AuthorDto,
@@ -65,7 +65,7 @@ def get_max_id(date: dict) -> Optional[int]:
 
 
 @dataclass(frozen=True)
-class AuthorData(BaseData):
+class AuthorData(BaseDataMixin):
     """
     作者信息数据
     """
@@ -89,7 +89,7 @@ class AuthorData(BaseData):
 
 
 @dataclass(frozen=True)
-class StatData(BaseData):
+class StatData(BaseDataMixin):
     """
     动态统计信息数据
     """
@@ -108,7 +108,7 @@ class StatData(BaseData):
 
 
 @dataclass(frozen=True)
-class VideoData(BaseData):
+class VideoData(BaseDataMixin):
     """
     视频信息数据
     """
@@ -144,7 +144,7 @@ class VideoData(BaseData):
 
 
 @dataclass(frozen=True)
-class MusicData(BaseData):
+class MusicData(BaseDataMixin):
     """
     音乐信息数据
     """
@@ -172,7 +172,7 @@ class MusicData(BaseData):
 
 
 @dataclass(frozen=True)
-class ArticleData(BaseData):
+class ArticleData(BaseDataMixin):
     """
     专栏信息数据
     """
@@ -198,7 +198,7 @@ class ArticleData(BaseData):
 
 
 @dataclass(frozen=True)
-class LiveRcmdData(BaseData):
+class LiveRcmdData(BaseDataMixin):
     """
     直播推荐信息数据
     """
@@ -244,7 +244,7 @@ class LiveRcmdData(BaseData):
 
 
 @dataclass(frozen=True)
-class DynamicData(BaseData):
+class DynamicData(BaseDataMixin):
     """
     动态数据
     """

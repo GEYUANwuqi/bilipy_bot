@@ -1,12 +1,12 @@
 from typing import Optional
 from dataclasses import dataclass
 
-from base_cls import BaseData
+from base_cls import BaseDataMixin
 from .dto import DanmakuMsgDTO, MedalInfoDto
 
 
 @dataclass(frozen=True)
-class MedalData(BaseData):
+class MedalData(BaseDataMixin):
     """
     粉丝牌数据
     """
@@ -31,7 +31,7 @@ class MedalData(BaseData):
 
 
 @dataclass(frozen=True)
-class DanmakuMsgData(BaseData):
+class DanmakuMsgData(BaseDataMixin):
     """
     弹幕消息数据
     """

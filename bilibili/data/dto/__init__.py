@@ -31,7 +31,6 @@ from .live_room_dto import (
     NoticeBoardDto,
 )
 
-#  TODO: pydantic BaseModel版本的DTO
 __all__ = [
     "DanmakuMsgDTO",
     "MedalInfoDto",

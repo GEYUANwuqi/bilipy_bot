@@ -1,17 +1,16 @@
 from logging import getLogger
-from typing import Optional
-from dataclasses import dataclass
+from typing import Optional, ClassVar
+from base_cls import BaseDataModel
 
 _log = getLogger("DanmakuMsgDTO")
 
 
-@dataclass
-class MedalInfoDto:
+class MedalInfoDto(BaseDataModel):
     """
     粉丝牌信息
     Tips:
-        如果当前直播间或者用户开启了“优先展示当前直播间的粉丝勋章
-        那么在该直播间无法获取到用户佩戴的其他主播的勋章信息”
+        如果当前直播间或者用户开启了"优先展示当前直播间的粉丝勋章
+        那么在该直播间无法获取到用户佩戴的其他主播的勋章信息"
     """
     level: int  # 勋章等级
     name: str  # 勋章名称
@@ -21,8 +20,7 @@ class MedalInfoDto:
     anchor_uid: int  # 主播UID
 
 
-@dataclass
-class UserInfoDto:
+class UserInfoDto(BaseDataModel):
     """
     用户基本信息
     """
@@ -32,11 +30,12 @@ class UserInfoDto:
     face: Optional[str] = None  # 头像URL
 
 
-@dataclass
-class DanmakuMsgDTO:
+class DanmakuMsgDTO(BaseDataModel):
     """
     弹幕消息DTO
     """
+    discriminator_value: ClassVar[str] = "danmaku_msg"  # 数据类型标识
+
     room_display_id: int  # 房间号
     room_real_id: int  # 房间真实ID
     message: str  # 弹幕内容
@@ -45,9 +44,10 @@ class DanmakuMsgDTO:
     timestamp: int = 0  # 发送时间戳
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Optional[DanmakuMsgDTO]":
+    def from_raw(cls, data: dict) -> "Optional[DanmakuMsgDTO]":
         """
-        从字典构造DTO对象
+        从原始API数据构造DTO对象
+        注意: 由于弹幕数据格式特殊(数组形式), 需要先转换为字典格式
         """
         try:
             room_display_id = data.get("room_display_id", 0)
@@ -79,39 +79,40 @@ class DanmakuMsgDTO:
                         base_info = user_detail.get("base", {})
                         face = base_info.get("face")
 
-            user_info = UserInfoDto(
-                uid=uid,
-                username=username,
-                user_level=user_level,
-                face=face,
-            )
-
             # 提取粉丝牌信息 info[3]: [level, name, anchor_name, room_id, color, ...]
             medal_info = None
             medal_data = info[3] if len(info) > 3 else []
             if medal_data and len(medal_data) > 0:
-                medal_info = MedalInfoDto(
-                    level=medal_data[0] if len(medal_data) > 0 else 0,
-                    name=medal_data[1] if len(medal_data) > 1 else "",
-                    anchor_name=medal_data[2] if len(medal_data) > 2 else "",
-                    room_id=medal_data[3] if len(medal_data) > 3 else 0,
-                    is_light=medal_data[11] if len(medal_data) > 11 else 0,
-                    anchor_uid=medal_data[12] if len(medal_data) > 12 else 0
-                )
+                medal_info = {
+                    "level": medal_data[0] if len(medal_data) > 0 else 0,
+                    "name": medal_data[1] if len(medal_data) > 1 else "",
+                    "anchor_name": medal_data[2] if len(medal_data) > 2 else "",
+                    "room_id": medal_data[3] if len(medal_data) > 3 else 0,
+                    "is_light": medal_data[11] if len(medal_data) > 11 else 0,
+                    "anchor_uid": medal_data[12] if len(medal_data) > 12 else 0
+                }
 
             # 提取时间戳 info[9].ts
             timestamp = 0
             if len(info) > 9 and isinstance(info[9], dict):
                 timestamp = info[9].get("ts", 0)
 
-            return cls(
-                room_display_id=room_display_id,
-                room_real_id=room_real_id,
-                message=message,
-                user=user_info,
-                medal=medal_info,
-                timestamp=timestamp
-            )
+            # 构造标准化字典后使用model_validate
+            normalized_data = {
+                "room_display_id": room_display_id,
+                "room_real_id": room_real_id,
+                "message": message,
+                "user": {
+                    "uid": uid,
+                    "username": username,
+                    "user_level": user_level,
+                    "face": face
+                },
+                "medal": medal_info,
+                "timestamp": timestamp
+            }
+
+            return cls.model_validate(normalized_data)
 
         except Exception as e:
             _log.error(f"解析弹幕数据失败: {e}", exc_info=True)
