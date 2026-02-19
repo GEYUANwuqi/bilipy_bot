@@ -14,8 +14,16 @@ _log = getLogger("NapcatApi")
 
 @dataclass
 class NapcatConfig:
-    """Napcat 客户端配置"""
-    uri: str
+    """Napcat 客户端配置
+
+    Attributes:
+        url: WebSocket 连接地址
+        token: 认证 Token（可选）
+        heartbeat: 心跳间隔（秒）
+        reconnect_attempts: 重连尝试次数
+        receive_timeout: 接收超时时间（秒）
+    """
+    url: str
     """WebSocket 连接地址"""
     token: Optional[str] = None
     """认证 Token（可选）"""
@@ -238,6 +246,8 @@ class NapcatApi(BaseApi):
     async def send_request(self, message: dict) -> Optional[dict]:
         """发送请求到服务器"""
         return await self.client.send_request(message)
+
+    # ================== 业务接口 ================== #
 
     async def send_group_message(self, group_id: int, message: list[dict]) -> Optional[dict]:
         """发送群消息"""
