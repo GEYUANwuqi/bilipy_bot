@@ -4,7 +4,8 @@ from .base_filter import (
     OrFilter,
 )
 from .base_model import (
-    BaseDataModel
+    BaseDataModel,
+    AutoDispatchList,
 )
 from .base_api import (
     BaseApi,
@@ -33,6 +34,7 @@ __all__ = [
     "BaseType",
     "BaseSource",
     "BaseDataModel",
+    "AutoDispatchList",
     "BaseDataMixin",
     # 泛型
     "BaseApiT",

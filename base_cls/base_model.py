@@ -1,5 +1,5 @@
-from typing import ClassVar, Self
-from pydantic import BaseModel, ConfigDict
+from typing import ClassVar, Self, Generic, TypeVar, Type
+from pydantic import BaseModel, ConfigDict, RootModel, model_validator
 from pydantic._internal._model_construction import ModelMetaclass
 from .base_data import BaseDataMixin
 
@@ -46,7 +46,7 @@ class BaseDataModel(BaseModel, BaseDataMixin, metaclass=MetaDataModel):
     3. 根类定义 discriminator_field，子类定义 discriminator_value，自动注册到 registry
     """
     model_config = ConfigDict(
-        strict = True,  # 严格模式，强制转换数据
+        strict = False,  # 强制转换数据
         frozen = True,  # 实例不可变，自动生成 __hash__
         extra = 'ignore',  # 额外字段将被忽略
     )
@@ -129,3 +129,53 @@ class BaseDataModel(BaseModel, BaseDataMixin, metaclass=MetaDataModel):
 
     def __str__(self):
         return self.__repr__()
+
+
+BaseDataModelT = TypeVar("BaseDataModelT", bound = BaseDataModel)
+
+
+class AutoDispatchList(RootModel[list[BaseDataModelT]], Generic[BaseDataModelT]):
+    """
+    自动对 list 中的 dict 进行 registry 分发
+    """
+
+    # root: list[BaseDataModelT]
+
+    # 子类必须指定 element_type
+    @classmethod
+    def element_type(cls) -> Type[BaseDataModelT]:
+        pass
+
+    @model_validator(mode="before")
+    @classmethod
+    def dispatch_elements(cls, value):
+        if not isinstance(value, list):
+            return value
+
+        result = []
+        for item in value:
+            if isinstance(item, dict):
+                result.append(cls.element_type().from_dict(item))
+            else:
+                result.append(item)
+
+        return result
+
+    # 辅助方法，方便调试和展示
+
+    def __repr__(self):
+        core_properties_str: str = self._get_core_properties_str()
+        return f"{self.__class__.__name__}({core_properties_str})"
+
+    def __str__(self):
+        return self.__repr__()
+
+    def _get_core_properties_str(self) -> str:
+        excludes = {"raw_data"}
+        props = {
+            k: v
+            for k, v in vars(self).items()
+            if not k.startswith("_") and k not in excludes
+        }
+        parts = [f"{k}={repr(v)}" for k, v in props.items()]
+        return ", ".join(parts)
