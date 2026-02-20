@@ -17,12 +17,14 @@ from napcat import (
 )
 from event import Event
 from napcat.data import (
-    GroupMessageData,
-    PrivateMessageData,
-    NoticeEventData,
-    RequestEventData,
-    HeartbeatEventData,
-    LifecycleEventData,
+    NapcatEvent,
+    NapcatGroupMessageEvent,
+    NapcatPrivateMessageEvent,
+    NapcatNoticeEvent,
+    NapcatFriendRequestEvent,
+    NapcatGroupRequestEvent,
+    NapcatHeartbeatMetaEvent,
+    NapcatLifecycleMetaEvent,
 )
 from utils import setup_logging
 
@@ -35,7 +37,7 @@ _log = getLogger("NAPCAT")
 
 # NapCat 配置
 napcat_config = NapcatConfig(
-    uri="",  # NapCat WebSocket 地址
+    url="",  # NapCat WebSocket 地址
     token=""
 )
 
@@ -58,30 +60,26 @@ napcat_id = napcat_source.uuid
 # ============ 订阅群消息事件 ============ #
 
 @manager.subscribe(napcat_id, NapcatType.MESSAGE)
-async def handle_group_message(event: Event[GroupMessageData | PrivateMessageData]):
+async def handle_group_message(event: Event[NapcatGroupMessageEvent | NapcatPrivateMessageEvent]):
     """处理所有消息（群消息和私聊消息）"""
     data = event.data
 
-    if isinstance(data, GroupMessageData):
-        _log.info(f"[群消息] 群 {data.group_id} - {data.sender.display_name}: {data.plain_text}")
+    if isinstance(data, NapcatGroupMessageEvent):
+        # 提取纯文本内容
+        plain_text = data.message.plain_text
+        sender_name = data.sender.card or data.sender.nickname
+        _log.info(f"[群消息] 群 {data.group_id} - {sender_name}: {plain_text}")
 
-        # 示例：检测是否@了机器人
-        if data.is_at_bot:
-            _log.info(f"  → 机器人被@了！")
-
-        # 示例：获取@列表
-        if data.at_list:
-            _log.info(f"  → @了以下用户: {data.at_list}")
-
-    elif isinstance(data, PrivateMessageData):
-        _log.info(f"[私聊消息] {data.sender.nickname} ({data.user_id}): {data.plain_text}")
+    elif isinstance(data, NapcatPrivateMessageEvent):
+        plain_text = data.message.plain_text
+        _log.info(f"[私聊消息] {data.sender.nickname} ({data.user_id}): {plain_text}")
 
 
 @manager.subscribe(napcat_id, NapcatType.MESSAGE)
-async def handle_command(event: Event[GroupMessageData | PrivateMessageData]):
+async def handle_command(event: Event[NapcatGroupMessageEvent | NapcatPrivateMessageEvent]):
     """示例：简单的命令处理"""
     data = event.data
-    text = data.plain_text.strip()
+    text = data.message.plain_text
 
     # 检测命令
     if text.startswith("/"):
@@ -103,7 +101,7 @@ async def handle_command(event: Event[GroupMessageData | PrivateMessageData]):
 # ============ 订阅通知事件 ============ #
 
 @manager.subscribe(napcat_id, NapcatType.NOTICE)
-async def handle_notice(event: Event[NoticeEventData]):
+async def handle_notice(event: Event[NapcatNoticeEvent]):
     """处理通知事件（如群成员变动、消息撤回等）"""
     data = event.data
     _log.info(f"[通知事件] 类型: {data.notice_type}, 时间: {data.time}")
@@ -112,18 +110,19 @@ async def handle_notice(event: Event[NoticeEventData]):
 # ============ 订阅请求事件 ============ #
 
 @manager.subscribe(napcat_id, NapcatType.REQUEST)
-async def handle_request(event: Event[RequestEventData]):
+async def handle_request(event: Event[NapcatFriendRequestEvent | NapcatGroupRequestEvent]):
     """处理请求事件（如加好友、加群请求）"""
     data = event.data
 
-    if data.is_friend_request:
+    if isinstance(data, NapcatFriendRequestEvent):
         _log.info(f"[好友请求] 用户 {data.user_id} 请求添加好友")
         _log.info(f"  验证信息: {data.comment}")
         _log.info(f"  Flag: {data.flag}")
         # 这里可以调用 API 同意或拒绝请求
 
-    elif data.is_group_request:
-        _log.info(f"[群请求] 用户 {data.user_id} 请求加群")
+    elif isinstance(data, NapcatGroupRequestEvent):
+        _log.info(f"[群请求] 用户 {data.user_id} 请求加群 {data.group_id}")
+        _log.info(f"  子类型: {data.sub_type}")
         _log.info(f"  验证信息: {data.comment}")
         _log.info(f"  Flag: {data.flag}")
 
@@ -131,23 +130,22 @@ async def handle_request(event: Event[RequestEventData]):
 # ============ 订阅元事件（心跳和生命周期）============ #
 
 @manager.subscribe(napcat_id, NapcatType.META)
-async def handle_meta_event(event: Event[HeartbeatEventData | LifecycleEventData]):
+async def handle_meta_event(event: Event[NapcatHeartbeatMetaEvent | NapcatLifecycleMetaEvent]):
     """处理元事件"""
     data = event.data
 
-    if isinstance(data, HeartbeatEventData):
+    if isinstance(data, NapcatHeartbeatMetaEvent):
         # 心跳事件
-        online_status = "在线" if data.is_online else "离线"
-        good_status = "良好" if data.is_good else "异常"
-        _log.debug(f"[心跳] 状态: {online_status}, 健康: {good_status}, 间隔: {data.interval}ms")
+        interval = data.interval
+        _log.debug(f"[心跳] 间隔: {interval}ms")
 
-    elif isinstance(data, LifecycleEventData):
+    elif isinstance(data, NapcatLifecycleMetaEvent):
         # 生命周期事件
-        if data.is_enable:
+        if data.sub_type == "enable":
             _log.info(f"[生命周期] 框架已启用")
-        elif data.is_disable:
+        elif data.sub_type == "disable":
             _log.info(f"[生命周期] 框架已禁用")
-        elif data.is_connect:
+        elif data.sub_type == "connect":
             _log.info(f"[生命周期] 连接已建立")
         else:
             _log.info(f"[生命周期] 未知类型: {data.sub_type}")
@@ -156,9 +154,9 @@ async def handle_meta_event(event: Event[HeartbeatEventData | LifecycleEventData
 # ============ 订阅所有事件（用于调试）============ #
 
 @manager.subscribe(napcat_id, NapcatType.ALL)
-async def handle_all_events(event: Event):
+async def handle_all_events(event: Event[NapcatEvent]):
     """捕获所有事件（用于调试）"""
-    _log.debug(f"[ALL] 收到事件: {event}")
+    _log.info(f"[ALL] 收到事件: {event}")
 
 
 # ============ 示例：定时任务 ============ #
@@ -196,7 +194,7 @@ async def main():
     _log.info("=" * 60)
     _log.info("启动 NapCat SourceManager")
     _log.info("=" * 60)
-    _log.info(f"WebSocket 地址: {napcat_config.uri}")
+    _log.info(f"WebSocket 地址: {napcat_config.url}")
     _log.info(f"心跳间隔: {napcat_config.heartbeat} 秒")
     _log.info(f"重连尝试次数: {napcat_config.reconnect_attempts}")
     _log.info("=" * 60)

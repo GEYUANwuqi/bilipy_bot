@@ -52,7 +52,7 @@ class NapcatClient:
             headers["Authorization"] = napcat_config.token
 
         return cls(
-            uri=napcat_config.uri,
+            url=napcat_config.url,
             headers=headers,
             heartbeat=napcat_config.heartbeat,
             reconnect_attempts=napcat_config.reconnect_attempts,
@@ -61,7 +61,7 @@ class NapcatClient:
 
     def __init__(
         self,
-        uri: str,
+        url: str,
         headers: Optional[dict[str, str]] = None,
         heartbeat: float = 30.0,
         reconnect_attempts: int = 5,
@@ -70,17 +70,17 @@ class NapcatClient:
         """初始化 Napcat 客户端
 
         Args:
-            uri: WebSocket 连接地址
+            url: WebSocket 连接地址
             headers: 请求头，通常包含 Authorization
             heartbeat: 心跳间隔
             reconnect_attempts: 重连尝试次数
             receive_timeout: 接收超时时间
         """
-        self.uri = uri
+        self.url = url
         self._handler: Optional[Callable[[dict[str, Any]], Awaitable[None]]] = None
         self.timeout = receive_timeout
         self.client = AsyncWebSocketClient(
-            uri=uri,
+            uri=url,
             logger=_log,
             headers=headers or {},
             heartbeat=heartbeat,
