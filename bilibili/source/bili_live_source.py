@@ -1,4 +1,4 @@
-from base_cls.base_source import BaseSource
+from base_cls import BaseSource
 from bilibili.type import LiveType
 from event import Event
 from bilibili.api import BilibiliApi
@@ -93,10 +93,10 @@ class BiliLiveSource(BaseSource):
             interval: 轮询间隔时间（秒）
         """
         if interval <= 0:
-            _log.error("非法参数，轮询间隔时间不可小于0")
+            _log.error("非法参数，轮询间隔时间不可小于或等于0")
             return
-        elif interval <= 8:
-            _log.warning("将轮询间隔时间设置为8s以下，可能导致请求频率过高")
+        elif interval <= 30:
+            _log.warning("将轮询间隔时间设置为30s及以下，可能导致请求频率过高")
         self.poll_interval = interval
         _log.info(f"轮询间隔时间已设置为 {self.poll_interval} 秒")
 

@@ -12,17 +12,6 @@ class Event(Generic[BaseDataT]):
         data: 事件数据
         status: 事件状态
         id: 事件唯一标识符
-
-    Usage:
-        # 创建动态事件
-        from event import DynamicData
-        from utils import DynamicType
-        event = Event(data=dynamic_data, status=DynamicType.NEW)
-
-        # 创建直播事件
-        from event import LiveRoomData
-        from utils import LiveType
-        event = Event(data=live_data, status=LiveType.OPEN)
     """
     data: BaseDataT
     status: BaseType

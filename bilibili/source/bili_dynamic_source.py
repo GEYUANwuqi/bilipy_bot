@@ -1,4 +1,4 @@
-from base_cls.base_source import BaseSource
+from base_cls import BaseSource
 from event import Event
 from bilibili.api import BilibiliApi
 from bilibili.type import DynamicType
@@ -19,7 +19,7 @@ class BiliDynamicSource(BaseSource):
     负责轮询B站动态并发布事件。
     """
 
-    def __init__(self, poll_interval: Union[float, int] = 15, watch_targets: Optional[list[int]] = None):
+    def __init__(self, poll_interval: Union[float, int] = 60, watch_targets: Optional[list[int]] = None):
         """初始化动态事件源.
 
         Args:
@@ -93,10 +93,10 @@ class BiliDynamicSource(BaseSource):
             interval: 轮询间隔时间（秒）
         """
         if interval <= 0:
-            _log.error("非法参数，轮询间隔时间不可小于0")
+            _log.error("非法参数，轮询间隔时间不可小于或等于0")
             return
-        elif interval <= 8:
-            _log.warning("将轮询间隔时间设置为8s以下，可能导致请求频率过高")
+        elif interval <= 30:
+            _log.warning("将轮询间隔时间设置为30s及以下，可能导致请求频率过高")
         self.poll_interval = interval
         _log.info(f"轮询间隔时间已设置为 {self.poll_interval} 秒")
 

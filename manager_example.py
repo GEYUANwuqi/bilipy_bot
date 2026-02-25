@@ -41,13 +41,13 @@ manager = SourceManager(config)
 dynamic_source = manager.add_source(
     source_cls = BiliDynamicSource,
     watch_targets = [1802011210],
-    poll_interval=12
+    poll_interval=100
 )
 dynamic_id = dynamic_source.uuid
 live_source = manager.add_source(
     source_cls = BiliLiveSource,
     watch_targets = [22758221],
-    poll_interval=12
+    poll_interval=100
 )
 live_id = live_source.uuid
 
@@ -130,4 +130,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
+        asyncio.create_task(manager.close())
         _log.info("程序被中断")

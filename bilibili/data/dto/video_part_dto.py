@@ -12,6 +12,6 @@ class VideoPartDto(BaseDataModel):
     content: str  # 字幕内容
 
     @classmethod
-    def from_list(cls, data: list) -> tuple["VideoPartDto", ...]:
+    def from_list(cls, data: list) -> list["VideoPartDto"]:
         """从列表构造DTO对象列表"""
-        return tuple(cls.model_validate(i) for i in data)
+        return [cls.model_validate(i) for i in data]
