@@ -21,7 +21,7 @@ class LiveType(BaseType):
 class DanmakuType(BaseType):
     """弹幕状态枚举."""
     ALL = "danmaku.all"  # 表示所有状态，用作通配符
-    NEW = "danmaku.msg"  # 新弹幕
+    DANMAKU = "danmaku.msg"  # 新弹幕
     GIFT = "danmaku.gift"  # 删除的弹幕
-    LIVE = "danmaku.live"  # 开播
+    OPEN = "danmaku.live_open"  # 开播
     OFFLINE = "danmaku.offline"  # 下播
