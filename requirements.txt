@@ -1,5 +1,7 @@
+aiohttp
 bilibili-api-python
-pillow
+Pillow
+pydantic
 pywin32
-requests
-curl_cffi
+Requests
+tqdm

@@ -10,8 +10,8 @@ import win32api
 import win32clipboard
 import win32con
 import win32gui
-from logger import setup_logger
-logger = setup_logger(filename='send_qq')
+from logging import getLogger
+logger = getLogger('send_qq')
 
 # 命令行解析
 class ArgsType(argparse.Namespace):
