@@ -179,7 +179,7 @@ class NapcatClient:
                             data: dict = json.loads(message)
                             if data.get("echo", 0):
                                 # 跳过带有 echo 的消息，这些是请求的响应，不需要处理
-                                break
+                                continue
                             _log.debug(data)
                             # noinspection PyCallingNonCallable
                             await self._handler(data)  # post_type: ignore (运行时设置 handler)
