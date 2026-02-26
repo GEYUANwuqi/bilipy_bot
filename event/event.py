@@ -15,7 +15,7 @@ class Event(Generic[BaseDataT]):
     """
     data: BaseDataT
     status: BaseType
-    id: UUID = field(default_factory=lambda: str(uuid4()))
+    id: str = field(default_factory=lambda: str(uuid4()))
 
     def __repr__(self) -> str:
         return f"Event(data={self.data}, status={self.status})"

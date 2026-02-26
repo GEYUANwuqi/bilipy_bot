@@ -54,4 +54,4 @@ class SubscriberGroup:
 
     def get_subscriber(self, uuid: UUID) -> list[Subscriber]:
         """获取对应发布器的所有订阅者."""
-        return self._subscribers[uuid]
+        return self._subscribers.get(uuid, [])
