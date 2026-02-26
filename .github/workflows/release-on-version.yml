@@ -76,7 +76,7 @@ jobs:
         with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as g:
             g.write(f"NEW_VERSION={curr_v}\n")
             g.write("CHANGED=true\n")
-            g.write("RELEASE_NOTES<<'EOF'\n")
+            g.write("RELEASE_NOTES<<EOF\n")
             g.write(f"Release v{curr_v}\n\n")
             g.write(log + "\n")
             g.write("EOF\n")
