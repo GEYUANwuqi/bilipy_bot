@@ -1,0 +1,105 @@
+name: Release on meta version change
+
+on:
+  push:
+    branches: [main]
+    paths: ['meta.py']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        persist-credentials: true
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Detect version change and build release notes
+      run: |
+        python - <<'PY'
+        import re, subprocess, os, sys
+
+        def parse_version(s):
+            m = re.search(r"__version__\s*=\s*['\"]([^'\"]+)['\"]", s)
+            return m.group(1) if m else None
+
+        with open('meta.py', encoding='utf-8') as f:
+            curr = f.read()
+
+        try:
+            prev_raw = subprocess.run(['git','show','HEAD^:meta.py'], capture_output=True, text=True, check=True)
+            prev = prev_raw.stdout
+        except subprocess.CalledProcessError:
+            prev = ''
+
+        curr_v = parse_version(curr)
+        prev_v = parse_version(prev) if prev else None
+
+        if not curr_v:
+            print("Error: __version__ not found in meta.py", file=sys.stderr)
+            sys.exit(1)
+
+        if curr_v == prev_v:
+            with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as g:
+                g.write("CHANGED=false\n")
+            print("Version unchanged:", curr_v)
+            sys.exit(0)
+
+        try:
+            tags = subprocess.run(['git','tag','--sort=-creatordate'], capture_output=True, text=True, check=True).stdout.splitlines()
+            prev_tag = tags[0] if tags else ''
+        except subprocess.CalledProcessError:
+            prev_tag = ''
+
+        if prev_tag:
+            rng = f"{prev_tag}..HEAD"
+        else:
+            rng = "HEAD"
+
+        try:
+            log = subprocess.run(['git','log', rng, '--pretty=format:- %s (%an)'], capture_output=True, text=True, check=True).stdout
+            if not log.strip():
+                log = '- no commits'
+        except subprocess.CalledProcessError:
+            log = '- no commits'
+
+        with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as g:
+            g.write(f"NEW_VERSION={curr_v}\n")
+            g.write("CHANGED=true\n")
+            g.write("RELEASE_NOTES<<'EOF'\n")
+            g.write(f"Release v{curr_v}\n\n")
+            g.write(log + "\n")
+            g.write("EOF\n")
+
+        print("Detected version change:", curr_v)
+        PY
+
+    - name: Create git tag
+      if: env.CHANGED == 'true'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git tag -a "v${{ env.NEW_VERSION }}" -m "Release v${{ env.NEW_VERSION }}"
+        git push origin "v${{ env.NEW_VERSION }}"
+
+    - name: Create GitHub Release
+      if: env.CHANGED == 'true'
+      uses: actions/create-release@v1
+      with:
+        tag_name: "v${{ env.NEW_VERSION }}"
+        release_name: "v${{ env.NEW_VERSION }}"
+        body: ${{ env.RELEASE_NOTES }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
