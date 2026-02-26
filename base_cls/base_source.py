@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod, ABCMeta
+from abc import ABC, abstractmethod
 from uuid import uuid4, UUID
 from typing import TYPE_CHECKING, TypeVar
 
@@ -6,19 +6,7 @@ if TYPE_CHECKING:
     from manager.context import AppContext
 
 
-class SourceMeta(ABCMeta):
-    _instances = {}
-    # 可能需要一个锁
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super().__call__(*args, **kwargs)
-            return cls._instances[cls]
-        else:
-            raise RuntimeError(f"Source 类 {cls.__name__} 只能实例化一次")
-
-
-class BaseSource(ABC, metaclass=SourceMeta):
+class BaseSource(ABC):
     """事件源基类.
 
     Source 负责：
