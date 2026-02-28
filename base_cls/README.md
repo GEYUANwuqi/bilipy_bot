@@ -25,7 +25,7 @@ BaseApiT = TypeVar("BaseApiT", bound=BaseApi)
 此模块仅仅规定一个工厂方法，用于创建api实例本身<br>
 `ctx`是**运行时动态创建**的上下文，可以从上下文获取api所需要的config配置，例如cookie等参数<br>
 具体实现方法可以参考[napcat_api](../napcat/api/napcat_api.py)和[bilibili_api](../bilibili/api/bili_api.py)模块<br>
-> 注：从APIContext构建保证了单个API实例全局的**唯一单例性**
+> 注：如要保证实例的**唯一单例性**，建议子类通过重写`__new__`实现
 
 ---------
 
@@ -35,6 +35,15 @@ BaseApiT = TypeVar("BaseApiT", bound=BaseApi)
 from base_cls import BaseApi
 
 class MyApi(BaseApi):
+    _instance = None  # 用于存储唯一实例 [1]
+
+    # 可选的单例创建方法
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            # 如果实例不存在，则创建并保存
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self, cookie: str):
         self.cookie = cookie
 

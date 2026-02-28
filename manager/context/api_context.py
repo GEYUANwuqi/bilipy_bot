@@ -12,17 +12,14 @@ class APIContext:
             config (RuntimeConfig): 运行时API配置实例
         """
         self.config = config
-        self._instances: Dict[Type, Any] = {}
 
     def get_api(self, cls: Type[BaseApiT]) -> BaseApiT:
-        """获取API单例实例
+        """获取API实例
         Args:
             cls (Type[BaseApiT]): API类类型
         Returns:
-            BaseApiT: API单例实例
+            BaseApiT: API实例
         """
-        if cls not in self._instances:
-            self._instances[cls] = cls.create(self)
-        return self._instances[cls]
+        return cls.create(self)
 
     get = get_api
