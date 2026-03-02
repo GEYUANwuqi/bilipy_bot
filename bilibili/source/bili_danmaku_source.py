@@ -7,8 +7,16 @@ from typing import TYPE_CHECKING
 from base_cls import BaseSource
 from event import Event
 from bilibili import BilibiliApi, DanmakuType
-from bilibili.data import DanmakuMsgData, DanmakuGiftData
-from bilibili.data.dto import DanmakuMsgDTO, DanmakuGiftDTO
+from bilibili.data import (
+    DanmakuMsgData,
+    DanmakuGiftData,
+    DanmakuGuardData
+)
+from bilibili.data.dto import (
+    DanmakuMsgDTO,
+    DanmakuGiftDTO,
+    DanmakuGuardDTO
+)
 
 if TYPE_CHECKING:
     from bilibili_api.live import LiveDanmaku
@@ -87,6 +95,7 @@ class BiliDanmakuSource(BaseSource):
         danmaku.add_event_listener("LIVE", self.on_live)
         danmaku.add_event_listener("DANMU_MSG", self.on_danmaku)
         danmaku.add_event_listener("SEND_GIFT", self.on_gift)
+        danmaku.add_event_listener("GUARD_BUY", self.on_guard)
         self.danmaku_list[room_id] = danmaku
         _log.debug(f"新建了房间 {room_id} 的弹幕姬对象，正在启动线程...")
         self._start_room_thread(room_id, danmaku)
@@ -189,4 +198,12 @@ class BiliDanmakuSource(BaseSource):
         if dto_data is not None:
             danmaku_data = DanmakuGiftData.from_dto(dto_data)
             event = Event(data=danmaku_data, status=DanmakuType.GIFT)
+            self._publish_to_main(event)
+
+    async def on_guard(self, msg: dict) -> None:
+        # 上舰事件
+        dto_data = DanmakuGuardDTO.from_raw(msg)
+        if dto_data is not None:
+            danmaku_data = DanmakuGuardData.from_dto(dto_data)
+            event = Event(data = danmaku_data, status = DanmakuType.GUARD)
             self._publish_to_main(event)

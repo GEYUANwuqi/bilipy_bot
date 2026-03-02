@@ -24,6 +24,9 @@ from .danmaku_gift_data import (
     GiftMedalData,
     BlindGiftData,
 )
+from .danmaku_guard_data import (
+    DanmakuGuardData,
+)
 from .video_part import (
     VideoPartData,
 )
@@ -48,4 +51,5 @@ __all__ = [
     "MedalData",
     "GiftMedalData",
     "BlindGiftData",
+    "DanmakuGuardData",
 ]
