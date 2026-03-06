@@ -1,7 +1,6 @@
 import asyncio
 from logging import getLogger, DEBUG, INFO
 import threading
-import time
 from typing import TYPE_CHECKING
 
 from base_cls import BaseSource
@@ -31,7 +30,6 @@ class BiliDanmakuSource(BaseSource):
         self.room_id: list[int] = room_id
         self.danmaku_list: dict[int, "LiveDanmaku"] = {}
         self.debug = debug
-        self._live_start_time: dict[int, float] = {}  # 记录每个房间的开播时间戳
         self._loops: dict[int, asyncio.AbstractEventLoop] = {}
         self._threads: dict[int, threading.Thread] = {}
         self._main_loop: asyncio.AbstractEventLoop | None = None  # 主事件循环引用
@@ -170,16 +168,11 @@ class BiliDanmakuSource(BaseSource):
 
     async def on_live(self, msg: dict) -> None:
         # 开播事件
+        if not msg.get("data", {}).get("live_time", 0):
+            # data.live_time不存在时不认为是开播事件
+            _log.debug(f"跳过不存在live_time字段的LIVE事件")
+            return
         room_id = msg.get("room_display_id")
-        ts = time.time()
-        if room_id not in self._live_start_time:
-            # 初始化
-            self._live_start_time[room_id] = ts
-        else:
-            old_ts = self._live_start_time[room_id]
-            if ts - old_ts < 5:  # 5s内的事件视为重复开播事件
-                _log.debug(f"房间 {room_id} 短时间内重复开播事件，已忽略")
-                return
         info = await self.api.get_room_info(room_id)
         event = Event(data=info, status=DanmakuType.OPEN)
         self._publish_to_main(event)
