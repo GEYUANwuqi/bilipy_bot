@@ -134,13 +134,16 @@ class NapcatClient:
         _log.debug(f"Sent message: {message}")
         echo = str(uuid4())
         message["echo"] = echo
-        await self.client.send(message)
-        _log.debug(f"发送请求{echo}")
+        listener_id = None
 
         try:
+            listener_id = await self.client.create_listener()
+            await self.client.send(message)
+            _log.debug(f"发送请求{echo}")
+
             while True:
                 #  等待响应，直到收到带有相同 echo 的消息
-                message, t = await self._get_message()
+                message, t = await self._get_message(listener_id)
                 match t:
                     case MessageType.Text:
                         try:
@@ -156,13 +159,16 @@ class NapcatClient:
         except asyncio.CancelledError:
             _log.debug(f"请求 {echo} 被取消")
             raise
+        finally:
+            _ = await self.client.remove_listener(listener_id) if listener_id is not None else None
 
-    async def _get_message(self) -> tuple[Any, MessageType]:
+    async def _get_message(self, listener_id: Optional[ListenerId] = None) -> tuple[Any, MessageType]:
         """获取一条消息（阻塞）
         Returns:
             (消息内容, 消息类型) 元组
         """
-        return await self.client.get_message(self._listener_id, self.timeout)
+        _listener_id = self._listener_id if listener_id is None else listener_id
+        return await self.client.get_message(_listener_id, self.timeout)
 
     async def _process_messages(self):
         """持续处理消息（事件循环）"""
