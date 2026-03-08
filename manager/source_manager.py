@@ -133,18 +133,19 @@ class SourceManager:
 
     # ============ API 访问 ============ #
 
-    def get_api(self, api_cls: Type[BaseApiT]) -> BaseApiT:
+    def get_api(self, api_cls: Type[BaseApiT], config_key: str) -> BaseApiT:
         """获取 API 实例.
 
         薄封装，内部转发到 api_ctx。
 
         Args:
             api_cls: API 类类型
+            config_key: 配置键
 
         Returns:
             API 单例实例
         """
-        return self._api_ctx.get_api(api_cls)
+        return self._api_ctx.get_api(api_cls, config_key)
 
     # ============ 订阅接口（转发 EventBus）============ #
 
