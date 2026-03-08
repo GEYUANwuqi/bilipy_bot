@@ -1,5 +1,3 @@
-from typing import Any
-
 # BaseCls模块
 
 此模块提供项目基础的ABC (抽象基类) 和接口定义，供其他模块继承和实现，下面一一介绍各基类的用法
@@ -45,7 +43,7 @@ class MyApi(BaseApi):
 
     @classmethod
     def create(cls, ctx: "APIContext", config_key: str) -> "MyApi":
-        cookie = ctx.get_config(config_key) # 从上下文获取名为{config_key}的配置项
+        cookie = ctx.config.get_config(config_key) # 从上下文获取名为{config_key}的配置项
         return cls(cookie)
 ```
 
