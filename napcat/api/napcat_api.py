@@ -228,7 +228,7 @@ class NapcatApi(BaseApi):
             config_key: 配置键
         """
         return cls(
-            ctx.config.get_config(config)
+            ctx.config.get_config(config_key)
         )
 
     def __init__(self, config: NapcatConfig):
