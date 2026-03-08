@@ -26,9 +26,15 @@ class BilibiliApi(BaseApi):
         self._credential = credential
 
     @classmethod
-    def create(cls, ctx: "APIContext") -> "BilibiliApi":
+    def create(cls, ctx: "APIContext", config_key: str = "bilibili") -> "BilibiliApi":
+        """
+        从上下文创建 BilibiliApi 实例
+        Args:
+            ctx: API 上下文
+            config_key: 配置键
+        """
         return cls(
-            ctx.config.get_config("bilibili")
+            ctx.config.get_config(config_key)
         )
 
     @property

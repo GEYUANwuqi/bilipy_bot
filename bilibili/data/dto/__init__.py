@@ -30,6 +30,9 @@ from .live_room_dto import (
     WatchedShowDto,
     NoticeBoardDto,
 )
+from .danmaku_guard_buy_dto import (
+    DanmakuGuardDTO,
+)
 
 __all__ = [
     "DanmakuMsgDTO",
@@ -54,4 +57,5 @@ __all__ = [
     "AnchorInfoDto",
     "WatchedShowDto",
     "NoticeBoardDto",
+    "DanmakuGuardDTO",
 ]

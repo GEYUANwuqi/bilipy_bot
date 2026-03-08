@@ -349,7 +349,7 @@ class NapcatMessage(AutoDispatchList[MessageNode]):
     def element_type(cls):
         return MessageNode
 
-    # dict()
+    # 可迭代对象
     def __iter__(self):
         return iter(self.root)
 

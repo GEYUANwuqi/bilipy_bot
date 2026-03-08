@@ -1,14 +1,21 @@
 import asyncio
 from logging import getLogger, DEBUG, INFO
 import threading
-import time
 from typing import TYPE_CHECKING
 
 from base_cls import BaseSource
 from event import Event
 from bilibili import BilibiliApi, DanmakuType
-from bilibili.data import DanmakuMsgData, DanmakuGiftData
-from bilibili.data.dto import DanmakuMsgDTO, DanmakuGiftDTO
+from bilibili.data import (
+    DanmakuMsgData,
+    DanmakuGiftData,
+    DanmakuGuardData
+)
+from bilibili.data.dto import (
+    DanmakuMsgDTO,
+    DanmakuGiftDTO,
+    DanmakuGuardDTO
+)
 
 if TYPE_CHECKING:
     from bilibili_api.live import LiveDanmaku
@@ -18,12 +25,18 @@ _log = getLogger("BiliDanmakuSource")
 
 class BiliDanmakuSource(BaseSource):
 
-    def __init__(self, room_id: list[int], debug: bool = False):
+    def __init__(self, room_id: list[int], debug: bool = False, config_key: str = "bilibili"):
+        """初始化B站弹幕源
+        Args:
+            room_id: 房间号列表
+            debug: 是否开启调试
+            config_key: 配置键，默认"bilibili"
+        """
         super().__init__()
+        self.config_key: str = config_key
         self.room_id: list[int] = room_id
         self.danmaku_list: dict[int, "LiveDanmaku"] = {}
         self.debug = debug
-        self._live_start_time: dict[int, float] = {}  # 记录每个房间的开播时间戳
         self._loops: dict[int, asyncio.AbstractEventLoop] = {}
         self._threads: dict[int, threading.Thread] = {}
         self._main_loop: asyncio.AbstractEventLoop | None = None  # 主事件循环引用
@@ -87,6 +100,7 @@ class BiliDanmakuSource(BaseSource):
         danmaku.add_event_listener("LIVE", self.on_live)
         danmaku.add_event_listener("DANMU_MSG", self.on_danmaku)
         danmaku.add_event_listener("SEND_GIFT", self.on_gift)
+        danmaku.add_event_listener("GUARD_BUY", self.on_guard)
         self.danmaku_list[room_id] = danmaku
         _log.debug(f"新建了房间 {room_id} 的弹幕姬对象，正在启动线程...")
         self._start_room_thread(room_id, danmaku)
@@ -124,7 +138,7 @@ class BiliDanmakuSource(BaseSource):
 
     async def start(self) -> None:
         """启动弹幕监控."""
-        if not self.ctx.config.get_config("bilibili"):
+        if not self.ctx.config.get_config(self.config_key):
             raise RuntimeError("未找到Credential配置")
         if self.running:
             _log.warning("B站弹幕姬已在运行中")
@@ -157,20 +171,15 @@ class BiliDanmakuSource(BaseSource):
     @property
     def api(self) -> BilibiliApi:
         """获取 Bilibili API 实例."""
-        return self.ctx.api_ctx.get(BilibiliApi)
+        return self.ctx.api_ctx.get(BilibiliApi, self.config_key)
 
     async def on_live(self, msg: dict) -> None:
         # 开播事件
+        if not msg.get("data", {}).get("live_time", 0):
+            # data.live_time不存在时不认为是开播事件
+            _log.debug(f"跳过不存在live_time字段的LIVE事件")
+            return
         room_id = msg.get("room_display_id")
-        ts = time.time()
-        if room_id not in self._live_start_time:
-            # 初始化
-            self._live_start_time[room_id] = ts
-        else:
-            old_ts = self._live_start_time[room_id]
-            if ts - old_ts < 5:  # 5s内的事件视为重复开播事件
-                _log.debug(f"房间 {room_id} 短时间内重复开播事件，已忽略")
-                return
         info = await self.api.get_room_info(room_id)
         event = Event(data=info, status=DanmakuType.OPEN)
         self._publish_to_main(event)
@@ -189,4 +198,12 @@ class BiliDanmakuSource(BaseSource):
         if dto_data is not None:
             danmaku_data = DanmakuGiftData.from_dto(dto_data)
             event = Event(data=danmaku_data, status=DanmakuType.GIFT)
+            self._publish_to_main(event)
+
+    async def on_guard(self, msg: dict) -> None:
+        # 上舰事件
+        dto_data = DanmakuGuardDTO.from_raw(msg)
+        if dto_data is not None:
+            danmaku_data = DanmakuGuardData.from_dto(dto_data)
+            event = Event(data = danmaku_data, status = DanmakuType.GUARD)
             self._publish_to_main(event)
