@@ -19,13 +19,17 @@ class BiliLiveSource(BaseSource):
     负责轮询B站直播状态并发布事件。
     """
 
-    def __init__(self, poll_interval: Union[float, int] = 20, watch_targets: Optional[list[int]] = None):
+    def __init__(self,
+                 poll_interval: Union[float, int] = 20,
+                 watch_targets: Optional[list[int]] = None,
+                 config_key: str = "bilibili"):
         """初始化直播事件源.
 
         Args:
             poll_interval: 轮询间隔时间（秒）
         """
         super().__init__()
+        self.config_key: str = config_key
         self.poll_interval: Union[float, int] = poll_interval
         self._poll_num: int = 0
         self._room_list: list[int] = []
@@ -103,7 +107,7 @@ class BiliLiveSource(BaseSource):
     @property
     def api(self) -> BilibiliApi:
         """获取 Bilibili API 实例."""
-        return self.ctx.api_ctx.get(BilibiliApi)
+        return self.ctx.api_ctx.get(BilibiliApi, self.config_key)
 
     @property
     def rooms(self) -> list[int]:

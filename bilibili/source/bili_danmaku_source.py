@@ -25,8 +25,9 @@ _log = getLogger("BiliDanmakuSource")
 
 class BiliDanmakuSource(BaseSource):
 
-    def __init__(self, room_id: list[int], debug: bool = False):
+    def __init__(self, room_id: list[int], debug: bool = False, config_key: str = "bilibili"):
         super().__init__()
+        self.config_key: str = config_key
         self.room_id: list[int] = room_id
         self.danmaku_list: dict[int, "LiveDanmaku"] = {}
         self.debug = debug
@@ -131,7 +132,7 @@ class BiliDanmakuSource(BaseSource):
 
     async def start(self) -> None:
         """启动弹幕监控."""
-        if not self.ctx.config.get_config("bilibili"):
+        if not self.ctx.config.get_config(self.config_key):
             raise RuntimeError("未找到Credential配置")
         if self.running:
             _log.warning("B站弹幕姬已在运行中")
@@ -164,7 +165,7 @@ class BiliDanmakuSource(BaseSource):
     @property
     def api(self) -> BilibiliApi:
         """获取 Bilibili API 实例."""
-        return self.ctx.api_ctx.get(BilibiliApi)
+        return self.ctx.api_ctx.get(BilibiliApi, self.config_key)
 
     async def on_live(self, msg: dict) -> None:
         # 开播事件

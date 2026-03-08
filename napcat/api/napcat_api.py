@@ -220,14 +220,15 @@ class NapcatApi(BaseApi):
     """Napcat API，提供与 Napcat QQ Bot 交互的接口"""
 
     @classmethod
-    def create(cls, ctx: APIContext) -> "NapcatApi":
+    def create(cls, ctx: APIContext, config_key: str = "napcat") -> "NapcatApi":
         """
         从上下文创建 NapcatApi 实例
         Args:
             ctx: API 上下文
+            config_key: 配置键
         """
         return cls(
-            ctx.config.get_config("napcat")
+            ctx.config.get_config(config)
         )
 
     def __init__(self, config: NapcatConfig):

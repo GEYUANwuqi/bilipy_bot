@@ -13,7 +13,7 @@ class BaseApi(ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls, ctx: "APIContext") -> Self:
+    def create(cls, ctx: "APIContext", config_key: str) -> Self:
         """API实例工厂方法"""
         pass
 

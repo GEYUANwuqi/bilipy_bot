@@ -21,9 +21,10 @@ class NapcatSource(BaseSource):
     使用ws协议连接napcat服务器，接收并发布事件。
     """
 
-    def __init__(self):
+    def __init__(self, config_key: str = "napcat"):
         """初始化 Napcat 事件源."""
         super().__init__()
+        self.config_key = config_key
 
     async def _process_messages(self, message: dict[str, Any]) -> None:
         """处理接收到的消息."""
@@ -55,4 +56,4 @@ class NapcatSource(BaseSource):
 
     @property
     def api(self) -> NapcatApi:
-        return self.ctx.api_ctx.get(NapcatApi)
+        return self.ctx.api_ctx.get(NapcatApi, self.config_key)
