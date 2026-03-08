@@ -26,6 +26,12 @@ _log = getLogger("BiliDanmakuSource")
 class BiliDanmakuSource(BaseSource):
 
     def __init__(self, room_id: list[int], debug: bool = False, config_key: str = "bilibili"):
+        """初始化B站弹幕源
+        Args:
+            room_id: 房间号列表
+            debug: 是否开启调试
+            config_key: 配置键，默认"bilibili"
+        """
         super().__init__()
         self.config_key: str = config_key
         self.room_id: list[int] = room_id

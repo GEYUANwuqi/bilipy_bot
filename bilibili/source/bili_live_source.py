@@ -24,9 +24,10 @@ class BiliLiveSource(BaseSource):
                  watch_targets: Optional[list[int]] = None,
                  config_key: str = "bilibili"):
         """初始化直播事件源.
-
         Args:
             poll_interval: 轮询间隔时间（秒）
+            watch_targets: 监听用户列表
+            config_key: 配置键，默认"bilibili"
         """
         super().__init__()
         self.config_key: str = config_key

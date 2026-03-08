@@ -22,7 +22,10 @@ class NapcatSource(BaseSource):
     """
 
     def __init__(self, config_key: str = "napcat"):
-        """初始化 Napcat 事件源."""
+        """初始化 Napcat 事件源.
+        Args:
+            config_key: 配置键，默认"napcat"
+        """
         super().__init__()
         self.config_key = config_key
 

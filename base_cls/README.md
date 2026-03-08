@@ -1,3 +1,5 @@
+from typing import Any
+
 # BaseCls模块
 
 此模块提供项目基础的ABC (抽象基类) 和接口定义，供其他模块继承和实现，下面一一介绍各基类的用法
@@ -15,7 +17,7 @@ class BaseApi(ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls, ctx: "APIContext") -> Self:
+    def create(cls, ctx: "APIContext", config_key: str) -> Self:
         """API实例工厂方法"""
         pass
 
@@ -24,8 +26,9 @@ BaseApiT = TypeVar("BaseApiT", bound=BaseApi)
 
 此模块仅仅规定一个工厂方法，用于创建api实例本身<br>
 `ctx`是**运行时动态创建**的上下文，可以从上下文获取api所需要的config配置，例如cookie等参数<br>
+`config_key`是获取配置的配置键，同一配置键对应单个实例<br>
 具体实现方法可以参考[napcat_api](../napcat/api/napcat_api.py)和[bilibili_api](../bilibili/api/bili_api.py)模块<br>
-> 注：如要保证实例的**唯一单例性**，建议子类通过重写`__new__`实现
+> 注：通过全局使用一个配置键可以实现全局单例，但是提供了多配置的能力
 
 ---------
 
@@ -33,23 +36,16 @@ BaseApiT = TypeVar("BaseApiT", bound=BaseApi)
 
 ```python
 from base_cls import BaseApi
+from typing import Any
 
 class MyApi(BaseApi):
-    _instance = None  # 用于存储唯一实例 [1]
 
-    # 可选的单例创建方法
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            # 如果实例不存在，则创建并保存
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self, cookie: str):
+    def __init__(self, cookie: Any):
         self.cookie = cookie
 
     @classmethod
-    def create(cls, ctx: "APIContext") -> "MyApi":
-        cookie = ctx.get_config("myapi") # 从上下文获取名为"myapi"的配置项
+    def create(cls, ctx: "APIContext", config_key: str) -> "MyApi":
+        cookie = ctx.get_config(config_key) # 从上下文获取名为{config_key}的配置项
         return cls(cookie)
 ```
 
