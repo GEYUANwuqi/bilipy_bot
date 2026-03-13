@@ -38,6 +38,7 @@ class NapcatSource(BaseSource):
         try:
             # 使用 BaseDataModel 的自动分发构造
             napcat_event = NapcatEvent.from_dict(message)
+            napcat_event.bind_runtime(self.ctx, self.config_key)
 
             if napcat_type.matches(NapcatType.ALL):
                 event = Event(data=napcat_event, status=napcat_type)

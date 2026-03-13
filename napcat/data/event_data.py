@@ -5,7 +5,10 @@ NapCat OneBot11 事件数据模型
 """
 from typing import ClassVar, Optional
 
+from manager import AppContext
 from base_cls import BaseDataModel
+from pydantic import PrivateAttr
+from ..api import NapcatApi
 from .segment_data import NapcatMessage
 
 
@@ -64,6 +67,40 @@ class NapcatEvent(BaseDataModel):
     time: int
     self_id: int
     post_type: str
+
+    # ====黑魔法====
+
+    # 私有上下文
+    _runtime = PrivateAttr(default = None)
+    _config_key = PrivateAttr(default = None)
+
+    # 绑定上下文
+    def bind_runtime(self, runtime: AppContext, config_key: str) -> None:
+        object.__setattr__(self, "_runtime", runtime)
+        object.__setattr__(self, "_config_key", config_key)
+
+    # 获取上下文
+    @property
+    def runtime(self) -> AppContext:
+        if self._runtime is None:
+            raise RuntimeError("runtime 未绑定")
+        return self._runtime
+
+    # 获取config键
+    @property
+    def config_key(self) -> str:
+        if self._config_key is None:
+            raise RuntimeError("config_key 未绑定")
+        return self._config_key
+
+    @property
+    def bus(self):
+        return self.runtime.bus
+
+    # 获取事件源api实例
+    @property
+    def api(self):
+        return self.runtime.api_ctx.get(NapcatApi, self.config_key)
 
 
 # ==================== 消息事件 ====================
