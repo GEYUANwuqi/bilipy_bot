@@ -22,13 +22,16 @@ class BaseType(str, Enum):
             rule: 要匹配的标签
 
         Returns:
-            bool: 在作用域相同且具体状态相同或rule为通配符时返回True，否则返回False
+            bool: 同时匹配type, scope, state
         """
-        if self.scope == rule.scope:  # 作用域
-            if self.state == rule.state:  # 具体状态
-                return True
-            elif rule.state == "all":  # 通配符
-                return True
+        if type(self) is type(rule):  # Type匹配
+            if self.scope == rule.scope:  # 作用域匹配
+                if self.state == rule.state:  # 具体状态匹配
+                    return True
+                elif rule.state == "all":  # 通配符
+                    return True
+                else:
+                    return False
             else:
                 return False
         else:
