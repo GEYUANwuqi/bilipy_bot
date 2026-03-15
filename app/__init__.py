@@ -6,16 +6,20 @@ from .source import (
 )
 from .context import (
     AppContext,
-    RuntimeConfig
+    APIContext,
+    RuntimeConfig,
 )
 from .event import (
-    Event
+    Event,
+    EventBus,
 )
 
 __all__ = [
     'BotApp',
     'SourceManager',
     'AppContext',
+    'APIContext',
     'RuntimeConfig',
     'Event',
+    'EventBus',
 ]

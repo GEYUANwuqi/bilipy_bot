@@ -1,43 +1,35 @@
 from uuid import UUID
-from typing import Type, Callable, Coroutine, Any, Optional
+from typing import Type, Any, Optional
 from logging import getLogger
-import asyncio
 
-from ..context import RuntimeConfig, APIContext, AppContext
-from ..event import EventBus, Event
-from ..base_cls import BaseSource, BaseSourceT, BaseType, BaseApiT
+from ..context import AppContext
+from ..base_cls import BaseSource, BaseSourceT
 
 
 _log = getLogger(__name__)
 
 
 class SourceManager:
-    """SourceManager 类，负责装配、生命周期和批量管理.
+    """SourceManager 类，专注于事件源的生命周期管理.
+
+    负责添加/移除事件源，并统一管理其启动、停止流程和异步任务。
+    高层概念（EventBus、APIContext、AppContext）由 BotApp 持有并通过
+    AppContext 注入。
 
     Attributes:
-        config: 运行时配置（只读）
-        api_ctx: API 单例容器
-        bus: 事件总线
-        sources: 事件源集合
+        sources: 事件源集合（UUID -> Source）
+        running: 是否正在运行
+        closed: 是否已关闭
     """
 
-    def __init__(self, config: RuntimeConfig):
+    def __init__(self, ctx: AppContext):
         """初始化 SourceManager.
 
         Args:
-            config: 运行时配置
+            ctx: 由 BotApp 构建并传入的应用上下文
         """
-        # 核心对象
-        self._config = config
-        self._api_ctx = APIContext(config)
-        self._bus = EventBus()
-
-        # AppContext 统一注入对象
-        self._ctx = AppContext(
-            config=self._config,
-            api_ctx=self._api_ctx,
-            bus=self._bus
-        )
+        # 注入应用上下文（只读引用，不持有所有权）
+        self._ctx = ctx
 
         # 事件源集合：UUID -> Source
         self._sources: dict[UUID, BaseSource] = {}
@@ -46,15 +38,7 @@ class SourceManager:
         self._running = False
         self._closed = False
 
-        # 任务管理
-        self._tasks: list[asyncio.Task] = []
-
     # ============ 属性 ============ #
-
-    @property
-    def config(self) -> RuntimeConfig:
-        """获取运行时配置（只读）."""
-        return self._config
 
     @property
     def ctx(self) -> AppContext:
@@ -131,64 +115,6 @@ class SourceManager:
         """
         return self._sources.get(source_id)
 
-    # ============ API 访问 ============ #
-
-    def get_api(self, api_cls: Type[BaseApiT], config_key: str) -> BaseApiT:
-        """获取 API 实例.
-
-        薄封装，内部转发到 api_ctx。
-
-        Args:
-            api_cls: API 类类型
-            config_key: 配置键
-
-        Returns:
-            API 单例实例
-        """
-        return self._api_ctx.get_api(api_cls, config_key)
-
-    # ============ 订阅接口（转发 EventBus）============ #
-
-    def subscribe(
-        self,
-        source_id: UUID,
-        status: BaseType
-    ) -> Callable:
-        """装饰器：订阅事件.
-
-        底层转发到 EventBus，SourceManager 不存 callback 索引表。
-
-        Args:
-            source_id: 事件源的 UUID
-            status: 状态过滤器
-
-        Returns:
-            装饰器函数
-
-        Usage:
-            @source.subscribe(source_id, DynamicType.NEW)
-            async def on_new_dynamic(event: Event):
-                print(event)
-        """
-        return self._bus.subscribe(source_id, status)
-
-    def add_subscriber(
-        self,
-        source_id: UUID,
-        callback: Callable[[Event], Coroutine[Any, Any, None]],
-        status: BaseType
-    ) -> None:
-        """添加订阅者.
-
-        底层转发到 EventBus。
-
-        Args:
-            source_id: 事件源的 UUID
-            callback: 回调函数
-            status: 状态过滤器
-        """
-        self._bus.add_subscriber(source_id, callback, status)
-
     # ============ 生命周期 ============ #
 
     async def start(self) -> None:
@@ -245,16 +171,6 @@ class SourceManager:
             except Exception as e:
                 _log.error(f"停止 {source.__class__.__name__} 失败: {e}")
 
-        # 取消所有任务
-        for task in self._tasks:
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
-        self._tasks.clear()
         self._running = False
         _log.info("SourceManager 已停止")
 
@@ -274,38 +190,3 @@ class SourceManager:
         self._sources.clear()
         self._closed = True
         _log.info("SourceManager 已关闭")
-
-    # ============ 上下文管理器 ============ #
-
-    async def __aenter__(self) -> "SourceManager":
-        """异步上下文管理器入口."""
-        await self.start()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """异步上下文管理器出口."""
-        await self.close()
-
-    # ============ 便捷方法 ============ #
-
-    def create_task(self, coro: Coroutine) -> asyncio.Task:
-        """创建并管理任务.
-
-        SourceManager 统一调度任务，stop 时统一 cancel。
-
-        Args:
-            coro: 协程
-
-        Returns:
-            创建的任务
-        """
-        task = asyncio.create_task(coro)
-        self._tasks.append(task)
-
-        # 任务完成后自动移除
-        def remove_task(t):
-            if t in self._tasks:
-                self._tasks.remove(t)
-
-        task.add_done_callback(remove_task)
-        return task
