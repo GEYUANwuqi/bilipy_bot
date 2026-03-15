@@ -1,10 +1,12 @@
-from typing import Callable, Coroutine, Any
+from typing import Callable, Coroutine, Any, TYPE_CHECKING
 from dataclasses import dataclass
 from logging import getLogger
 from uuid import UUID
-from base_cls import BaseType
+
 from .event import Event
 
+if TYPE_CHECKING:
+    from ..base_cls import BaseType
 
 _log = getLogger(__name__)
 
@@ -18,7 +20,7 @@ class Subscriber:
         status_filter: 状态过滤器
     """
     callback: Callable[[Event], Coroutine[Any, Any, None]]
-    status_filter: BaseType
+    status_filter: "BaseType"
 
 
 class SubscriberGroup:

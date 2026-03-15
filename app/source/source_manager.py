@@ -3,9 +3,9 @@ from typing import Type, Callable, Coroutine, Any, Optional
 from logging import getLogger
 import asyncio
 
-from .context import RuntimeConfig, APIContext, AppContext
-from event import EventBus, Event
-from base_cls import BaseSource, BaseSourceT, BaseType, BaseApiT
+from ..context import RuntimeConfig, APIContext, AppContext
+from ..event import EventBus, Event
+from ..base_cls import BaseSource, BaseSourceT, BaseType, BaseApiT
 
 
 _log = getLogger(__name__)
@@ -166,7 +166,7 @@ class SourceManager:
             装饰器函数
 
         Usage:
-            @manager.subscribe(source_id, DynamicType.NEW)
+            @source.subscribe(source_id, DynamicType.NEW)
             async def on_new_dynamic(event: Event):
                 print(event)
         """

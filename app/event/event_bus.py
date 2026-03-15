@@ -1,12 +1,15 @@
-from typing import Callable, Coroutine, Any
+from typing import Callable, Coroutine, Any, TYPE_CHECKING
 from logging import getLogger
 from functools import wraps
 import asyncio
 import inspect
 from uuid import UUID
-from base_cls import BaseType
+
 from .event import Event
 from .subscriber import Subscriber, SubscriberGroup
+
+if TYPE_CHECKING:
+    from ..base_cls import BaseType
 
 
 _log = getLogger(__name__)
@@ -51,7 +54,7 @@ class EventBus:
         self,
         uuid: UUID,
         callback: Callable[[Event], Coroutine[Any, Any, None]],
-        status: BaseType
+        status: "BaseType"
     ) -> None:
         """添加订阅者.
 
@@ -76,7 +79,7 @@ class EventBus:
     def subscribe(
         self,
         uuid: UUID,
-        status: BaseType
+        status: "BaseType"
     ) -> Callable:
         """装饰器：订阅事件.
 

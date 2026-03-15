@@ -1,6 +1,6 @@
 from .api_context import APIContext
 from .config import RuntimeConfig
-from event import EventBus
+from ..event import EventBus
 
 
 class AppContext:

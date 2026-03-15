@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Self, TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from manager import APIContext
+    from ..source import APIContext
 
 
 class BaseApi(ABC):

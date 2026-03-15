@@ -3,7 +3,7 @@ from typing import Any, TYPE_CHECKING
 from logging import getLogger
 
 if TYPE_CHECKING:
-    from event import Event
+    from ..event import Event
 
 _log = getLogger(__name__)
 

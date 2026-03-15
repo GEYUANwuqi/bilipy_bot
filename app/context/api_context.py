@@ -2,17 +2,15 @@ from typing import Type, Dict, Any
 from threading import Lock
 from collections import defaultdict
 from logging import getLogger
+
 from .config import RuntimeConfig
-from base_cls import BaseApiT
+from ..base_cls import BaseApiT
 
 _log = getLogger("APIContext")
 
 
 class APIContext:
     """API上下文管理，负责管理 API 单例和配置."""
-    _lock = Lock()
-    _instances: Dict[Type, Dict[str, Any]] = defaultdict(dict)
-    # Type[BaseApiT] - {config_key - BaseApiT}
 
     def __init__(self, config: RuntimeConfig):
         """初始化 APIContext 实例.
@@ -20,6 +18,9 @@ class APIContext:
             config (RuntimeConfig): 运行时API配置实例
         """
         self.config = config
+        self._lock = Lock()
+        self._instances: Dict[Type, Dict[str, Any]] = defaultdict(dict)
+        # Type[BaseApiT] - {config_key - BaseApiT}
 
     def get_api(
         self,

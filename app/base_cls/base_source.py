@@ -3,7 +3,7 @@ from uuid import uuid4, UUID
 from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
-    from manager.context import AppContext
+    from ..context import AppContext
 
 
 class BaseSource(ABC):
