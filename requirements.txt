@@ -1,7 +1,0 @@
-aiohttp
-bilibili-api-python
-Pillow
-pydantic
-pywin32
-Requests
-tqdm

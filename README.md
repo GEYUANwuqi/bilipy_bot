@@ -20,39 +20,37 @@
     git clone https://github.com/GEYUANwuqi/bilipy_bot.git
     cd bilipy_bot
     ```
-2. 配置环境和依赖 ( 推荐使用conda/venv隔离环境，也推荐使用uv来管理依赖 )
+2. 配置环境和依赖（本项目使用 [uv](https://docs.astral.sh/uv/) 管理环境和依赖）
     ```sh
-    conda create -n bilipy_bot python=3.12.4
-    conda activate bilipy_bot
-    pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+    uv sync
     ```
+
+> **注意：请使用 uv 进行环境和依赖管理。** 本项目不提供 pip / conda 的部署方式，如需使用请自行摸索。
 
 
 ## 运行项目示例
 - 目前项目提供了三个example
-    - [napcat](napcat_example.py)：napcat事件监听
-    - [bilibili](manager_example.py)：B站动态/直播事件监听
-    - [bilibili_danmaku](live_danmaku_example.py)：bilibili直播弹幕监听
+    - [napcat](example/napcat_example.py)：napcat事件监听
+    - [bilibili](example/manager_example.py)：B站动态/直播事件监听
+    - [bilibili_danmaku](example/live_danmaku_example.py)：bilibili直播弹幕监听
 
 
 ### 运行示例
  ```sh
- conda activate bilipy_bot
- python napcat_example.py  # 对接napcat
- python manager_example.py  # 基于轮询的B站动态/直播事件推送
- python live_danmaku_example.py  # 基于ws的b站弹幕姬实现
+ uv run example/napcat_example.py  # 对接napcat
+ uv run example/manager_example.py  # 基于轮询的B站动态/直播事件推送
+ uv run example/live_danmaku_example.py  # 基于ws的b站弹幕姬实现
  ```
 
 ------
 
 ## 各模块的详细说明
 
-1. [base_cls 模块](base_cls/README.md)
-2. [manager 模块](manager/README.md)
-3. [event 模块](event/README.md)
-4. [utils 模块](utils/README.md)
-5. [napcat 事件源](napcat/README.md)
-6. [bilibili 事件源](bilibili/README.md)
+1. [source 模块](bilipy_bot/app/source/README.md)
+2. [event 模块](bilipy_bot/app/event/README.md)
+3. [utils 模块](bilipy_bot/utils/README.md)
+4. [napcat 事件源](bilipy_bot/sources/napcat/README.md)
+5. [bilibili 事件源](bilipy_bot/sources/bilibili/README.md)
 
 ## 使用文档
 

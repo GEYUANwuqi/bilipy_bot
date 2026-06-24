@@ -12,6 +12,7 @@ venv/
 
 # === Logs ===
 *.log
+logs
 
 # === IDE ===
 .idea/
@@ -24,3 +25,10 @@ Thumbs.db
 # === Local config ===
 config.local.py
 settings.local.yaml
+
+# === AI ===
+CLAUDE.md
+.claude
+
+# === Dev ===
+dev
