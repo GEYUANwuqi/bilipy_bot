@@ -31,16 +31,17 @@ class BotApp:
         manager: 事件源生命周期管理器
     """
 
-    def __init__(self, config: "RuntimeConfig") -> None:
+    def __init__(self, config: "RuntimeConfig", ctx: AppContext | None = None) -> None:
         """初始化 BotApp.
 
         Args:
             config: 运行时配置
+            ctx: 可选，注入自定义 AppContext，默认自动创建
         """
         self._config = config
 
         # 统一注入对象，传递给各 Source
-        self._ctx = AppContext(
+        self._ctx = ctx or AppContext(
             config=self._config,
         )
 

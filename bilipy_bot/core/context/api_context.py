@@ -43,4 +43,9 @@ class APIContext:
 
         return self._instances[cls][config_key]
 
+    def clear(self) -> None:
+        """清空所有缓存的 API 单例实例，主要用于测试隔离."""
+        with self._lock:
+            self._instances.clear()
+
     get = get_api

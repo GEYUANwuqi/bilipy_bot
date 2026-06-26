@@ -19,10 +19,13 @@ class BaseSource(ABC):
         running: 运行状态
     """
 
-    @abstractmethod
-    def __init__(self, **kwargs):
-        """初始化事件源."""
-        self.uuid: UUID = uuid4()
+    def __init__(self, uuid: UUID | None = None, **kwargs):
+        """初始化事件源.
+
+        Args:
+            uuid: 可选，指定 UUID，默认自动生成
+        """
+        self.uuid: UUID = uuid or uuid4()
         self.running: bool = False
         self._ctx: AppContext | None = None
 

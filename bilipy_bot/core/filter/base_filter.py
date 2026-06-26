@@ -11,7 +11,7 @@ _log = getLogger(__name__)
 class BaseFilter(ABC):
     """过滤器基类."""
 
-    filters = Any
+    filters: Any
 
     @abstractmethod
     def check(self, event: "Event") -> bool:

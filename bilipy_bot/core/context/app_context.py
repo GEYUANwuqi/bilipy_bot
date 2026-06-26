@@ -19,15 +19,19 @@ class AppContext:
     def __init__(
         self,
         config: RuntimeConfig,
+        event_bus: EventBus | None = None,
+        api_ctx: APIContext | None = None,
     ):
         """初始化 AppContext.
 
         Args:
             config: 运行时配置
+            event_bus: 可选，注入自定义 EventBus，默认自动创建
+            api_ctx: 可选，注入自定义 APIContext，默认自动创建
         """
         self._config = config
-        self._api_ctx = APIContext(config)
-        self._bus = EventBus()
+        self._api_ctx = api_ctx or APIContext(config)
+        self._bus = event_bus or EventBus()
 
     @property
     def config(self) -> RuntimeConfig:
