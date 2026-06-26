@@ -307,7 +307,7 @@ def get_log(name="Logger"):
     获取日志记录器
     """
     warnings.warn(
-        "The 'get_log' method is deprecated, " "use 'logging.getLogger' instead",
+        "The 'get_log' method is deprecated, use 'logging.getLogger' instead",
         DeprecationWarning,
         2,
     )
