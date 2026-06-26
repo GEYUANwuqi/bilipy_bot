@@ -154,8 +154,13 @@ class BiliDynamicSource(BaseSource):
         Returns:
             当前的动态状态
         """
-        old_timestamp = self._dynamic_data[uid].old.pub_ts
-        new_timestamp = self._dynamic_data[uid].new.pub_ts
+        old_data = self._dynamic_data[uid].old
+        new_data = self._dynamic_data[uid].new
+        if old_data is None or new_data is None:
+            return DynamicType.NULL
+
+        old_timestamp = old_data.pub_ts
+        new_timestamp = new_data.pub_ts
 
         if new_timestamp > old_timestamp:
             return DynamicType.NEW

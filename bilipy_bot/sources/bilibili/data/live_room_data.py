@@ -41,7 +41,7 @@ class RoomInfoData(BaseDataMixin):
             cover_url=room_info.cover_url,
             background_url=room_info.background_url,
             description=room_info.description,
-            tags=room_info.tags,
+            tags=list(room_info.tags),
             live_status=room_info.live_status,
             live_start_time=room_info.live_start_time,
             parent_area_name=room_info.parent_area_name,

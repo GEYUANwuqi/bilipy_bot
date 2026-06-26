@@ -151,6 +151,7 @@ class NapcatClient:
                 match t:
                     case MessageType.Text:
                         try:
+                            assert isinstance(message, str)
                             results: dict = json.loads(message)
                         except json.JSONDecodeError as e:
                             _log.error(f"解析错误: {e}")
@@ -178,6 +179,7 @@ class NapcatClient:
             (消息内容, 消息类型) 元组
         """
         _listener_id = self._listener_id if listener_id is None else listener_id
+        assert _listener_id is not None, "Listener not available"
         return await self.client.get_message(_listener_id, self.timeout)
 
     async def _process_messages(self):
@@ -198,6 +200,7 @@ class NapcatClient:
                                 continue
                             _log.debug(data)
                             # noinspection PyCallingNonCallable
+                            assert self._handler is not None
                             await self._handler(
                                 data
                             )  # post_type: ignore (运行时设置 handler)

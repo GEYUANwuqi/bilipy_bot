@@ -178,7 +178,11 @@ class BiliDanmakuSource(BaseSource):
             # data.live_time不存在时不认为是开播事件
             _log.debug("跳过不存在live_time字段的LIVE事件")
             return
-        room_id = msg.get("room_display_id")
+        raw_room_id = msg.get("room_display_id")
+        if raw_room_id is None:
+            _log.warning("消息中缺少 room_display_id，跳过开播事件")
+            return
+        room_id = int(raw_room_id)
         info = await self.api.get_room_info(room_id)
         event = Event(data=info, status=DanmakuType.OPEN)
         self._publish_to_main(event)

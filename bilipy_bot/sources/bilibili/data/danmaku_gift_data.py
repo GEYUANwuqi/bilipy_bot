@@ -130,6 +130,6 @@ class DanmakuGiftData(BaseDataMixin):
             timestamp=dto.timestamp,
             is_first=dto.is_first,
             combo_total_coin=dto.combo_total_coin,
-            gift_gif=dto.gift_info.gif,
-            gift_img=dto.gift_info.img_basic,
+            gift_gif=dto.gift_info.gif if dto.gift_info else "",
+            gift_img=dto.gift_info.img_basic if dto.gift_info else "",
         )

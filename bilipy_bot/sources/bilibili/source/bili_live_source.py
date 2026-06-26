@@ -179,9 +179,13 @@ class BiliLiveSource(BaseSource):
             LiveType: 当前的直播状态
         """
         data_pair = self._live_data[room_id]
+        old_data = data_pair.old
+        new_data = data_pair.new
+        if old_data is None or new_data is None:
+            return LiveType.NULL
 
-        old_status = data_pair.old.room_info.live_status
-        new_status = data_pair.new.room_info.live_status
+        old_status = old_data.room_info.live_status
+        new_status = new_data.room_info.live_status
         # 刚开播：旧状态不是直播中(0或2)，新状态是直播中(1)
         if old_status != 1 and new_status == 1:
             return LiveType.OPEN

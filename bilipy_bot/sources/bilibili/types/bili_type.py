@@ -18,6 +18,7 @@ class LiveType(BaseType):
     OFFLINE = "live.offline"  # 离线
     OPEN = "live.open"  # 开播
     CLOSE = "live.close"  # 下播
+    NULL = "live.null"  # 无变化
 
 
 class DanmakuType(BaseType):

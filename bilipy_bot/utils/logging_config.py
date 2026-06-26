@@ -14,7 +14,11 @@ from logging.handlers import TimedRotatingFileHandler
 
 from .terminal import Color
 
-tqdm_original = None
+# 尝试从 tqdm 导入进度条类，不强制依赖
+try:
+    from tqdm import tqdm as tqdm_original  # type: ignore[import-untyped]
+except ImportError:
+    tqdm_original = None
 
 __author__ = "Fish-LP <Fish.zh@outlook.com>"
 __status__ = "dev"
@@ -146,7 +150,9 @@ LOG_LEVEL_TO_COLOR = {
 class DynamicFormatter(logging.Formatter):
     """根据日志记录级别动态选择格式的格式化器"""
 
-    def __init__(self, fmt_dict: dict, datefmt: str = None, use_color: bool = True):
+    def __init__(
+        self, fmt_dict: dict, datefmt: str | None = None, use_color: bool = True
+    ):
         """
         初始化动态格式化器
 

@@ -12,7 +12,7 @@ from ..data import DynamicData, LiveRoomData, get_max_id
 from ..data.dto import DynamicDTO, LiveRoomDTO
 
 if TYPE_CHECKING:
-    from bilipy_bot.app.context import APIContext
+    from bilipy_bot.core.context import APIContext
 
 _log = getLogger("BilibiliApi")
 
@@ -86,6 +86,8 @@ class BilibiliApi(BaseApi):
         Returns:
             list[DynamicData]: 动态信息对象
         """
+        if self._credential is None:  # pyright: ignore
+            raise ValueError("获取动态主页需要 B 站凭证，请配置 credential")
         dynamic_info = await get_dynamic_page_info(self._credential)
         if dynamic_info.get("items", None) is None or not dynamic_info.get("items"):
             raise ValueError("未获取到动态数据或者动态数据为不完整")

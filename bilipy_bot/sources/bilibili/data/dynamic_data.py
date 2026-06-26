@@ -313,7 +313,7 @@ class DynamicData(BaseDataMixin):
             stat=stat_data,
             tag=dto.tag,
             text=dto.text,
-            pics_url=dto.pics_url,
+            pics_url=list(dto.pics_url) if dto.pics_url else None,
             video=video_data,
             music=music_data,
             article=article_data,
