@@ -9,9 +9,8 @@
 import asyncio
 from logging import getLogger
 
-from bilipy_bot.app import BotApp, Event, RuntimeConfig
+from bilipy_bot.app import BotApp, Event
 from bilipy_bot.sources.napcat import (
-    NapcatConfig,
     NapcatSource,
     NapcatType,
 )
@@ -33,20 +32,16 @@ _log = getLogger("NAPCAT")
 
 
 # ============ 配置 ============ #
+#
+# 请先复制 config.example.yaml 为 config.yaml，填入你的配置:
+#   napcat:
+#     url: "ws://localhost:3001"
+#     token: ""
+#
+# BotApp 会自动读取 config.yaml，无需手动创建 RuntimeConfig。
 
-# NapCat 配置
-napcat_config = NapcatConfig(
-    url="",  # NapCat WebSocket 地址
-    token="",
-)
-
-# 创建运行时配置
-config = RuntimeConfig(
-    napcat=napcat_config,
-)
-
-# 创建 BotApp
-app = BotApp(config)
+# 创建 BotApp（自动加载 config.yaml）
+app = BotApp()
 
 # ============ 创建事件源 ============ #
 # 注册 NapCat 事件源并获取 UUID
@@ -205,6 +200,9 @@ async def periodic_task():
 
 
 async def main():
+    # 从自动加载的配置中获取 napcat 配置（仅用于展示）
+    napcat_config = app.config.get_config("napcat")
+
     _log.info("=" * 60)
     _log.info("启动 NapCat BotApp")
     _log.info("=" * 60)

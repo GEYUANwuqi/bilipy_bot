@@ -8,9 +8,7 @@
 import asyncio
 from logging import getLogger
 
-from bilibili_api import Credential
-
-from bilipy_bot.app import BotApp, Event, RuntimeConfig
+from bilipy_bot.app import BotApp, Event
 from bilipy_bot.sources.bilibili import BiliDanmakuSource, DanmakuType
 from bilipy_bot.sources.bilibili.data import LiveRoomData
 from bilipy_bot.utils import setup_logging
@@ -20,17 +18,17 @@ _log = getLogger("BILIBILI")
 
 
 # ============ 配置 ============ #
+#
+# 请先复制 config.example.yaml 为 config.yaml，填入你的配置:
+#   bilibili:
+#     sessdata: ""
+#     bili_jct: ""
+#     buvid3: ""
+#
+# BotApp 会自动读取 config.yaml，无需手动创建 RuntimeConfig。
 
-# B站凭证（可选）
-credential = Credential(sessdata="", bili_jct="", buvid3="")
-
-# 创建运行时配置
-config = RuntimeConfig(
-    bilibili=credential,
-)
-
-# 创建 BotApp
-app = BotApp(config)
+# 创建 BotApp（自动加载 config.yaml）
+app = BotApp()
 
 danmaku_source = app.add_source(
     source_cls=BiliDanmakuSource, room_id=[26498147, 22758221]

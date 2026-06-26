@@ -199,6 +199,7 @@ dependencies = [
     { name = "bilibili-api-python" },
     { name = "pillow" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "requests" },
     { name = "tqdm" },
 ]
@@ -219,6 +220,7 @@ requires-dist = [
     { name = "bilibili-api-python", specifier = ">=17.4.2" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.34.2" },
     { name = "tqdm", specifier = ">=4.68.3" },
 ]

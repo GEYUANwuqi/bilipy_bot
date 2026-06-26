@@ -8,9 +8,7 @@
 import asyncio
 from logging import getLogger
 
-from bilibili_api import Credential
-
-from bilipy_bot.app import BotApp, Event, RuntimeConfig
+from bilipy_bot.app import BotApp, Event
 from bilipy_bot.sources.bilibili import (
     BiliDynamicSource,
     BiliLiveSource,
@@ -25,17 +23,17 @@ _log = getLogger("BILIBILI")
 
 
 # ============ 配置 ============ #
+#
+# 请先复制 config.example.yaml 为 config.yaml，填入你的配置:
+#   bilibili:
+#     sessdata: ""
+#     bili_jct: ""
+#     buvid3: ""
+#
+# BotApp 会自动读取 config.yaml，无需手动创建 RuntimeConfig。
 
-# B站凭证（可选）
-credential = Credential(sessdata="", bili_jct="", buvid3="")
-
-# 创建运行时配置
-config = RuntimeConfig(
-    bilibili=credential,
-)
-
-# 创建 BotApp
-app = BotApp(config)
+# 创建 BotApp（自动加载 config.yaml）
+app = BotApp()
 
 # ============ 创建事件源 ============ #
 # 注册事件源并获取 UUID

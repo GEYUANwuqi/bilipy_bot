@@ -1,0 +1,29 @@
+# ==============================
+# bilipy_bot 配置文件示例
+# ==============================
+#
+# 使用方法:
+#   1. 复制本文件为 config.yaml
+#   2. 填入你的配置信息
+#   3. 在代码中使用:
+#      from bilipy_bot.app import RuntimeConfig
+#      config = RuntimeConfig.from_yaml()
+#
+
+# ---------- B站 配置 ----------
+# bilibili_api.Credential 参数，不填则为未登录状态
+bilibili:
+  sessdata: ""
+  bili_jct: ""
+  buvid3: ""
+  # dedeuserid: ""
+  # ac_time_value: ""
+
+# ---------- NapCat QQ 配置 ----------
+# NapcatConfig 参数
+napcat:
+  url: "ws://localhost:3001"
+  token: ""
+  # heartbeat: 30.0
+  # reconnect_attempts: 5
+  # receive_timeout: 60.0

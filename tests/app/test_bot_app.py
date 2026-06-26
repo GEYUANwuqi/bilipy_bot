@@ -64,13 +64,18 @@ def app(config):
 class TestBotApp:
     """Test BotApp construction, delegation, and lifecycle."""
 
-    def test_construction_default(self, config):
-        """默认构造应创建内部的 AppContext 和 SourceManager."""
+    def test_construction_with_config(self, config):
+        """传入 config 构造应创建内部的 AppContext 和 SourceManager."""
         app = BotApp(config)
         assert isinstance(app.ctx, AppContext)
         from bilipy_bot.app.source_manager import SourceManager
 
         assert isinstance(app.manager, SourceManager)
+
+    def test_construction_no_config_raises_file_not_found(self):
+        """无 config 且无 config.yaml 文件时抛出 FileNotFoundError."""
+        with pytest.raises(FileNotFoundError, match="config.yaml"):
+            BotApp()
 
     def test_construction_with_injected_ctx(self, config):
         """注入的 AppContext 应被使用."""
