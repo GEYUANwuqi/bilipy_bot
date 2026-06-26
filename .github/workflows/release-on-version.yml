@@ -1,9 +1,9 @@
-name: Release on meta version change
+name: Release on tag
 
 on:
   push:
-    branches: [main]
-    paths: ['meta.py']
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -13,93 +13,69 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        persist-credentials: true
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
+      - name: Validate tag and branch
+        id: meta
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
 
-    - name: Detect version change and build release notes
-      run: |
-        python - <<'PY'
-        import re, subprocess, os, sys
+          git fetch origin main dev_main --prune
 
-        def parse_version(s):
-            m = re.search(r"__version__\s*=\s*['\"]([^'\"]+)['\"]", s)
-            return m.group(1) if m else None
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            CHANNEL="stable"
+            REQUIRED_BRANCH="main"
+            PRERELEASE="false"
+            LATEST_FLAG="--latest"
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$ ]]; then
+            CHANNEL="dev"
+            REQUIRED_BRANCH="dev_main"
+            PRERELEASE="true"
+            LATEST_FLAG="--latest=false"
+          else
+            echo "Invalid tag: $TAG"
+            echo "Expected stable tag: v3.0.5"
+            echo "Expected dev tag: v3.0.5-dev.1"
+            exit 1
+          fi
 
-        with open('meta.py', encoding='utf-8') as f:
-            curr = f.read()
+          if ! git branch -r --contains "$GITHUB_SHA" | grep -q "origin/${REQUIRED_BRANCH}$"; then
+            echo "Tag $TAG is not on required branch: $REQUIRED_BRANCH"
+            exit 1
+          fi
 
-        try:
-            prev_raw = subprocess.run(['git','show','HEAD^:meta.py'], capture_output=True, text=True, check=True)
-            prev = prev_raw.stdout
-        except subprocess.CalledProcessError:
-            prev = ''
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "latest_flag=$LATEST_FLAG" >> "$GITHUB_OUTPUT"
 
-        curr_v = parse_version(curr)
-        prev_v = parse_version(prev) if prev else None
+      - name: Create stable GitHub Release
+        if: steps.meta.outputs.prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.meta.outputs.tag }}
+          LATEST_FLAG: ${{ steps.meta.outputs.latest_flag }}
+        run: |
+          gh release create "$TAG_NAME" \
+            --title "$TAG_NAME" \
+            --generate-notes \
+            --verify-tag \
+            $LATEST_FLAG
 
-        if not curr_v:
-            print("Error: __version__ not found in meta.py", file=sys.stderr)
-            sys.exit(1)
-
-        if curr_v == prev_v:
-            with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as g:
-                g.write("CHANGED=false\n")
-            print("Version unchanged:", curr_v)
-            sys.exit(0)
-
-        try:
-            tags = subprocess.run(['git','tag','--sort=-creatordate'], capture_output=True, text=True, check=True).stdout.splitlines()
-            prev_tag = tags[0] if tags else ''
-        except subprocess.CalledProcessError:
-            prev_tag = ''
-
-        if prev_tag:
-            rng = f"{prev_tag}..HEAD"
-        else:
-            rng = "HEAD"
-
-        try:
-            log = subprocess.run(['git','log', rng, '--pretty=format:- %s (%an)'], capture_output=True, text=True, check=True).stdout
-            if not log.strip():
-                log = '- no commits'
-        except subprocess.CalledProcessError:
-            log = '- no commits'
-
-        with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as g:
-            g.write(f"NEW_VERSION={curr_v}\n")
-            g.write("CHANGED=true\n")
-            g.write("RELEASE_NOTES<<EOF\n")
-            g.write(f"Release v{curr_v}\n\n")
-            g.write(log + "\n")
-            g.write("EOF\n")
-
-        print("Detected version change:", curr_v)
-        PY
-
-    - name: Create git tag
-      if: env.CHANGED == 'true'
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git tag -a "v${{ env.NEW_VERSION }}" -m "Release v${{ env.NEW_VERSION }}"
-        git push origin "v${{ env.NEW_VERSION }}"
-
-    - name: Create GitHub Release
-      if: env.CHANGED == 'true'
-      uses: actions/create-release@v1
-      with:
-        tag_name: "v${{ env.NEW_VERSION }}"
-        release_name: "v${{ env.NEW_VERSION }}"
-        body: ${{ env.RELEASE_NOTES }}
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create dev GitHub Prerelease
+        if: steps.meta.outputs.prerelease == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.meta.outputs.tag }}
+          LATEST_FLAG: ${{ steps.meta.outputs.latest_flag }}
+        run: |
+          gh release create "$TAG_NAME" \
+            --title "$TAG_NAME" \
+            --generate-notes \
+            --verify-tag \
+            --prerelease \
+            $LATEST_FLAG
