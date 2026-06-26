@@ -18,8 +18,8 @@
 
 **以下是项目中各个模块的详细说明，点击链接可以查看对应模块的文档：**
 
-1. [source 模块](../bilipy_bot/app/source/README.md)
-2. [event 模块](../bilipy_bot/app/event/README.md)
+1. [source 模块](../bilipy_bot/core/source/README.md)
+2. [event 模块](../bilipy_bot/core/event/README.md)
 3. [utils 模块](../bilipy_bot/utils/README.md)
 
 ------

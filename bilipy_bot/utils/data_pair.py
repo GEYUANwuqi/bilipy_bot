@@ -1,15 +1,16 @@
-from dataclasses import dataclass
-from typing import Generic, Optional
-from bilipy_bot.app.data import BaseDataT
-from typing import Literal
 from copy import copy
+from dataclasses import dataclass
+from typing import Generic, Literal
+
+from bilipy_bot.core.data import BaseDataT
 
 
 @dataclass
 class DataPair(Generic[BaseDataT]):
     """存储新旧数据对"""
-    old: Optional[BaseDataT] = None
-    new: Optional[BaseDataT] = None
+
+    old: BaseDataT | None = None
+    new: BaseDataT | None = None
 
     def update(self, new_data: BaseDataT):
         """更新数据"""

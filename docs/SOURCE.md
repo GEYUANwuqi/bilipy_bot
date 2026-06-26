@@ -94,8 +94,8 @@ my_source/
 首先定义事件类型枚举：
 
 ```python
-# my_source/type/my_type.py
-from bilipy_bot.app.type import BaseType
+# my_source/types/my_type.py
+from bilipy_bot.core.types import BaseType
 
 class MySourceType(BaseType):
     """我的事件源类型枚举."""
@@ -111,7 +111,7 @@ class MySourceType(BaseType):
 ```python
 # my_source/data/event_data.py
 from typing import ClassVar
-from bilipy_bot.app.data import BaseDataModel
+from bilipy_bot.core.data import BaseDataModel
 
 class MyEvent(BaseDataModel):
     """事件基类"""
@@ -140,12 +140,12 @@ class NoticeEvent(MyEvent):
 
 ```python
 # my_source/api/my_api.py
-from bilipy_bot.app.api import BaseApi
-from bilipy_bot.app.context import APIContext
+from bilipy_bot.core.api import BaseApi
+from bilipy_bot.core.context import APIContext
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bilipy_bot.app.context import APIContext
+    from bilipy_bot.core.context import APIContext
 
 class MyApi(BaseApi):
     """我的 API 实现"""
@@ -182,11 +182,11 @@ class MyApi(BaseApi):
 from typing import Any
 from logging import getLogger
 
-from bilipy_bot.app.source import BaseSource
-from bilipy_bot.app.event import Event
+from bilipy_bot.core.source import BaseSource
+from bilipy_bot.core.event import Event
 from bilipy_bot.sources.my_source.api import MyApi
 from bilipy_bot.sources.my_source.data import MyEvent
-from bilipy_bot.sources.my_source.type import MySourceType
+from bilipy_bot.sources.my_source.types import MySourceType
 
 _log = getLogger("MySource")
 
@@ -290,11 +290,11 @@ Napcat 事件源
 from typing import Any, Optional
 from logging import getLogger
 
-from bilipy_bot.app.source import BaseSource
-from bilipy_bot.app.event import Event
+from bilipy_bot.core.source import BaseSource
+from bilipy_bot.core.event import Event
 from bilipy_bot.sources.napcat.data import NapcatEvent
 from bilipy_bot.sources.napcat.api import NapcatApi
-from bilipy_bot.sources.napcat.type import NapcatType
+from bilipy_bot.sources.napcat.types import NapcatType
 
 _log = getLogger("NapcatSource")
 
@@ -361,7 +361,7 @@ class NapcatSource(BaseSource):
 ### 基本使用
 
 ```python
-from bilipy_bot.app import BotApp, RuntimeConfig
+from bilipy_bot.core import BotApp, RuntimeConfig
 from bilipy_bot.sources.napcat import NapcatSource, NapcatConfig
 
 # 创建配置
@@ -395,7 +395,7 @@ asyncio.run(app.start())
 
 ```python
 import asyncio
-from bilipy_bot.app import BotApp, RuntimeConfig
+from bilipy_bot.core import BotApp, RuntimeConfig
 from bilipy_bot.sources.napcat import NapcatSource, NapcatConfig
 
 async def main():

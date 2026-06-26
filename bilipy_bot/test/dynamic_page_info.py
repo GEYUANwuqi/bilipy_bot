@@ -1,10 +1,13 @@
 from bilibili_api import Credential
 from bilibili_api.dynamic import get_dynamic_page_info
+
 from bilipy_bot.sources.bilibili.data import DynamicData
 from bilipy_bot.sources.bilibili.data.dto import DynamicDTO
 
 
-async def get_new_dynamic_list(sessdata: str, event: bool = True, file: bool = False) -> list[DynamicData]:
+async def get_new_dynamic_list(
+    sessdata: str, event: bool = True, file: bool = False
+) -> list[DynamicData]:
     """获取动态主页的动态列表
     Args:
         sessdata (str): cookie信息-SESSDATA
@@ -20,8 +23,11 @@ async def get_new_dynamic_list(sessdata: str, event: bool = True, file: bool = F
     if file:
         import json
         import os
-        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dynamic_page_info.json')
-        with open(file_path, 'w', encoding='utf-8') as f:
+
+        file_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "dynamic_page_info.json"
+        )
+        with open(file_path, "w", encoding="utf-8") as f:
             json.dump(info_list, f, ensure_ascii=False, indent=4)
     if event:
         info = []
@@ -31,18 +37,15 @@ async def get_new_dynamic_list(sessdata: str, event: bool = True, file: bool = F
             info.append(data)
             info.append(f"{data}")
             print(data)
-            print(f"\n")
+            print("\n")
     else:
         info = info_list
         if not file:
             print(info)
     return info
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import asyncio
-    asyncio.run(
-        get_new_dynamic_list(
-            sessdata = "",
-            event = True,
-            file = False
-        ))
+
+    asyncio.run(get_new_dynamic_list(sessdata="", event=True, file=False))

@@ -3,162 +3,186 @@ NapCat OneBot11 消息段数据模型
 
 基于 OneBot11 协议定义的消息段类型，使用 BaseDataModel 实现自动分发构造
 """
-from typing import ClassVar, Optional, TypeVar
 
-from bilipy_bot.app.data import BaseDataModel, AutoDispatchList
+from typing import ClassVar, TypeVar
 
+from bilipy_bot.core.data import AutoDispatchList, BaseDataModel
 
 # ==================== 嵌套数据类 ====================
 
+
 class TextData(BaseDataModel):
     """纯文本消息数据"""
+
     text: str
 
 
 class FaceData(BaseDataModel):
     """QQ表情消息数据"""
+
     id: str
 
 
 class ImageData(BaseDataModel):
     """图片消息数据"""
+
     file: str
-    type: Optional[str] = None  # 'flash' 表示闪照
-    url: Optional[str] = None
-    cache: Optional[int] = None  # 0 或 1
-    proxy: Optional[int] = None  # 0 或 1
-    timeout: Optional[int] = None
+    type: str | None = None  # 'flash' 表示闪照
+    url: str | None = None
+    cache: int | None = None  # 0 或 1
+    proxy: int | None = None  # 0 或 1
+    timeout: int | None = None
 
 
 class RecordData(BaseDataModel):
     """语音消息数据"""
+
     file: str
-    magic: Optional[int] = None  # 0 或 1，变声
-    url: Optional[str] = None
-    cache: Optional[int] = None
-    proxy: Optional[int] = None
-    timeout: Optional[int] = None
+    magic: int | None = None  # 0 或 1，变声
+    url: str | None = None
+    cache: int | None = None
+    proxy: int | None = None
+    timeout: int | None = None
 
 
 class VideoData(BaseDataModel):
     """短视频消息数据"""
+
     file: str
-    url: Optional[str] = None
-    cache: Optional[int] = None
-    proxy: Optional[int] = None
-    timeout: Optional[int] = None
+    url: str | None = None
+    cache: int | None = None
+    proxy: int | None = None
+    timeout: int | None = None
 
 
 class AtData(BaseDataModel):
     """@某人消息数据"""
+
     qq: str  # QQ号 或 'all'
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class PokeData(BaseDataModel):
     """戳一戳消息数据"""
+
     type: str
     id: str
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class ShareData(BaseDataModel):
     """链接分享消息数据"""
+
     url: str
     title: str
-    content: Optional[str] = None
-    image: Optional[str] = None
+    content: str | None = None
+    image: str | None = None
 
 
 class ContactData(BaseDataModel):
     """推荐好友/群消息数据"""
+
     type: str  # 'qq' 或 'group'
     id: str
 
 
 class LocationData(BaseDataModel):
     """位置消息数据"""
+
     lat: str  # 纬度
     lon: str  # 经度
-    title: Optional[str] = None
-    content: Optional[str] = None
+    title: str | None = None
+    content: str | None = None
 
 
 class MusicData(BaseDataModel):
     """音乐分享消息数据"""
+
     type: str  # 'qq', '163', 'xm' 或 'custom'
-    id: Optional[str] = None  # 非 custom 时使用
-    url: Optional[str] = None  # custom 时使用
-    audio: Optional[str] = None
-    title: Optional[str] = None
-    content: Optional[str] = None
-    image: Optional[str] = None
+    id: str | None = None  # 非 custom 时使用
+    url: str | None = None  # custom 时使用
+    audio: str | None = None
+    title: str | None = None
+    content: str | None = None
+    image: str | None = None
 
 
 class ReplyData(BaseDataModel):
     """回复消息数据"""
-    id: Optional[str] = None  # msg_id 的短ID映射
-    seq: Optional[int] = None  # msg_seq，优先使用
+
+    id: str | None = None  # msg_id 的短ID映射
+    seq: int | None = None  # msg_seq，优先使用
 
 
 class ForwardData(BaseDataModel):
     """合并转发消息数据"""
+
     id: str
 
 
 class NodeData(BaseDataModel):
     """合并转发节点消息数据"""
-    id: Optional[str] = None  # 直接引用已有消息
-    user_id: Optional[str] = None  # 自定义节点
-    nickname: Optional[str] = None
-    content: Optional[list] = None  # MessageNode[]
-    prompt: Optional[str] = None
-    summary: Optional[str] = None
-    source: Optional[str] = None
+
+    id: str | None = None  # 直接引用已有消息
+    user_id: str | None = None  # 自定义节点
+    nickname: str | None = None
+    content: list | None = None  # MessageNode[]
+    prompt: str | None = None
+    summary: str | None = None
+    source: str | None = None
 
 
 class FileData(BaseDataModel):
     """文件消息数据"""
+
     file: str
 
 
 class AnonymousData(BaseDataModel):
     """匿名发消息数据"""
-    ignore: Optional[int] = None  # 0 或 1
+
+    ignore: int | None = None  # 0 或 1
 
 
 class RpsData(BaseDataModel):
     """猜拳魔法表情数据"""
+
     pass
 
 
 class DiceData(BaseDataModel):
     """掷骰子魔法表情数据"""
+
     pass
 
 
 class ShakeData(BaseDataModel):
     """窗口抖动数据"""
+
     pass
 
 
 class XmlData(BaseDataModel):
     """XML消息数据"""
+
     data: str
 
 
 class JsonData(BaseDataModel):
     """JSON消息数据"""
+
     data: str
 
 
 # ==================== 消息段基类与子类 ====================
+
 
 class MessageNode(BaseDataModel):
     """OneBot11 消息段基类
 
     使用 type 字段进行分发
     """
+
     discriminator_field: ClassVar[str] = "type"
     type: str
 
@@ -168,6 +192,7 @@ MessageNodeT = TypeVar("MessageNodeT", bound=MessageNode)
 
 class TextNode(MessageNode):
     """纯文本消息段"""
+
     discriminator_value: ClassVar[str] = "text"
     type: str = "text"
     data: TextData
@@ -179,6 +204,7 @@ class TextNode(MessageNode):
 
 class FaceNode(MessageNode):
     """QQ表情消息段"""
+
     discriminator_value: ClassVar[str] = "face"
     type: str = "face"
     data: FaceData
@@ -190,6 +216,7 @@ class FaceNode(MessageNode):
 
 class ImageNode(MessageNode):
     """图片消息段"""
+
     discriminator_value: ClassVar[str] = "image"
     type: str = "image"
     data: ImageData
@@ -197,6 +224,7 @@ class ImageNode(MessageNode):
 
 class RecordNode(MessageNode):
     """语音消息段"""
+
     discriminator_value: ClassVar[str] = "record"
     type: str = "record"
     data: RecordData
@@ -204,6 +232,7 @@ class RecordNode(MessageNode):
 
 class VideoNode(MessageNode):
     """短视频消息段"""
+
     discriminator_value: ClassVar[str] = "video"
     type: str = "video"
     data: VideoData
@@ -211,6 +240,7 @@ class VideoNode(MessageNode):
 
 class AtNode(MessageNode):
     """@某人消息段"""
+
     discriminator_value: ClassVar[str] = "at"
     type: str = "at"
     data: AtData
@@ -226,27 +256,31 @@ class AtNode(MessageNode):
 
 class RpsNode(MessageNode):
     """猜拳魔法表情消息段"""
+
     discriminator_value: ClassVar[str] = "rps"
     type: str = "rps"
-    data: Optional[RpsData] = None
+    data: RpsData | None = None
 
 
 class DiceNode(MessageNode):
     """掷骰子魔法表情消息段"""
+
     discriminator_value: ClassVar[str] = "dice"
     type: str = "dice"
-    data: Optional[DiceData] = None
+    data: DiceData | None = None
 
 
 class ShakeNode(MessageNode):
     """窗口抖动消息段"""
+
     discriminator_value: ClassVar[str] = "shake"
     type: str = "shake"
-    data: Optional[ShakeData] = None
+    data: ShakeData | None = None
 
 
 class PokeNode(MessageNode):
     """戳一戳消息段"""
+
     discriminator_value: ClassVar[str] = "poke"
     type: str = "poke"
     data: PokeData
@@ -254,13 +288,15 @@ class PokeNode(MessageNode):
 
 class AnonymousNode(MessageNode):
     """匿名发消息消息段"""
+
     discriminator_value: ClassVar[str] = "anonymous"
     type: str = "anonymous"
-    data: Optional[AnonymousData] = None
+    data: AnonymousData | None = None
 
 
 class ShareNode(MessageNode):
     """链接分享消息段"""
+
     discriminator_value: ClassVar[str] = "share"
     type: str = "share"
     data: ShareData
@@ -268,6 +304,7 @@ class ShareNode(MessageNode):
 
 class ContactNode(MessageNode):
     """推荐好友/群消息段"""
+
     discriminator_value: ClassVar[str] = "contact"
     type: str = "contact"
     data: ContactData
@@ -275,6 +312,7 @@ class ContactNode(MessageNode):
 
 class LocationNode(MessageNode):
     """位置消息段"""
+
     discriminator_value: ClassVar[str] = "location"
     type: str = "location"
     data: LocationData
@@ -282,6 +320,7 @@ class LocationNode(MessageNode):
 
 class MusicNode(MessageNode):
     """音乐分享消息段"""
+
     discriminator_value: ClassVar[str] = "music"
     type: str = "music"
     data: MusicData
@@ -289,6 +328,7 @@ class MusicNode(MessageNode):
 
 class ReplyNode(MessageNode):
     """回复消息段"""
+
     discriminator_value: ClassVar[str] = "reply"
     type: str = "reply"
     data: ReplyData
@@ -296,6 +336,7 @@ class ReplyNode(MessageNode):
 
 class ForwardNode(MessageNode):
     """合并转发消息段"""
+
     discriminator_value: ClassVar[str] = "forward"
     type: str = "forward"
     data: ForwardData
@@ -303,6 +344,7 @@ class ForwardNode(MessageNode):
 
 class NodeNode(MessageNode):
     """合并转发节点消息段"""
+
     discriminator_value: ClassVar[str] = "node"
     type: str = "node"
     data: NodeData
@@ -310,6 +352,7 @@ class NodeNode(MessageNode):
 
 class XmlNode(MessageNode):
     """XML消息段"""
+
     discriminator_value: ClassVar[str] = "xml"
     type: str = "xml"
     data: XmlData
@@ -321,6 +364,7 @@ class XmlNode(MessageNode):
 
 class JsonNode(MessageNode):
     """JSON消息段"""
+
     discriminator_value: ClassVar[str] = "json"
     type: str = "json"
     data: JsonData
@@ -332,6 +376,7 @@ class JsonNode(MessageNode):
 
 class FileNode(MessageNode):
     """文件消息段"""
+
     discriminator_value: ClassVar[str] = "file"
     type: str = "file"
     data: FileData
@@ -377,7 +422,9 @@ class NapcatMessage(AutoDispatchList[MessageNode]):
     @property
     def imgs(self) -> list[str]:
         """提取所有图片消息段的URL"""
-        return [seg.data.url for seg in self.filter(ImageNode) if seg.data.url is not None]
+        return [
+            seg.data.url for seg in self.filter(ImageNode) if seg.data.url is not None
+        ]
 
     @property
     def plain_text(self):

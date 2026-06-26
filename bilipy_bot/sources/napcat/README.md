@@ -13,7 +13,7 @@
   - 对 napcat 接口的封装，提供了ws连接、api调用等功能
   - [WS 连接模块](api/napcat_api.py#L38)：提供了连接 napcat ws 服务器的功能，并将接收到的消息进行解析和封装
   - [API 调用模块](api/napcat_api.py#L213)：提供了调用 napcat API 的功能，例如发送消息等
-  - [WS 连接底层模块](../utils/wsclient.py) (/utils/wsclient.py)
+  - [WS 连接底层模块](../utils/websocket.py)../utils/websocket.py)
 
 ### Data层
 
@@ -39,8 +39,8 @@
 ### 运行时配置
 
 ```python
-from bilipy_bot.manager import SourceManager, RuntimeConfig
-from bilipy_bot.napcat import NapcatConfig
+from bilipy_bot.core import SourceManager, RuntimeConfig
+from bilipy_bot.sources.napcat import NapcatConfig
 
 napcat_config = NapcatConfig(
     url="",  # NapCat WebSocket 地址
@@ -62,7 +62,7 @@ manager = SourceManager(config)
 ### 添加事件源
 
 ```python
-from bilipy_bot.napcat import NapcatSource
+from bilipy_bot.sources.napcat import NapcatSource
 
 napcat_source = manager.add_source(
     source_cls=NapcatSource,
@@ -75,9 +75,9 @@ napcat_id = napcat_source.uuid
 ### 事件订阅
 
 ```python
-from bilipy_bot.napcat import NapcatType
-from bilipy_bot.napcat.data import NapcatGroupMessageEvent, NapcatPrivateMessageEvent
-from bilipy_bot.event import Event
+from bilipy_bot.sources.napcat import NapcatType
+from bilipy_bot.sources.napcat.data import NapcatGroupMessageEvent, NapcatPrivateMessageEvent
+from bilipy_bot.core.event import Event
 
 @manager.subscribe(napcat_id, NapcatType.MESSAGE)
 async def handle_group_message(event: Event[NapcatGroupMessageEvent | NapcatPrivateMessageEvent]):
@@ -103,7 +103,7 @@ async def handle_group_message(event: Event[NapcatGroupMessageEvent | NapcatPriv
 
 ## 完整运行示例
 
-- [napcat](../../example/napcat_example.py)：napcat事件监听
+- [napcat](../../examples/napcat_example.py)：napcat事件监听
 
 ------
 

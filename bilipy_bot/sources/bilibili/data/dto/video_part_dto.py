@@ -1,10 +1,11 @@
 from typing import ClassVar
 
-from bilipy_bot.app.data import BaseDataModel
+from bilipy_bot.core.data import BaseDataModel
 
 
 class VideoPartDto(BaseDataModel):
     """视频分段数据DTO"""
+
     discriminator_value: ClassVar[str] = "video_part"  # 数据类型标识
 
     start_timestamp: int  # 开始时间戳

@@ -1,8 +1,8 @@
-from logging import getLogger
-from typing import Optional, Any, ClassVar
 import json
-from bilipy_bot.app.data import BaseDataModel
+from logging import getLogger
+from typing import Any, ClassVar, Optional
 
+from bilipy_bot.core.data import BaseDataModel
 
 _log = getLogger("DynamicDTO")
 
@@ -11,6 +11,7 @@ class AuthorDto(BaseDataModel):
     """
     作者信息DTO
     """
+
     uid: int  # UP主UID
     name: str  # UP主昵称
     face: str  # UP主头像URL
@@ -20,6 +21,7 @@ class StatDto(BaseDataModel):
     """
     动态统计信息DTO
     """
+
     comment_count: int = 0  # 评论数
     like_count: int = 0  # 点赞数
     forward_count: int = 0  # 转发数
@@ -29,6 +31,7 @@ class VideoDto(BaseDataModel):
     """
     视频信息DTO
     """
+
     av_id: str  # 视频AV号
     bv_id: str  # 视频BV号
     title: str  # 视频标题
@@ -44,6 +47,7 @@ class MusicDto(BaseDataModel):
     """
     音乐信息DTO
     """
+
     music_id: str  # 音乐ID
     title: str  # 音乐标题
     cover: str  # 音乐封面
@@ -55,6 +59,7 @@ class ArticleDto(BaseDataModel):
     """
     专栏信息DTO
     """
+
     title: str  # 专栏标题
     summary: str  # 专栏摘要
     has_more: bool  # 是否有更多内容
@@ -65,6 +70,7 @@ class LiveRcmdDto(BaseDataModel):
     """
     直播推荐信息DTO
     """
+
     room_id: int  # 直播间ID
     live_status: int  # 直播状态 1:直播中
     title: str  # 直播间标题
@@ -75,16 +81,17 @@ class LiveRcmdDto(BaseDataModel):
     parent_area_id: int  # 直播父分区ID
     parent_area_name: str  # 直播父分区
     live_start_time: int  # 开播时间戳
-    watched_num: Optional[int] = None  # 观看人数
-    switch: Optional[bool] = None  # 观看榜开关
-    text_small: Optional[str] = None  # 小文本
-    text_large: Optional[str] = None  # 大文本
+    watched_num: int | None = None  # 观看人数
+    switch: bool | None = None  # 观看榜开关
+    text_small: str | None = None  # 小文本
+    text_large: str | None = None  # 大文本
 
 
 class DynamicDTO(BaseDataModel):
     """
     动态消息DTO
     """
+
     discriminator_value: ClassVar[str] = "dynamic"  # 数据类型标识
 
     dynamic_id: str  # 动态ID
@@ -93,18 +100,18 @@ class DynamicDTO(BaseDataModel):
     pub_time: str  # 发布时间
     pub_ts: int  # 发布时间戳
     author: AuthorDto  # 作者信息
-    tag: Optional[str] = None  # 标签（如置顶）
-    text: Optional[str] = None  # 文字内容
-    pics_url: Optional[tuple[str, ...]] = None  # 图片列表
-    stat: Optional[StatDto] = None  # 统计信息
-    video: Optional[VideoDto] = None  # 视频信息
-    music: Optional[MusicDto] = None  # 音乐信息
-    article: Optional[ArticleDto] = None  # 专栏信息
-    live_rcmd: Optional[LiveRcmdDto] = None  # 直播推荐信息
-    forward_orig: Optional['DynamicDTO'] = None  # 转发的原动态
+    tag: str | None = None  # 标签（如置顶）
+    text: str | None = None  # 文字内容
+    pics_url: tuple[str, ...] | None = None  # 图片列表
+    stat: StatDto | None = None  # 统计信息
+    video: VideoDto | None = None  # 视频信息
+    music: MusicDto | None = None  # 音乐信息
+    article: ArticleDto | None = None  # 专栏信息
+    live_rcmd: LiveRcmdDto | None = None  # 直播推荐信息
+    forward_orig: Optional["DynamicDTO"] = None  # 转发的原动态
 
     @classmethod
-    def from_raw(cls, data: Optional[dict[Any, Any]]) -> "Optional[DynamicDTO]":
+    def from_raw(cls, data: dict[Any, Any] | None) -> "DynamicDTO | None":
         """
         从原始API数据构造DTO对象
         """
@@ -135,7 +142,7 @@ class DynamicDTO(BaseDataModel):
             author = {
                 "uid": author_info.get("mid", 0),
                 "name": author_info.get("name", ""),
-                "face": author_info.get("face", "")
+                "face": author_info.get("face", ""),
             }
 
             # 统计信息
@@ -145,7 +152,7 @@ class DynamicDTO(BaseDataModel):
                 stat = {
                     "comment_count": stat_info.get("comment", {}).get("count", 0),
                     "like_count": stat_info.get("like", {}).get("count", 0),
-                    "forward_count": stat_info.get("forward", {}).get("count", 0)
+                    "forward_count": stat_info.get("forward", {}).get("count", 0),
                 }
 
             # 标签（如置顶）
@@ -176,7 +183,7 @@ class DynamicDTO(BaseDataModel):
                     "duration_text": archive.get("duration_text", ""),
                     "dynamic_text": desc_info.get("text", "") if desc_info else "",
                     "play_count": stat_info_video.get("play"),
-                    "danmaku_count": stat_info_video.get("danmaku")
+                    "danmaku_count": stat_info_video.get("danmaku"),
                 }
 
             # 解析音乐信息
@@ -188,7 +195,7 @@ class DynamicDTO(BaseDataModel):
                     "title": music_info.get("title", ""),
                     "cover": music_info.get("cover", ""),
                     "label": music_info.get("label", ""),
-                    "dynamic_text": desc_info.get("text", "") if desc_info else ""
+                    "dynamic_text": desc_info.get("text", "") if desc_info else "",
                 }
 
             # 解析专栏信息
@@ -199,7 +206,7 @@ class DynamicDTO(BaseDataModel):
                     "title": opus.get("title", ""),
                     "summary": summary_info.get("text", ""),
                     "has_more": summary_info.get("has_more", False),
-                    "id": int(dynamic_id) if dynamic_id else 0
+                    "id": int(dynamic_id) if dynamic_id else 0,
                 }
 
             # 解析直播推荐信息
@@ -222,7 +229,7 @@ class DynamicDTO(BaseDataModel):
                     "watched_num": watched_show.get("num"),
                     "switch": watched_show.get("switch"),
                     "text_small": watched_show.get("text_small"),
-                    "text_large": watched_show.get("text_large")
+                    "text_large": watched_show.get("text_large"),
                 }
 
             # 解析转发信息
@@ -248,7 +255,7 @@ class DynamicDTO(BaseDataModel):
                 "music": music,
                 "article": article,
                 "live_rcmd": live_rcmd,
-                "forward_orig": forward_orig
+                "forward_orig": forward_orig,
             }
 
             return cls.model_validate(normalized_data)
@@ -258,7 +265,7 @@ class DynamicDTO(BaseDataModel):
             return None
 
     @classmethod
-    def from_list(cls, data_dict: list[dict[Any, Any]]) -> "list[Optional[DynamicDTO]]":
+    def from_list(cls, data_dict: list[dict[Any, Any]]) -> "list[DynamicDTO | None]":
         """
         从动态列表数据构造DTO对象列表
         """

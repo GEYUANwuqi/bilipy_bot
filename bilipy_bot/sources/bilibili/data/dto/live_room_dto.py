@@ -1,9 +1,9 @@
-from logging import getLogger
-from typing import Optional, Any, ClassVar
 import re
 from html import unescape
-from bilipy_bot.app.data import BaseDataModel
+from logging import getLogger
+from typing import Any, ClassVar
 
+from bilipy_bot.core.data import BaseDataModel
 
 _log = getLogger("LiveRoomDTO")
 
@@ -18,20 +18,21 @@ def _html2_text(text: str) -> str:
         text (str): 纯文本内容
     """
     # 将<br>标签替换为换行符
-    text = re.sub(r'<br\s*/?>', '\n', text)
+    text = re.sub(r"<br\s*/?>", "\n", text)
     # 去除其他HTML标签
-    text = re.sub(r'<[^>]*>', '', text)
+    text = re.sub(r"<[^>]*>", "", text)
     # 处理HTML实体
     text = unescape(text)
     # 处理多余的空白字符，但保留单个换行符
-    text = re.sub(r'[ \t]+', ' ', text)  # 将多个空格或制表符合并为单个空格
-    text = re.sub(r' *\n *', '\n', text)  # 去除换行符前后的空格
-    text = re.sub(r'\n+', '\n', text).strip()  # 合并多个换行符并去除首尾空白
+    text = re.sub(r"[ \t]+", " ", text)  # 将多个空格或制表符合并为单个空格
+    text = re.sub(r" *\n *", "\n", text)  # 去除换行符前后的空格
+    text = re.sub(r"\n+", "\n", text).strip()  # 合并多个换行符并去除首尾空白
     return text
 
 
 class RoomInfoDto(BaseDataModel):
     """直播间信息DTO"""
+
     uid: int  # 用户uid
     room_id: int  # 房间号
     title: str  # 直播间标题
@@ -51,6 +52,7 @@ class RoomInfoDto(BaseDataModel):
 
 class AnchorInfoDto(BaseDataModel):
     """主播信息DTO"""
+
     name: str  # 主播昵称
     face_url: str  # 主播头像url
     gender: str  # 主播性别
@@ -64,6 +66,7 @@ class AnchorInfoDto(BaseDataModel):
 
 class WatchedShowDto(BaseDataModel):
     """观看榜信息DTO"""
+
     switch: bool  # 观看榜开关
     num: int  # 观看人数/人气值
     text_small: str  # 小文本
@@ -72,21 +75,23 @@ class WatchedShowDto(BaseDataModel):
 
 class NoticeBoardDto(BaseDataModel):
     """公告栏信息DTO"""
+
     content: str  # 公告内容
     ctime: str  # 公告发布时间
 
 
 class LiveRoomDTO(BaseDataModel):
     """直播间数据DTO"""
+
     discriminator_value: ClassVar[str] = "live_room"  # 数据类型标识
 
     room_info: RoomInfoDto  # 直播间信息
     anchor_info: AnchorInfoDto  # 主播信息
     watched_show: WatchedShowDto  # 观看榜信息
-    notice_board: Optional[NoticeBoardDto] = None  # 公告栏信息
+    notice_board: NoticeBoardDto | None = None  # 公告栏信息
 
     @classmethod
-    def from_raw(cls, data: dict[Any, Any]) -> "Optional[LiveRoomDTO]":
+    def from_raw(cls, data: dict[Any, Any]) -> "LiveRoomDTO | None":
         """从原始API数据构造DTO对象"""
         try:
             # 直播间信息
@@ -109,7 +114,7 @@ class LiveRoomDTO(BaseDataModel):
                 "area_name": room_info_data.get("area_name", ""),
                 "area_id": room_info_data.get("area_id", 0),
                 "keyframe_url": room_info_data.get("keyframe", ""),
-                "online": room_info_data.get("online", 0)
+                "online": room_info_data.get("online", 0),
             }
 
             # 主播信息
@@ -128,7 +133,7 @@ class LiveRoomDTO(BaseDataModel):
                 "fanclub_num": medal_info.get("fansclub", 0),
                 "live_level": live_info.get("level", 0),
                 "live_score": live_info.get("score", 0),
-                "live_upgrade_score": live_info.get("upgrade_score", 0)
+                "live_upgrade_score": live_info.get("upgrade_score", 0),
             }
 
             # 观看榜信息
@@ -137,7 +142,7 @@ class LiveRoomDTO(BaseDataModel):
                 "switch": watched_show_data.get("switch", False),
                 "num": watched_show_data.get("num", 0),
                 "text_small": watched_show_data.get("text_small", ""),
-                "text_large": watched_show_data.get("text_large", "")
+                "text_large": watched_show_data.get("text_large", ""),
             }
 
             # 公告栏信息
@@ -146,7 +151,7 @@ class LiveRoomDTO(BaseDataModel):
             if notice_board_data:
                 notice_board = {
                     "content": notice_board_data.get("content", ""),
-                    "ctime": notice_board_data.get("ctime", "")
+                    "ctime": notice_board_data.get("ctime", ""),
                 }
 
             # 构造标准化字典后使用model_validate
@@ -154,7 +159,7 @@ class LiveRoomDTO(BaseDataModel):
                 "room_info": room_info,
                 "anchor_info": anchor_info,
                 "watched_show": watched_show,
-                "notice_board": notice_board
+                "notice_board": notice_board,
             }
 
             return cls.model_validate(normalized_data)

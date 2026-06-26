@@ -1,13 +1,14 @@
 import asyncio
 import json
-from typing import Optional, Any, Callable, Awaitable
-from logging import getLogger
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from logging import getLogger
+from typing import Any
 from uuid import uuid4
 
-from bilipy_bot.app.context import APIContext
-from bilipy_bot.app.api import BaseApi
-from bilipy_bot.utils import AsyncWebSocketClient, MessageType, ListenerId
+from bilipy_bot.core.api import BaseApi
+from bilipy_bot.core.context import APIContext
+from bilipy_bot.utils import AsyncWebSocketClient, ListenerId, MessageType
 
 _log = getLogger("NapcatApi")
 
@@ -23,9 +24,10 @@ class NapcatConfig:
         reconnect_attempts: 重连尝试次数
         receive_timeout: 接收超时时间（秒）
     """
+
     url: str
     """WebSocket 连接地址"""
-    token: Optional[str] = None
+    token: str | None = None
     """认证 Token（可选）"""
     heartbeat: float = 30.0
     """心跳间隔（秒）"""
@@ -56,16 +58,16 @@ class NapcatClient:
             headers=headers,
             heartbeat=napcat_config.heartbeat,
             reconnect_attempts=napcat_config.reconnect_attempts,
-            receive_timeout=napcat_config.receive_timeout
+            receive_timeout=napcat_config.receive_timeout,
         )
 
     def __init__(
         self,
         url: str,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         heartbeat: float = 30.0,
         reconnect_attempts: int = 5,
-        receive_timeout: float = 60.0
+        receive_timeout: float = 60.0,
     ):
         """初始化 Napcat 客户端
 
@@ -77,7 +79,7 @@ class NapcatClient:
             receive_timeout: 接收超时时间
         """
         self.url = url
-        self._handler: Optional[Callable[[dict[str, Any]], Awaitable[None]]] = None
+        self._handler: Callable[[dict[str, Any]], Awaitable[None]] | None = None
         self.timeout = receive_timeout
         self.client = AsyncWebSocketClient(
             uri=url,
@@ -85,10 +87,10 @@ class NapcatClient:
             headers=headers or {},
             heartbeat=heartbeat,
             reconnect_attempts=reconnect_attempts,
-            receive_timeout=receive_timeout
+            receive_timeout=receive_timeout,
         )
-        self._task: Optional[asyncio.Task] = None
-        self._listener_id: Optional[ListenerId] = None
+        self._task: asyncio.Task | None = None
+        self._listener_id: ListenerId | None = None
 
     def set_handler(self, handler: Callable[[dict[str, Any]], Awaitable[None]]):
         """设置消息处理函数
@@ -103,7 +105,9 @@ class NapcatClient:
     async def start(self):
         """启动客户端并创建监听器"""
         if not self._handler:
-            raise RuntimeError("消息处理函数未设置，请先调用 set_handler() 设置处理函数")
+            raise RuntimeError(
+                "消息处理函数未设置，请先调用 set_handler() 设置处理函数"
+            )
         await self.client.start()
         self._listener_id = await self.client.create_listener()
         self._task = asyncio.create_task(self._process_messages())
@@ -125,7 +129,7 @@ class NapcatClient:
         await self.client.stop()
         _log.info("Napcat client stopped")
 
-    async def send_request(self, message: dict) -> Optional[dict]:
+    async def send_request(self, message: dict) -> dict | None:
         """发送请求到服务器
 
         Args:
@@ -160,9 +164,15 @@ class NapcatClient:
             _log.debug(f"请求 {echo} 被取消")
             raise
         finally:
-            _ = await self.client.remove_listener(listener_id) if listener_id is not None else None
+            _ = (
+                await self.client.remove_listener(listener_id)
+                if listener_id is not None
+                else None
+            )
 
-    async def _get_message(self, listener_id: Optional[ListenerId] = None) -> tuple[Any, MessageType]:
+    async def _get_message(
+        self, listener_id: ListenerId | None = None
+    ) -> tuple[Any, MessageType]:
         """获取一条消息（阻塞）
         Returns:
             (消息内容, 消息类型) 元组
@@ -188,7 +198,9 @@ class NapcatClient:
                                 continue
                             _log.debug(data)
                             # noinspection PyCallingNonCallable
-                            await self._handler(data)  # post_type: ignore (运行时设置 handler)
+                            await self._handler(
+                                data
+                            )  # post_type: ignore (运行时设置 handler)
                         except json.JSONDecodeError:
                             _log.error(f"Failed to parse message: {message}")
                         except Exception as e:
@@ -197,7 +209,7 @@ class NapcatClient:
                         _log.warning("Received close message")
                         break
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # 超时是正常的，继续等待
                     continue
                 except Exception as e:
@@ -227,9 +239,7 @@ class NapcatApi(BaseApi):
             ctx: API 上下文
             config_key: 配置键
         """
-        return cls(
-            ctx.config.get_config(config_key)
-        )
+        return cls(ctx.config.get_config(config_key))
 
     def __init__(self, config: NapcatConfig):
         self.client = NapcatClient.create(config)
@@ -250,19 +260,20 @@ class NapcatApi(BaseApi):
         """获取客户端指标"""
         return self.client.client.get_metrics()
 
-    async def send_request(self, message: dict) -> Optional[dict]:
+    async def send_request(self, message: dict) -> dict | None:
         """发送请求到服务器"""
         return await self.client.send_request(message)
 
     # ================== 业务接口 ================== #
 
-    async def send_group_message(self, group_id: int, message: list[dict]) -> Optional[dict]:
+    async def send_group_message(
+        self, group_id: int, message: list[dict]
+    ) -> dict | None:
         """发送群消息"""
-        results = await self.send_request({
-            "action": "send_group_msg",
-            "params": {
-                "group_id": group_id,
-                "message": message
+        results = await self.send_request(
+            {
+                "action": "send_group_msg",
+                "params": {"group_id": group_id, "message": message},
             }
-        })
+        )
         return results

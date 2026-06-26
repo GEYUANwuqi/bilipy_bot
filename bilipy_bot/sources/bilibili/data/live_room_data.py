@@ -1,19 +1,20 @@
-from typing import Optional
 from dataclasses import dataclass
 
-from bilipy_bot.app.data import BaseDataMixin
+from bilipy_bot.core.data import BaseDataMixin
+
 from .dto import (
-    LiveRoomDTO,
-    RoomInfoDto,
     AnchorInfoDto,
-    WatchedShowDto,
+    LiveRoomDTO,
     NoticeBoardDto,
+    RoomInfoDto,
+    WatchedShowDto,
 )
 
 
 @dataclass(frozen=True)
 class RoomInfoData(BaseDataMixin):
     """直播间信息数据"""
+
     uid: int  # 用户uid
     room_id: int  # 房间号
     title: str  # 直播间标题
@@ -48,7 +49,7 @@ class RoomInfoData(BaseDataMixin):
             area_name=room_info.area_name,
             area_id=room_info.area_id,
             keyframe_url=room_info.keyframe_url,
-            online=room_info.online
+            online=room_info.online,
         )
 
     @property
@@ -60,6 +61,7 @@ class RoomInfoData(BaseDataMixin):
 @dataclass(frozen=True)
 class AnchorInfoData(BaseDataMixin):
     """主播信息数据"""
+
     name: str  # 主播昵称
     face_url: str  # 主播头像url
     gender: str  # 主播性别
@@ -82,13 +84,14 @@ class AnchorInfoData(BaseDataMixin):
             fanclub_num=anchor_info.fanclub_num,
             live_level=anchor_info.live_level,
             live_score=anchor_info.live_score,
-            live_upgrade_score=anchor_info.live_upgrade_score
+            live_upgrade_score=anchor_info.live_upgrade_score,
         )
 
 
 @dataclass(frozen=True)
 class WatchedShowData(BaseDataMixin):
     """观看榜信息数据"""
+
     switch: bool  # 观看榜开关
     num: int  # 观看人数/人气值
     text_small: str  # 小文本
@@ -101,32 +104,31 @@ class WatchedShowData(BaseDataMixin):
             switch=watched_show.switch,
             num=watched_show.num,
             text_small=watched_show.text_small,
-            text_large=watched_show.text_large
+            text_large=watched_show.text_large,
         )
 
 
 @dataclass(frozen=True)
 class NoticeBoardData(BaseDataMixin):
     """公告栏信息数据"""
+
     content: str  # 公告内容
     ctime: str  # 公告发布时间
 
     @classmethod
     def from_dto(cls, notice_board: NoticeBoardDto) -> "NoticeBoardData":
         """从NoticeBoardDto构造NoticeBoardData实例"""
-        return cls(
-            content=notice_board.content,
-            ctime=notice_board.ctime
-        )
+        return cls(content=notice_board.content, ctime=notice_board.ctime)
 
 
 @dataclass(frozen=True)
 class LiveRoomData(BaseDataMixin):
     """直播间数据"""
+
     room_info: RoomInfoData  # 直播间信息
     anchor_info: AnchorInfoData  # 主播信息
     watched_show: WatchedShowData  # 观看榜信息
-    notice_board: Optional[NoticeBoardData]  # 公告栏信息
+    notice_board: NoticeBoardData | None  # 公告栏信息
 
     @classmethod
     def from_dto(cls, dto: LiveRoomDTO) -> "LiveRoomData":
@@ -148,11 +150,13 @@ class LiveRoomData(BaseDataMixin):
         watched_show_data = WatchedShowData.from_dto(dto.watched_show)
 
         # 构造公告栏信息数据
-        notice_board_data = NoticeBoardData.from_dto(dto.notice_board) if dto.notice_board else None
+        notice_board_data = (
+            NoticeBoardData.from_dto(dto.notice_board) if dto.notice_board else None
+        )
 
         return cls(
             room_info=room_info_data,
             anchor_info=anchor_info_data,
             watched_show=watched_show_data,
-            notice_board=notice_board_data
+            notice_board=notice_board_data,
         )

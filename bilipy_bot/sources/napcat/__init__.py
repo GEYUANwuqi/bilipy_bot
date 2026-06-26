@@ -2,19 +2,19 @@ from .api import (
     NapcatApi,
     NapcatConfig,
 )
-from .type import (
-    NapcatType,
-)
 from .source import (
     NapcatSource,
 )
+from .types import (
+    NapcatType,
+)
 
 __all__ = [
-    # 事件源类
-    "NapcatSource",
     # API类
     "NapcatApi",
     "NapcatConfig",
+    # 事件源类
+    "NapcatSource",
     # 数据类型类
     "NapcatType",
 ]

@@ -1,16 +1,16 @@
-from typing import Any, Optional
 from logging import getLogger
+from typing import Any
 
-from bilipy_bot.app.source import BaseSource
-from bilipy_bot.sources.napcat.data import NapcatEvent
-from bilipy_bot.sources.napcat.api import (
+from bilipy_bot.core.event import Event
+from bilipy_bot.core.source import BaseSource
+
+from ..api import (
     NapcatApi,
 )
-from bilipy_bot.sources.napcat.type import (
+from ..data import NapcatEvent
+from ..types import (
     NapcatType,
 )
-from bilipy_bot.app.event import Event
-
 
 _log = getLogger("NapcatSource")
 
@@ -33,7 +33,7 @@ class NapcatSource(BaseSource):
         """处理接收到的消息."""
         post_type = message.get("post_type", "")
         napcat_type = NapcatType.get_type(post_type)
-        event: Optional[Event] = None
+        event: Event | None = None
 
         try:
             # 使用 BaseDataModel 的自动分发构造

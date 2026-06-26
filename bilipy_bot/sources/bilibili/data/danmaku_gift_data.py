@@ -1,8 +1,8 @@
-from typing import Optional
 from dataclasses import dataclass
 
-from bilipy_bot.app.data import BaseDataMixin
-from .dto import DanmakuGiftDTO, GiftMedalInfoDto, BlindGiftInfoDto
+from bilipy_bot.core.data import BaseDataMixin
+
+from .dto import BlindGiftInfoDto, DanmakuGiftDTO, GiftMedalInfoDto
 
 
 @dataclass(frozen=True)
@@ -10,6 +10,7 @@ class GiftMedalData(BaseDataMixin):
     """
     送礼用户粉丝牌数据
     """
+
     level: int  # 粉丝牌等级
     name: str  # 粉丝牌名称
     anchor_room_id: int  # 粉丝牌对应主播房间号
@@ -28,7 +29,7 @@ class GiftMedalData(BaseDataMixin):
             anchor_uname=medal.anchor_uname,
             guard_level=medal.guard_level,
             is_lighted=medal.is_lighted,
-            anchor_uid=medal.target_id
+            anchor_uid=medal.target_id,
         )
 
 
@@ -37,6 +38,7 @@ class BlindGiftData(BaseDataMixin):
     """
     盲盒礼物数据（从盲盒中开出的礼物信息）
     """
+
     blind_gift_config_id: int  # 盲盒配置ID
     original_gift_id: int  # 原始盲盒礼物ID
     original_gift_name: str  # 原始盲盒礼物名称
@@ -53,7 +55,7 @@ class BlindGiftData(BaseDataMixin):
             original_gift_name=blind_gift.original_gift_name,
             original_gift_price=blind_gift.original_gift_price,
             gift_action=blind_gift.gift_action,
-            gift_tip_price=blind_gift.gift_tip_price
+            gift_tip_price=blind_gift.gift_tip_price,
         )
 
 
@@ -62,6 +64,7 @@ class DanmakuGiftData(BaseDataMixin):
     """
     礼物消息数据
     """
+
     room_display_id: int  # 房间号
     room_real_id: int  # 房间真实ID
     gift_id: int  # 礼物ID
@@ -80,8 +83,8 @@ class DanmakuGiftData(BaseDataMixin):
     receiver_uname: str  # 收礼用户名（主播）
     receiver_face: str  # 收礼用户头像URL（主播）
     receiver_official_title: str  # 认证描述
-    medal: Optional[GiftMedalData]  # 粉丝牌信息
-    blind_gift: Optional[BlindGiftData]  # 盲盒礼物信息
+    medal: GiftMedalData | None  # 粉丝牌信息
+    blind_gift: BlindGiftData | None  # 盲盒礼物信息
     timestamp: int  # 发送时间戳
     is_first: bool  # 是否首次送礼
     combo_total_coin: int  # 连击总价值
@@ -99,7 +102,9 @@ class DanmakuGiftData(BaseDataMixin):
             DanmakuGiftData实例
         """
         medal_data = GiftMedalData.from_dto(dto.medal) if dto.medal else None
-        blind_gift_data = BlindGiftData.from_dto(dto.blind_gift) if dto.blind_gift else None
+        blind_gift_data = (
+            BlindGiftData.from_dto(dto.blind_gift) if dto.blind_gift else None
+        )
 
         return cls(
             room_display_id=dto.room_display_id,
@@ -126,5 +131,5 @@ class DanmakuGiftData(BaseDataMixin):
             is_first=dto.is_first,
             combo_total_coin=dto.combo_total_coin,
             gift_gif=dto.gift_info.gif,
-            gift_img=dto.gift_info.img_basic
+            gift_img=dto.gift_info.img_basic,
         )

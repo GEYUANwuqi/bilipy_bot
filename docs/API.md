@@ -59,12 +59,12 @@ class MyApiConfig:
 继承 `BaseApi` 并实现必要的方法：
 
 ```python
-from bilipy_bot.app.api import BaseApi
-from bilipy_bot.app.context import APIContext
+from bilipy_bot.core.api import BaseApi
+from bilipy_bot.core.context import APIContext
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bilipy_bot.app.context import APIContext
+    from bilipy_bot.core.context import APIContext
 
 class MyApi(BaseApi):
     """MyApi 实现"""
@@ -120,8 +120,8 @@ from logging import getLogger
 from dataclasses import dataclass
 from uuid import uuid4
 
-from bilipy_bot.app.context import APIContext
-from bilipy_bot.app.api import BaseApi
+from bilipy_bot.core.context import APIContext
+from bilipy_bot.core.api import BaseApi
 
 _log = getLogger("MyApi")
 
@@ -210,7 +210,7 @@ class MyApi(BaseApi):
 在事件源中使用 API：
 
 ```python
-from bilipy_bot.app.source import BaseSource
+from bilipy_bot.core.source import BaseSource
 
 class MySource(BaseSource):
 

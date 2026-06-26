@@ -38,7 +38,7 @@
 ### 运行时配置
 
 ```python
-from bilipy_bot.manager import SourceManager, RuntimeConfig
+from bilipy_bot.core import SourceManager, RuntimeConfig
 from bilibili_api import Credential
 
 credential = Credential(
@@ -65,7 +65,7 @@ manager = SourceManager(config)
 ### 添加事件源
 
 ```python
-from bilipy_bot.bilibili import BiliDynamicSource, BiliLiveSource
+from bilipy_bot.sources.bilibili import BiliDynamicSource, BiliLiveSource
 
 # 添加动态轮询事件源
 dynamic_source = manager.add_source(
@@ -91,9 +91,9 @@ live_id = live_source.uuid
 ### 事件订阅
 
 ```python
-from bilipy_bot.bilibili import DynamicType, LiveType
-from bilipy_bot.bilibili.data import DynamicData, LiveRoomData
-from bilipy_bot.event import Event
+from bilipy_bot.sources.bilibili import DynamicType, LiveType
+from bilipy_bot.sources.bilibili.data import DynamicData, LiveRoomData
+from bilipy_bot.core.event import Event
 
 @manager.subscribe(dynamic_id, DynamicType.ALL)
 async def handle_get_dynamic(event: Event[DynamicData]):
@@ -124,8 +124,8 @@ async def handle_live_open(event: Event[LiveRoomData]):
 
 ## 完整运行示例
 
-- [bilibili](../../example/manager_example.py)：B站动态/直播事件监听
-- [bilibili_danmaku](../../example/live_danmaku_example.py)：bilibili直播弹幕监听
+- [bilibili](../../examples/manager_example.py)：B站动态/直播事件监听
+- [bilibili_danmaku](../../examples/live_danmaku_example.py)：bilibili直播弹幕监听
 
 ------
 

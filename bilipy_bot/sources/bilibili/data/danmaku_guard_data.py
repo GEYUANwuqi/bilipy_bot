@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from bilipy_bot.app.data import BaseDataMixin
+from bilipy_bot.core.data import BaseDataMixin
+
 from .dto import DanmakuGuardDTO
 
 # 舰长等级名称映射
@@ -17,6 +18,7 @@ class DanmakuGuardData(BaseDataMixin):
     上舰事件数据
     guard_level: 舰长等级 (1=总督, 2=提督, 3=舰长)
     """
+
     room_display_id: int  # 房间号
     room_real_id: int  # 房间真实ID
     uid: int  # 用户UID

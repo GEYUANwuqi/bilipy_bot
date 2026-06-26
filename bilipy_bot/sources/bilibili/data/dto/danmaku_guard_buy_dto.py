@@ -1,6 +1,7 @@
 from logging import getLogger
-from typing import Optional, ClassVar
-from bilipy_bot.app.data import BaseDataModel
+from typing import ClassVar
+
+from bilipy_bot.core.data import BaseDataModel
 
 _log = getLogger("DanmakuGuardDTO")
 
@@ -10,6 +11,7 @@ class DanmakuGuardDTO(BaseDataModel):
     舰长事件 DTO
     guard_level: 舰长等级 (1=总督, 2=提督, 3=舰长)
     """
+
     discriminator_value: ClassVar[str] = "guard"  # 数据类型标识
 
     room_display_id: int  # 房间号
@@ -23,7 +25,7 @@ class DanmakuGuardDTO(BaseDataModel):
     gift_name: str  # 礼物名称（如"舰长"）
 
     @classmethod
-    def from_raw(cls, data: dict) -> "Optional[DanmakuGuardDTO]":
+    def from_raw(cls, data: dict) -> "DanmakuGuardDTO | None":
         """
         从原始API数据构造DTO对象
         """

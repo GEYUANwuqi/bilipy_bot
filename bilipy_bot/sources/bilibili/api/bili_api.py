@@ -1,14 +1,15 @@
-from bilibili_api import Credential
-from bilibili_api.user import User
-from bilibili_api.live import LiveRoom, LiveDanmaku
-from bilibili_api.dynamic import get_dynamic_page_info
-
-from bilipy_bot.sources.bilibili.data import DynamicData, LiveRoomData, get_max_id
-from bilipy_bot.sources.bilibili.data.dto import DynamicDTO, LiveRoomDTO
-from bilipy_bot.app.api import BaseApi
-
 from logging import getLogger
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
+
+from bilibili_api import Credential
+from bilibili_api.dynamic import get_dynamic_page_info
+from bilibili_api.live import LiveDanmaku, LiveRoom
+from bilibili_api.user import User
+
+from bilipy_bot.core.api import BaseApi
+
+from ..data import DynamicData, LiveRoomData, get_max_id
+from ..data.dto import DynamicDTO, LiveRoomDTO
 
 if TYPE_CHECKING:
     from bilipy_bot.app.context import APIContext
@@ -17,8 +18,7 @@ _log = getLogger("BilibiliApi")
 
 
 class BilibiliApi(BaseApi):
-
-    def __init__(self, credential: Optional[Credential]) -> None:
+    def __init__(self, credential: Credential | None) -> None:
         """初始化BilibiliApi客户端
         Args:
             credential: Optional[Credential]: B站用户凭证
@@ -33,12 +33,10 @@ class BilibiliApi(BaseApi):
             ctx: API 上下文
             config_key: 配置键
         """
-        return cls(
-            ctx.config.get_config(config_key)
-        )
+        return cls(ctx.config.get_config(config_key))
 
     @property
-    def credential(self) -> Optional[Credential]:
+    def credential(self) -> Credential | None:
         """获取B站用户凭证
         Returns:
             Optional[Credential]: B站用户凭证对象，如果未配置则返回None
@@ -54,8 +52,8 @@ class BilibiliApi(BaseApi):
         Returns:
             list[DynamicData]: 动态信息对象
         """
-        user = User(credential = self._credential, uid = uid)
-        dict_info = await user.get_dynamics_new(offset = offset)
+        user = User(credential=self._credential, uid=uid)
+        dict_info = await user.get_dynamics_new(offset=offset)
         if dict_info.get("items", None) is None or not dict_info.get("items"):
             raise ValueError("未获取到动态数据或者动态数据为不完整")
         info_dto = DynamicDTO.from_list(dict_info["items"])
@@ -70,7 +68,7 @@ class BilibiliApi(BaseApi):
         Returns:
             DynamicData: 动态信息对象
         """
-        user = User(credential = self._credential, uid = uid)
+        user = User(credential=self._credential, uid=uid)
         dict_info = await user.get_dynamics_new()
         max_id = get_max_id(dict_info)
         _log.debug(f"获取到最大时间戳的索引为'{max_id}'")
@@ -103,7 +101,7 @@ class BilibiliApi(BaseApi):
         Returns:
             LiveRoomData: 直播间信息对象
         """
-        live_room = LiveRoom(credential = self._credential, room_display_id = room_id)
+        live_room = LiveRoom(credential=self._credential, room_display_id=room_id)
         live = await live_room.get_room_info()
         dto = LiveRoomDTO.from_raw(live)
         if dto is None:
@@ -119,5 +117,5 @@ class BilibiliApi(BaseApi):
         Returns:
             LiveDanmaku: 直播间弹幕对象
         """
-        live_danmaku = LiveDanmaku(credential = self._credential, room_display_id = room_id)
+        live_danmaku = LiveDanmaku(credential=self._credential, room_display_id=room_id)
         return live_danmaku

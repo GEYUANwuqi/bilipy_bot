@@ -1,14 +1,14 @@
-from bilipy_bot.app.source import BaseSource
-from bilipy_bot.sources.bilibili.type import LiveType
-from bilipy_bot.app.event import Event
-from bilipy_bot.sources.bilibili.api import BilibiliApi
-from bilipy_bot.sources.bilibili.data import LiveRoomData
-from bilipy_bot.utils import DataPair
-from typing import Union, Optional
-import traceback
 import asyncio
+import traceback
 from logging import getLogger
 
+from bilipy_bot.core.event import Event
+from bilipy_bot.core.source import BaseSource
+from bilipy_bot.utils import DataPair
+
+from ..api import BilibiliApi
+from ..data import LiveRoomData
+from ..types import LiveType
 
 _log = getLogger("BiliLiveSource")
 
@@ -19,10 +19,12 @@ class BiliLiveSource(BaseSource):
     负责轮询B站直播状态并发布事件。
     """
 
-    def __init__(self,
-                 poll_interval: Union[float, int] = 20,
-                 watch_targets: Optional[list[int]] = None,
-                 config_key: str = "bilibili"):
+    def __init__(
+        self,
+        poll_interval: float | int = 20,
+        watch_targets: list[int] | None = None,
+        config_key: str = "bilibili",
+    ):
         """初始化直播事件源.
         Args:
             poll_interval: 轮询间隔时间（秒）
@@ -31,11 +33,11 @@ class BiliLiveSource(BaseSource):
         """
         super().__init__()
         self.config_key: str = config_key
-        self.poll_interval: Union[float, int] = poll_interval
+        self.poll_interval: float | int = poll_interval
         self._poll_num: int = 0
         self._room_list: list[int] = []
         self._live_data: dict[int, DataPair[LiveRoomData]] = {}
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         if watch_targets is not None:
             self.add_members(watch_targets)
 
@@ -91,7 +93,7 @@ class BiliLiveSource(BaseSource):
             else:
                 _log.warning(f"房间 '{room_id}' 不存在于监控列表中")
 
-    def set_poll_interval(self, interval: Union[float, int]) -> None:
+    def set_poll_interval(self, interval: float | int) -> None:
         """设置轮询间隔时间.
 
         Args:
@@ -120,7 +122,7 @@ class BiliLiveSource(BaseSource):
         """获取已完成的轮询次数."""
         return self._poll_num
 
-    async def _poll_data(self, room_id: int) -> Optional[LiveRoomData]:
+    async def _poll_data(self, room_id: int) -> LiveRoomData | None:
         """获取并更新直播数据.
 
         Args:

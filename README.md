@@ -29,25 +29,25 @@
 
 
 ## 运行项目示例
-- 目前项目提供了三个example
-    - [napcat](example/napcat_example.py)：napcat事件监听
-    - [bilibili](example/manager_example.py)：B站动态/直播事件监听
-    - [bilibili_danmaku](example/live_danmaku_example.py)：bilibili直播弹幕监听
+- 目前项目提供了三个示例
+    - [napcat](examples/napcat_example.py)：napcat事件监听
+    - [bilibili](examples/manager_example.py)：B站动态/直播事件监听
+    - [bilibili_danmaku](examples/live_danmaku_example.py)：bilibili直播弹幕监听
 
 
 ### 运行示例
  ```sh
- uv run example/napcat_example.py  # 对接napcat
- uv run example/manager_example.py  # 基于轮询的B站动态/直播事件推送
- uv run example/live_danmaku_example.py  # 基于ws的b站弹幕姬实现
+ uv run examples/napcat_example.py  # 对接napcat
+ uv run examples/manager_example.py  # 基于轮询的B站动态/直播事件推送
+ uv run examples/live_danmaku_example.py  # 基于ws的b站弹幕姬实现
  ```
 
 ------
 
 ## 各模块的详细说明
 
-1. [source 模块](bilipy_bot/app/source/README.md)
-2. [event 模块](bilipy_bot/app/event/README.md)
+1. [source 模块](bilipy_bot/core/source/README.md)
+2. [event 模块](bilipy_bot/core/event/README.md)
 3. [utils 模块](bilipy_bot/utils/README.md)
 4. [napcat 事件源](bilipy_bot/sources/napcat/README.md)
 5. [bilibili 事件源](bilipy_bot/sources/bilibili/README.md)

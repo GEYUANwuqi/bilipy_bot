@@ -1,60 +1,18 @@
-from .app import (
-    BotApp,
-)
-from .source import (
-    SourceManager,
-    BaseSource,
-    BaseSourceT,
-)
-from .context import (
-    AppContext,
-    APIContext,
-    RuntimeConfig,
-)
-from .event import (
-    Event,
-    EventBus,
-)
-from .api import (
-    BaseApi,
-    BaseApiT,
-)
-from .data import (
-    BaseDataMixin,
-    BaseDataT,
-    BaseDataModel,
-    AutoDispatchList,
-)
-from .type import (
-    BaseType,
-    BaseTypeT,
-)
-from .filter import (
-    BaseFilter,
-    AndFilter,
-    OrFilter,
-)
+"""bilipy_bot 应用入口模块.
+
+用户应该从这里导入需要的类，而不是直接从 core 导入。
+"""
+
+from bilipy_bot.core.event import Event
+
+from .bot_app import BotApp
+from .config import RuntimeConfig
 
 __all__ = [
-    'BotApp',
-    'SourceManager',
-    'AppContext',
-    'APIContext',
-    'RuntimeConfig',
-    'Event',
-    'EventBus',
-    # Base classes
-    'BaseSource',
-    'BaseSourceT',
-    'BaseApi',
-    'BaseApiT',
-    'BaseDataMixin',
-    'BaseDataT',
-    'BaseDataModel',
-    'AutoDispatchList',
-    'BaseType',
-    'BaseTypeT',
-    'BaseFilter',
-    'AndFilter',
-    'OrFilter',
+    # 应用主入口
+    "BotApp",
+    # 事件
+    "Event",
+    # 配置
+    "RuntimeConfig",
 ]

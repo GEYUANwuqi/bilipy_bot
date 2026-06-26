@@ -1,9 +1,12 @@
 from bilibili_api import Credential
 from bilibili_api.live import LiveRoom
+
 from bilipy_bot.sources.bilibili.data import LiveRoomData
 
 
-async def get_room_info(room_id: int, sessdata: str = "", file: bool = False) -> LiveRoomData:
+async def get_room_info(
+    room_id: int, sessdata: str = "", file: bool = False
+) -> LiveRoomData:
     """获取直播间信息
     Args:
         room_id (int): 直播间ID
@@ -14,21 +17,22 @@ async def get_room_info(room_id: int, sessdata: str = "", file: bool = False) ->
     """
 
     credential_uid = Credential(sessdata=sessdata)
-    live_room = LiveRoom(credential = credential_uid, room_display_id = room_id)
+    live_room = LiveRoom(credential=credential_uid, room_display_id=room_id)
     live = await live_room.get_room_info()
     info = LiveRoomData(live)
     if file:
         import json
         import os
-        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'live.json')
-        with open(file_path, 'w', encoding='utf-8') as f:
+
+        file_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "live.json"
+        )
+        with open(file_path, "w", encoding="utf-8") as f:
             json.dump(live, f, ensure_ascii=False, indent=4)
     return info
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import asyncio
-    asyncio.run(get_room_info(
-        room_id = 26498147,
-        sessdata = "",
-        file = True
-    ))
+
+    asyncio.run(get_room_info(room_id=26498147, sessdata="", file=True))

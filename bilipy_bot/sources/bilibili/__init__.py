@@ -1,22 +1,16 @@
-from .api import (
-    BilibiliApi
-)
-from .type import (
-    DanmakuType,
-    DynamicType,
-    LiveType
-)
+from .api import BilibiliApi
 from .source import (
+    BiliDanmakuSource,
     BiliDynamicSource,
     BiliLiveSource,
-    BiliDanmakuSource,
 )
+from .types import DanmakuType, DynamicType, LiveType
 
 __all__ = [
+    "BiliDanmakuSource",
     # 事件源类
     "BiliDynamicSource",
     "BiliLiveSource",
-    "BiliDanmakuSource",
     # API类
     "BilibiliApi",
     # 数据类型类

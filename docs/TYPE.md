@@ -61,7 +61,7 @@ BaseTypeT = TypeVar("BaseTypeT", bound=BaseType)
 继承 `BaseType` 并定义事件标签：
 
 ```python
-from bilipy_bot.app.type import BaseType
+from bilipy_bot.core.types import BaseType
 
 class MyType(BaseType):
     """我的事件类型枚举."""
@@ -76,7 +76,7 @@ class MyType(BaseType):
 在事件订阅和发布时使用标签：
 
 ```python
-from bilipy_bot.app.event import Event
+from bilipy_bot.core.event import Event
 
 # 发布事件
 event = Event(data=data, status=MyType.MESSAGE)
@@ -129,7 +129,7 @@ MyType.ALL.matches(MyType.MESSAGE)  # False
 以下是一个完整的 Type 适配示例，参考 [napcat_type](../bilipy_bot/sources/napcat/type/napcat_type.py)：
 
 ```python
-from bilipy_bot.app.type import BaseType
+from bilipy_bot.core.types import BaseType
 
 
 class NapcatType(BaseType):
@@ -173,7 +173,7 @@ class NapcatType(BaseType):
 当有多个事件源时，每个事件源应该定义自己的 Type 类：
 
 ```python
-from bilipy_bot.app.type import BaseType
+from bilipy_bot.core.types import BaseType
 
 
 # ========== B站事件类型 ==========

@@ -1,6 +1,7 @@
 from logging import getLogger
-from typing import Optional, ClassVar
-from bilipy_bot.app.data import BaseDataModel
+from typing import ClassVar
+
+from bilipy_bot.core.data import BaseDataModel
 
 _log = getLogger("DanmakuGiftDTO")
 
@@ -9,6 +10,7 @@ class BlindGiftInfoDto(BaseDataModel):
     """
     盲盒礼物信息（从盲盒中开出的礼物）
     """
+
     blind_gift_config_id: int  # 盲盒配置ID
     original_gift_id: int  # 原始盲盒礼物ID
     original_gift_name: str  # 原始盲盒礼物名称
@@ -21,6 +23,7 @@ class GiftMedalInfoDto(BaseDataModel):
     """
     送礼用户的粉丝牌信息
     """
+
     level: int  # 勋章等级
     name: str  # 勋章名称
     anchor_room_id: int  # 主播房间号
@@ -34,6 +37,7 @@ class GiftInfoDto(BaseDataModel):
     """
     礼物资源信息
     """
+
     img_basic: str  # 礼物基础图片URL
     gif: str  # 礼物动图URL
     webp: str  # 礼物webp图片URL
@@ -43,6 +47,7 @@ class GiftSenderDto(BaseDataModel):
     """
     送礼用户信息
     """
+
     uid: int  # 用户UID
     uname: str  # 用户名
     face: str  # 头像URL
@@ -54,6 +59,7 @@ class GiftReceiverDto(BaseDataModel):
     """
     收礼用户信息（主播）
     """
+
     uid: int  # 用户UID
     uname: str  # 用户名
     face: str  # 头像URL
@@ -64,6 +70,7 @@ class DanmakuGiftDTO(BaseDataModel):
     """
     礼物消息DTO
     """
+
     discriminator_value: ClassVar[str] = "danmaku_gift"  # 数据类型标识
 
     room_display_id: int  # 房间号
@@ -77,15 +84,15 @@ class DanmakuGiftDTO(BaseDataModel):
     action: str  # 动作描述（如"投喂"）
     sender: GiftSenderDto  # 送礼用户信息
     receiver: GiftReceiverDto  # 收礼用户信息（主播）
-    medal: Optional[GiftMedalInfoDto] = None  # 粉丝牌信息
-    gift_info: Optional[GiftInfoDto] = None  # 礼物资源信息
-    blind_gift: Optional[BlindGiftInfoDto] = None  # 盲盒礼物信息
+    medal: GiftMedalInfoDto | None = None  # 粉丝牌信息
+    gift_info: GiftInfoDto | None = None  # 礼物资源信息
+    blind_gift: BlindGiftInfoDto | None = None  # 盲盒礼物信息
     timestamp: int = 0  # 发送时间戳
     is_first: bool = False  # 是否首次送礼 (单次送礼, 无连击)
     combo_total_coin: int = 0  # 连击总价值
 
     @classmethod
-    def from_raw(cls, data: dict) -> "Optional[DanmakuGiftDTO]":
+    def from_raw(cls, data: dict) -> "DanmakuGiftDTO | None":
         """
         从原始API数据构造DTO对象
         """
@@ -102,7 +109,7 @@ class DanmakuGiftDTO(BaseDataModel):
                 "uname": gift_data.get("uname", ""),
                 "face": gift_data.get("face", ""),
                 "guard_level": gift_data.get("guard_level", 0),
-                "wealth_level": gift_data.get("wealth_level", 0)
+                "wealth_level": gift_data.get("wealth_level", 0),
             }
 
             # 收礼用户信息（主播）
@@ -112,7 +119,9 @@ class DanmakuGiftDTO(BaseDataModel):
                 "uid": receiver_uinfo.get("uid", 0),
                 "uname": receiver_base.get("name", ""),
                 "face": receiver_base.get("face", ""),
-                "official_title": receiver_base.get("official_info", {}).get("title", "")
+                "official_title": receiver_base.get("official_info", {}).get(
+                    "title", ""
+                ),
             }
 
             # 粉丝牌信息
@@ -126,7 +135,7 @@ class DanmakuGiftDTO(BaseDataModel):
                     "anchor_uname": medal_info.get("anchor_uname", ""),
                     "guard_level": medal_info.get("guard_level", 0),
                     "is_lighted": medal_info.get("is_lighted", 0),
-                    "target_id": medal_info.get("target_id", 0)
+                    "target_id": medal_info.get("target_id", 0),
                 }
 
             # 礼物资源信息
@@ -136,7 +145,7 @@ class DanmakuGiftDTO(BaseDataModel):
                 gift_info = {
                     "img_basic": gift_info_data.get("img_basic", ""),
                     "gif": gift_info_data.get("gif", ""),
-                    "webp": gift_info_data.get("webp", "")
+                    "webp": gift_info_data.get("webp", ""),
                 }
 
             # 盲盒礼物信息
@@ -144,12 +153,16 @@ class DanmakuGiftDTO(BaseDataModel):
             blind_gift_data = gift_data.get("blind_gift")
             if blind_gift_data:
                 blind_gift = {
-                    "blind_gift_config_id": blind_gift_data.get("blind_gift_config_id", 0),
+                    "blind_gift_config_id": blind_gift_data.get(
+                        "blind_gift_config_id", 0
+                    ),
                     "original_gift_id": blind_gift_data.get("original_gift_id", 0),
                     "original_gift_name": blind_gift_data.get("original_gift_name", ""),
-                    "original_gift_price": blind_gift_data.get("original_gift_price", 0),
+                    "original_gift_price": blind_gift_data.get(
+                        "original_gift_price", 0
+                    ),
                     "gift_action": blind_gift_data.get("gift_action", ""),
-                    "gift_tip_price": blind_gift_data.get("gift_tip_price", 0)
+                    "gift_tip_price": blind_gift_data.get("gift_tip_price", 0),
                 }
 
             # 构造标准化字典后使用model_validate
@@ -170,7 +183,7 @@ class DanmakuGiftDTO(BaseDataModel):
                 "blind_gift": blind_gift,
                 "timestamp": gift_data.get("timestamp", 0),
                 "is_first": gift_data.get("is_first", False),
-                "combo_total_coin": gift_data.get("combo_total_coin", 0)
+                "combo_total_coin": gift_data.get("combo_total_coin", 0),
             }
 
             return cls.model_validate(normalized_data)

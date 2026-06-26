@@ -93,7 +93,7 @@ class BaseDataModel(BaseModel, BaseDataMixin, metaclass=MetaDataModel):
 
 ```python
 from dataclasses import dataclass
-from bilipy_bot.app.data import BaseDataMixin
+from bilipy_bot.core.data import BaseDataMixin
 
 @dataclass(frozen=True)
 class UserData(BaseDataMixin):
@@ -122,7 +122,7 @@ class UserData(BaseDataMixin):
 
 ```python
 from typing import ClassVar
-from bilipy_bot.app.data import BaseDataModel
+from bilipy_bot.core.data import BaseDataModel
 
 class Event(BaseDataModel):
     """事件基类"""
@@ -156,7 +156,7 @@ event = Event.from_dict(raw_data)  # 返回 MessageEvent 实例
 
 ```python
 from typing import ClassVar
-from bilipy_bot.app.data import BaseDataModel
+from bilipy_bot.core.data import BaseDataModel
 
 class Event(BaseDataModel):
     """事件基类 - 第一层分发"""
@@ -207,7 +207,7 @@ event = Event.from_dict(raw_data)  # 返回 GroupMessageEvent 实例
 OneBot11 事件数据模型
 """
 from typing import ClassVar, Optional
-from bilipy_bot.app.data import BaseDataModel
+from bilipy_bot.core.data import BaseDataModel
 
 
 # ==================== 嵌套数据类 ====================
@@ -301,7 +301,7 @@ class GroupUploadNoticeEvent(NoticeEvent):
 ```python
 from dataclasses import dataclass
 from typing import Optional
-from bilipy_bot.app.data import BaseDataModel, BaseDataMixin
+from bilipy_bot.core.data import BaseDataModel, BaseDataMixin
 
 
 # ========== DTO 层（处理原始数据） ==========

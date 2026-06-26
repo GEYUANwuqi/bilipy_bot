@@ -1,21 +1,14 @@
 import asyncio
-from logging import getLogger, DEBUG, INFO
 import threading
+from logging import DEBUG, INFO, getLogger
 from typing import TYPE_CHECKING
 
-from bilipy_bot.app.source import BaseSource
-from bilipy_bot.app.event import Event
-from bilipy_bot.sources.bilibili import BilibiliApi, DanmakuType
-from bilipy_bot.sources.bilibili.data import (
-    DanmakuMsgData,
-    DanmakuGiftData,
-    DanmakuGuardData
-)
-from bilipy_bot.sources.bilibili.data.dto import (
-    DanmakuMsgDTO,
-    DanmakuGiftDTO,
-    DanmakuGuardDTO
-)
+from bilipy_bot.core.event import Event
+from bilipy_bot.core.source import BaseSource
+
+from .. import BilibiliApi, DanmakuType
+from ..data import DanmakuGiftData, DanmakuGuardData, DanmakuMsgData
+from ..data.dto import DanmakuGiftDTO, DanmakuGuardDTO, DanmakuMsgDTO
 
 if TYPE_CHECKING:
     from bilibili_api.live import LiveDanmaku
@@ -24,8 +17,9 @@ _log = getLogger("BiliDanmakuSource")
 
 
 class BiliDanmakuSource(BaseSource):
-
-    def __init__(self, room_id: list[int], debug: bool = False, config_key: str = "bilibili"):
+    def __init__(
+        self, room_id: list[int], debug: bool = False, config_key: str = "bilibili"
+    ):
         """初始化B站弹幕源
         Args:
             room_id: 房间号列表
@@ -35,13 +29,15 @@ class BiliDanmakuSource(BaseSource):
         super().__init__()
         self.config_key: str = config_key
         self.room_id: list[int] = room_id
-        self.danmaku_list: dict[int, "LiveDanmaku"] = {}
+        self.danmaku_list: dict[int, LiveDanmaku] = {}
         self.debug = debug
         self._loops: dict[int, asyncio.AbstractEventLoop] = {}
         self._threads: dict[int, threading.Thread] = {}
         self._main_loop: asyncio.AbstractEventLoop | None = None  # 主事件循环引用
 
-    def _run_room_thread(self, room_id: int, danmaku: "LiveDanmaku", ready: threading.Event) -> None:
+    def _run_room_thread(
+        self, room_id: int, danmaku: "LiveDanmaku", ready: threading.Event
+    ) -> None:
         """线程入口：为该房间创建独立事件循环，以 task 方式运行弹幕连接，loop.run_forever() 驱动。"""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -54,6 +50,7 @@ class BiliDanmakuSource(BaseSource):
                 ready.set()
                 if danmaku.get_status() == 2:
                     _log.info(f"房间 {room_id} 的弹幕姬已连接")
+
             try:
                 asyncio.get_event_loop().create_task(danmaku.connect())
                 _log.debug("等待房间 %d 的弹幕姬连接成功...", room_id)
@@ -61,6 +58,7 @@ class BiliDanmakuSource(BaseSource):
                 _log.error(f"房间 {room_id} 弹幕姬异常退出: {e}")
             finally:
                 ready.set()  # 防止异常时 ready 永远不被 set
+
         loop.create_task(_connect())
         loop.run_forever()
 
@@ -125,7 +123,9 @@ class BiliDanmakuSource(BaseSource):
         if t and t.is_alive():
             t.join(timeout=15)
             if t.is_alive():
-                _log.warning(f"房间 {room_id} 的线程未能在超时内退出，连接可能未完全断开")
+                _log.warning(
+                    f"房间 {room_id} 的线程未能在超时内退出，连接可能未完全断开"
+                )
             else:
                 _log.info(f"房间 {room_id} 的弹幕姬已暂停")
         self._threads.pop(room_id, None)
@@ -164,8 +164,7 @@ class BiliDanmakuSource(BaseSource):
             _log.error("主事件循环未初始化，无法发布事件")
             raise RuntimeError("主事件循环未初始化")
         asyncio.run_coroutine_threadsafe(
-            self.ctx.bus.publish(self.uuid, event),
-            self._main_loop
+            self.ctx.bus.publish(self.uuid, event), self._main_loop
         )
 
     @property
@@ -177,7 +176,7 @@ class BiliDanmakuSource(BaseSource):
         # 开播事件
         if not msg.get("data", {}).get("live_time", 0):
             # data.live_time不存在时不认为是开播事件
-            _log.debug(f"跳过不存在live_time字段的LIVE事件")
+            _log.debug("跳过不存在live_time字段的LIVE事件")
             return
         room_id = msg.get("room_display_id")
         info = await self.api.get_room_info(room_id)
@@ -205,5 +204,5 @@ class BiliDanmakuSource(BaseSource):
         dto_data = DanmakuGuardDTO.from_raw(msg)
         if dto_data is not None:
             danmaku_data = DanmakuGuardData.from_dto(dto_data)
-            event = Event(data = danmaku_data, status = DanmakuType.GUARD)
+            event = Event(data=danmaku_data, status=DanmakuType.GUARD)
             self._publish_to_main(event)

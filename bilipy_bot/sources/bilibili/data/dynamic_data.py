@@ -1,19 +1,20 @@
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
 
-from bilipy_bot.app.data import BaseDataMixin
+from bilipy_bot.core.data import BaseDataMixin
+
 from .dto import (
-    DynamicDTO,
+    ArticleDto,
     AuthorDto,
+    DynamicDTO,
+    LiveRcmdDto,
+    MusicDto,
     StatDto,
     VideoDto,
-    MusicDto,
-    ArticleDto,
-    LiveRcmdDto,
 )
 
 
-def get_max_id(date: dict) -> Optional[int]:
+def get_max_id(date: dict) -> int | None:
     """获取最新动态的索引ID
     Args:
         date (dict): 原始动态数据
@@ -32,7 +33,7 @@ def get_max_id(date: dict) -> Optional[int]:
         return None
 
     max_timestamp: int = 0
-    max_id: Optional[int] = None
+    max_id: int | None = None
 
     for index, item in enumerate(list_data):
         # 数据校验：检查 item 是否为字典
@@ -69,6 +70,7 @@ class AuthorData(BaseDataMixin):
     """
     作者信息数据
     """
+
     uid: int  # UP主UID
     name: str  # UP主昵称
     face: str  # UP主头像URL
@@ -93,6 +95,7 @@ class StatData(BaseDataMixin):
     """
     动态统计信息数据
     """
+
     comment_count: int  # 评论数
     like_count: int  # 点赞数
     forward_count: int  # 转发数
@@ -103,7 +106,7 @@ class StatData(BaseDataMixin):
         return cls(
             comment_count=stat.comment_count,
             like_count=stat.like_count,
-            forward_count=stat.forward_count
+            forward_count=stat.forward_count,
         )
 
 
@@ -112,6 +115,7 @@ class VideoData(BaseDataMixin):
     """
     视频信息数据
     """
+
     av_id: str  # 视频AV号
     bv_id: str  # 视频BV号
     title: str  # 视频标题
@@ -134,7 +138,7 @@ class VideoData(BaseDataMixin):
             duration_text=video.duration_text,
             dynamic_text=video.dynamic_text,
             play_count=video.play_count,
-            danmaku_count=video.danmaku_count
+            danmaku_count=video.danmaku_count,
         )
 
     @property
@@ -148,6 +152,7 @@ class MusicData(BaseDataMixin):
     """
     音乐信息数据
     """
+
     music_id: str  # 音乐ID
     title: str  # 音乐标题
     cover: str  # 音乐封面
@@ -162,7 +167,7 @@ class MusicData(BaseDataMixin):
             title=music.title,
             cover=music.cover,
             label=music.label,
-            dynamic_text=music.dynamic_text
+            dynamic_text=music.dynamic_text,
         )
 
     @property
@@ -176,6 +181,7 @@ class ArticleData(BaseDataMixin):
     """
     专栏信息数据
     """
+
     title: str  # 专栏标题
     summary: str  # 专栏摘要
     has_more: bool  # 是否有更多内容
@@ -188,7 +194,7 @@ class ArticleData(BaseDataMixin):
             title=article.title,
             summary=article.summary,
             has_more=article.has_more,
-            article_id=article.id
+            article_id=article.id,
         )
 
     @property
@@ -202,6 +208,7 @@ class LiveRcmdData(BaseDataMixin):
     """
     直播推荐信息数据
     """
+
     room_id: int  # 直播间ID
     live_status: int  # 直播状态 1:直播中
     title: str  # 直播间标题
@@ -212,10 +219,10 @@ class LiveRcmdData(BaseDataMixin):
     parent_area_id: int  # 直播父分区ID
     parent_area_name: str  # 直播父分区
     live_start_time: int  # 开播时间戳
-    watched_num: Optional[int]  # 观看人数
-    switch: Optional[bool]  # 观看榜开关
-    text_small: Optional[str]  # 小文本
-    text_large: Optional[str]  # 大文本
+    watched_num: int | None  # 观看人数
+    switch: bool | None  # 观看榜开关
+    text_small: str | None  # 小文本
+    text_large: str | None  # 大文本
 
     @classmethod
     def from_dto(cls, live_rcmd: LiveRcmdDto) -> "LiveRcmdData":
@@ -234,7 +241,7 @@ class LiveRcmdData(BaseDataMixin):
             watched_num=live_rcmd.watched_num,
             switch=live_rcmd.switch,
             text_small=live_rcmd.text_small,
-            text_large=live_rcmd.text_large
+            text_large=live_rcmd.text_large,
         )
 
     @property
@@ -248,21 +255,22 @@ class DynamicData(BaseDataMixin):
     """
     动态数据
     """
+
     dynamic_id: str  # 动态ID
     dynamic_type: str  # 动态类型
     visible: bool  # 动态显示状态(false时被折叠)
     pub_time: str  # 发布时间
     pub_ts: int  # 发布时间戳
     author: AuthorData  # 作者信息
-    stat: Optional[StatData]  # 统计信息
-    tag: Optional[str]  # 标签（如置顶）
-    text: Optional[str]  # 文字内容
-    pics_url: Optional[list[str]]  # 图片列表
-    video: Optional[VideoData]  # 视频信息
-    music: Optional[MusicData]  # 音乐信息
-    article: Optional[ArticleData]  # 专栏信息
-    live_rcmd: Optional[LiveRcmdData]  # 直播推荐信息
-    forward_orig: Optional['DynamicData']  # 转发的原动态
+    stat: StatData | None  # 统计信息
+    tag: str | None  # 标签（如置顶）
+    text: str | None  # 文字内容
+    pics_url: list[str] | None  # 图片列表
+    video: VideoData | None  # 视频信息
+    music: MusicData | None  # 音乐信息
+    article: ArticleData | None  # 专栏信息
+    live_rcmd: LiveRcmdData | None  # 直播推荐信息
+    forward_orig: Optional["DynamicData"]  # 转发的原动态
 
     @classmethod
     def from_dto(cls, dto: DynamicDTO) -> "DynamicData":
@@ -299,8 +307,8 @@ class DynamicData(BaseDataMixin):
             dynamic_id=dto.dynamic_id,
             dynamic_type=dto.dynamic_type,
             visible=dto.visible,
-            pub_time = dto.pub_time,
-            pub_ts = dto.pub_ts,
+            pub_time=dto.pub_time,
+            pub_ts=dto.pub_ts,
             author=author_data,
             stat=stat_data,
             tag=dto.tag,
@@ -310,7 +318,7 @@ class DynamicData(BaseDataMixin):
             music=music_data,
             article=article_data,
             live_rcmd=live_rcmd_data,
-            forward_orig=forward_orig_data
+            forward_orig=forward_orig_data,
         )
 
     @property

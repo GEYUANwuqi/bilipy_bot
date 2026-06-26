@@ -1,6 +1,7 @@
 from logging import getLogger
-from typing import Optional, ClassVar
-from bilipy_bot.app.data import BaseDataModel
+from typing import ClassVar
+
+from bilipy_bot.core.data import BaseDataModel
 
 _log = getLogger("DanmakuMsgDTO")
 
@@ -12,6 +13,7 @@ class MedalInfoDto(BaseDataModel):
         如果当前直播间或者用户开启了"优先展示当前直播间的粉丝勋章
         那么在该直播间无法获取到用户佩戴的其他主播的勋章信息"
     """
+
     level: int  # 勋章等级
     name: str  # 勋章名称
     anchor_name: str  # 主播名称
@@ -24,27 +26,29 @@ class UserInfoDto(BaseDataModel):
     """
     用户基本信息
     """
+
     uid: int  # 用户UID
     username: str  # 用户名
     user_level: int  # 用户等级
-    face: Optional[str] = None  # 头像URL
+    face: str | None = None  # 头像URL
 
 
 class DanmakuMsgDTO(BaseDataModel):
     """
     弹幕消息DTO
     """
+
     discriminator_value: ClassVar[str] = "danmaku_msg"  # 数据类型标识
 
     room_display_id: int  # 房间号
     room_real_id: int  # 房间真实ID
     message: str  # 弹幕内容
     user: UserInfoDto  # 用户信息
-    medal: Optional[MedalInfoDto] = None  # 粉丝牌信息
+    medal: MedalInfoDto | None = None  # 粉丝牌信息
     timestamp: int = 0  # 发送时间戳
 
     @classmethod
-    def from_raw(cls, data: dict) -> "Optional[DanmakuMsgDTO]":
+    def from_raw(cls, data: dict) -> "DanmakuMsgDTO | None":
         """
         从原始API数据构造DTO对象
         注意: 由于弹幕数据格式特殊(数组形式), 需要先转换为字典格式
@@ -89,7 +93,7 @@ class DanmakuMsgDTO(BaseDataModel):
                     "anchor_name": medal_data[2] if len(medal_data) > 2 else "",
                     "room_id": medal_data[3] if len(medal_data) > 3 else 0,
                     "is_light": medal_data[11] if len(medal_data) > 11 else 0,
-                    "anchor_uid": medal_data[12] if len(medal_data) > 12 else 0
+                    "anchor_uid": medal_data[12] if len(medal_data) > 12 else 0,
                 }
 
             # 提取时间戳 info[9].ts
@@ -106,10 +110,10 @@ class DanmakuMsgDTO(BaseDataModel):
                     "uid": uid,
                     "username": username,
                     "user_level": user_level,
-                    "face": face
+                    "face": face,
                 },
                 "medal": medal_info,
-                "timestamp": timestamp
+                "timestamp": timestamp,
             }
 
             return cls.model_validate(normalized_data)

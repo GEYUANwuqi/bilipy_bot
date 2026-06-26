@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from bilipy_bot.app.data import BaseDataMixin
+from bilipy_bot.core.data import BaseDataMixin
+
 from .dto import (
     VideoPartDto,
 )
@@ -11,6 +12,7 @@ class VideoPartData(BaseDataMixin):
     """
     视频字幕数据
     """
+
     start_timestamp: int  # 开始时间戳
     end_timestamp: int  # 结束时间戳
     content: str  # 字幕内容
@@ -38,7 +40,7 @@ class VideoPartData(BaseDataMixin):
             VideoPartData实例
         """
         return cls(
-            start_timestamp = dto.start_timestamp,
-            end_timestamp = dto.end_timestamp,
-            content = dto.content,
+            start_timestamp=dto.start_timestamp,
+            end_timestamp=dto.end_timestamp,
+            content=dto.content,
         )

@@ -13,24 +13,23 @@ async def get_video_info(bv_id: str, sessdata: str, file: bool = False) -> dict:
     """
 
     credential_uid = Credential(sessdata=sessdata)
-    video = Video(credential = credential_uid, bvid = bv_id)
+    video = Video(credential=credential_uid, bvid=bv_id)
     info = await video.get_info()
     if file:
         import json
         import os
-        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'video_info.json')
-        with open(file_path, 'w', encoding='utf-8') as f:
+
+        file_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "video_info.json"
+        )
+        with open(file_path, "w", encoding="utf-8") as f:
             json.dump(info, f, ensure_ascii=False, indent=4)
     else:
         print(info)
     return info
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import asyncio
-    asyncio.run(
-        get_video_info(
-        bv_id = "BV1w6BDBkEoD",
-        sessdata = "",
-        file = True
-        )
-    )
+
+    asyncio.run(get_video_info(bv_id="BV1w6BDBkEoD", sessdata="", file=True))
