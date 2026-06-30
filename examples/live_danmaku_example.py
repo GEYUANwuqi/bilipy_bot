@@ -30,10 +30,10 @@ _log = getLogger("BILIBILI")
 # 创建 BotApp（自动加载 config.yaml）
 app = BotApp()
 
-danmaku_source = app.add_source(
-    source_cls=BiliDanmakuSource, room_id=[26498147, 22758221]
-)
-danmaku_id = danmaku_source.uuid
+app.add_source(source_cls=BiliDanmakuSource, room_id=[26498147, 22758221])
+source = app.get_source(BiliDanmakuSource)
+assert source is not None
+danmaku_id = source.uuid
 
 
 @app.subscribe(danmaku_id, DanmakuType.OPEN)

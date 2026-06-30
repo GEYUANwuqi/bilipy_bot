@@ -1,5 +1,5 @@
 from logging import getLogger
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 from uuid import UUID
 
 from bilipy_bot.core.source import BaseSource, BaseSourceT
@@ -101,16 +101,47 @@ class SourceManager:
             _log.warning(f"事件源 {source_id} 不存在")
         return source
 
-    def get_source(self, source_id: UUID) -> BaseSource | None:
+    @overload
+    def get_source(self, source: UUID) -> BaseSource | None: ...
+
+    @overload
+    def get_source(
+        self, source: type[BaseSourceT], config_key: str | None = None
+    ) -> BaseSourceT | None: ...
+
+    def get_source(
+        self,
+        source: type[BaseSource] | UUID,
+        config_key: str | None = None,
+    ) -> BaseSource | None:
         """获取事件源.
 
+        支持三种查找方式：
+
+        - ``get_source(source_id)`` — 按 UUID 查找
+        - ``get_source(source_cls)`` — 按类型查找（单一实例时最常用）
+        - ``get_source(source_cls, config_key)`` — 按类型 + 配置键查找（同源多实例时区分）
+
         Args:
-            source_id: 事件源的 UUID
+            source: 事件源类或 UUID
+            config_key: 配置键，可选。传入时做精确匹配，否则返回该类型的第一个实例
 
         Returns:
             事件源实例，如果不存在则返回 None
         """
-        return self._sources.get(source_id)
+        # 按 UUID 查找
+        if isinstance(source, UUID):
+            return self._sources.get(source)
+
+        # 此时 source 一定是 type[BaseSource]
+        source_cls: type[BaseSource] = source
+
+        # 按类型查找（可选精确匹配 config_key）
+        for inst in self._sources.values():
+            if isinstance(inst, source_cls):
+                if config_key is None or inst.config_key == config_key:
+                    return inst
+        return None
 
     # ============ 生命周期 ============ #
 

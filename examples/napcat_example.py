@@ -10,10 +10,7 @@ import asyncio
 from logging import getLogger
 
 from bilipy_bot.app import BotApp, Event
-from bilipy_bot.sources.napcat import (
-    NapcatSource,
-    NapcatType,
-)
+from bilipy_bot.sources.napcat import NapcatApi, NapcatSource, NapcatType
 from bilipy_bot.sources.napcat.data import (
     NapcatEvent,
     NapcatFriendRequestEvent,
@@ -44,12 +41,15 @@ _log = getLogger("NAPCAT")
 app = BotApp()
 
 # ============ 创建事件源 ============ #
-# 注册 NapCat 事件源并获取 UUID
-napcat_source = app.add_source(
+# 注册 NapCat 事件源
+app.add_source(
     source_cls=NapcatSource,
 )
+# 通过类型获取事件源的 UUID（单一实例时无需传 config_key）
+napcat_source = app.get_source(NapcatSource)
+assert napcat_source is not None
 napcat_id = napcat_source.uuid
-
+napcat_api = app.get_api(NapcatApi, "napcat")
 
 # ============ 订阅群消息事件 ============ #
 
@@ -88,12 +88,12 @@ async def handle_command(
         if command == "/help":
             _log.info("  → 执行帮助命令")
             # 这里可以调用 API 发送回复
-            # await napcat_source.api.send_group_message(...)
+            # await napcat_api.send_group_message(...)
 
         elif command == "/status":
             _log.info("  → 执行状态命令")
             # 获取客户端指标
-            metrics = napcat_source.api.get_metrics()
+            metrics = napcat_api.get_metrics()
             _log.info(f"  → 客户端指标: {metrics}")
 
 

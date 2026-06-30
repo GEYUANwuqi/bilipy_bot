@@ -36,14 +36,17 @@ _log = getLogger("BILIBILI")
 app = BotApp()
 
 # ============ 创建事件源 ============ #
-# 注册事件源并获取 UUID
-dynamic_source = app.add_source(
+# 注册事件源，无需保存返回值
+app.add_source(
     source_cls=BiliDynamicSource, watch_targets=[1802011210], poll_interval=100
 )
+app.add_source(source_cls=BiliLiveSource, watch_targets=[22758221], poll_interval=100)
+# 通过类型获取事件源的 UUID（单一实例时无需传 config_key）
+dynamic_source = app.get_source(BiliDynamicSource)
+assert dynamic_source is not None
 dynamic_id = dynamic_source.uuid
-live_source = app.add_source(
-    source_cls=BiliLiveSource, watch_targets=[22758221], poll_interval=100
-)
+live_source = app.get_source(BiliLiveSource)
+assert live_source is not None
 live_id = live_source.uuid
 
 
@@ -104,6 +107,9 @@ async def handle_live_close(event: Event[LiveRoomData]):
 
 async def main():
     _log.info("启动 BotApp 监控...")
+    dynamic_source = app.get_source(BiliDynamicSource)
+    live_source = app.get_source(BiliLiveSource)
+    assert dynamic_source is not None and live_source is not None
     _log.info(f"动态监控轮询间隔: {dynamic_source.poll_interval} 秒")
     _log.info(f"直播监控轮询间隔: {live_source.poll_interval} 秒")
 

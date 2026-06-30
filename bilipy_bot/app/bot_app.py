@@ -1,12 +1,12 @@
 from collections.abc import Callable, Coroutine
 from logging import getLogger
-from typing import Any
+from typing import Any, overload
 from uuid import UUID
 
 from bilipy_bot.core.api import BaseApiT
 from bilipy_bot.core.context import AppContext
 from bilipy_bot.core.event import Event, EventBus
-from bilipy_bot.core.source import BaseSourceT
+from bilipy_bot.core.source import BaseSource, BaseSourceT
 from bilipy_bot.core.types import BaseType
 
 from .config import RuntimeConfig
@@ -105,9 +105,24 @@ class BotApp:
         """移除事件源."""
         return self._manager.remove_source(source_id)
 
-    def get_source(self, source_id: UUID):
-        """获取事件源."""
-        return self._manager.get_source(source_id)
+    @overload
+    def get_source(self, source: UUID) -> BaseSource | None: ...
+
+    @overload
+    def get_source(
+        self, source: type[BaseSourceT], config_key: str | None = None
+    ) -> BaseSourceT | None: ...
+
+    def get_source(self, source: Any, config_key: Any = None) -> Any:  # type: ignore[misc]
+        """获取事件源.
+
+        支持三种查找方式：
+
+        - ``app.get_source(source_id)`` — 按 UUID 查找
+        - ``app.get_source(source_cls)`` — 按类型查找（单一实例时最常用）
+        - ``app.get_source(source_cls, config_key)`` — 按类型 + 配置键查找（同源多实例时区分）
+        """
+        return self._manager.get_source(source, config_key)
 
     # ============ API 访问（委托 APIContext）============ #
 

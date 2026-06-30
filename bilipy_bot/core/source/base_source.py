@@ -17,7 +17,10 @@ class BaseSource(ABC):
     Attributes:
         uuid: 唯一标识符，由 SourceManager 内部管理
         running: 运行状态
+        config_key: 配置键，子类覆盖此类属性作为默认值
     """
+
+    config_key: str = ""
 
     def __init__(self, uuid: UUID | None = None, **kwargs):
         """初始化事件源.
@@ -27,6 +30,7 @@ class BaseSource(ABC):
         """
         self.uuid: UUID = uuid or uuid4()
         self.running: bool = False
+        self.config_key: str = kwargs.get("config_key", "")
         self._ctx: AppContext | None = None
 
     @abstractmethod
