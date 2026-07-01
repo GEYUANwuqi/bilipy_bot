@@ -23,6 +23,8 @@ class EventBus:
         """初始化事件总线."""
         # 使用订阅组管理订阅者
         self._subscriber_group = SubscriberGroup()
+        # 持有 create_task 返回的 Task 强引用，防止 GC 回收未完成的任务
+        self._background_tasks: set[asyncio.Task] = set()
 
     def _wrap_callback(
         self, func: Callable
@@ -110,8 +112,10 @@ class EventBus:
             try:
                 if not event.status.matches(subscriber.status_filter):
                     continue
-                # 异步执行回调
-                asyncio.create_task(subscriber.callback(event))
+                # 异步执行回调，保留强引用防止 GC 回收
+                task = asyncio.create_task(subscriber.callback(event))
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
                 _log.debug(
                     f"触发订阅者 (uuid={uuid}, "
                     f"callback={subscriber.callback.__name__}, status={event.status.value})"
