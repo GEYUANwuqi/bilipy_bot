@@ -14,7 +14,7 @@ class StubSource(BaseSource):
     """Minimal concrete source for testing SourceManager."""
 
     def __init__(self, uuid: UUID | None = None, **kwargs):
-        super().__init__(uuid=uuid)
+        super().__init__(uuid=uuid, **kwargs)
         self.started = False
         self.stopped = False
         self.start_exception: Exception | None = None
@@ -27,6 +27,16 @@ class StubSource(BaseSource):
 
     async def stop(self):
         self.stopped = True
+        self.running = False
+
+
+class OtherSource(BaseSource):
+    """A second source type for type-lookup tests."""
+
+    async def start(self):
+        self.running = True
+
+    async def stop(self):
         self.running = False
 
 
@@ -163,3 +173,60 @@ class TestSourceManager:
         await manager.stop()
         assert source.stopped
         assert not source.running
+
+    # ============ get_source 按类型查找（commit 2772c42）============
+
+    def test_get_source_by_uuid(self, manager):
+        """get_source(UUID) 应返回对应事件源."""
+        source = manager.add_source(StubSource)
+        assert manager.get_source(source.uuid) is source
+
+    def test_get_source_by_uuid_nonexistent(self, manager):
+        """get_source(UUID) 不存在的 UUID 应返回 None."""
+        assert manager.get_source(UUID("00000000-0000-0000-0000-000000000000")) is None
+
+    def test_get_source_by_type(self, manager):
+        """get_source(type) 应返回该类型的唯一实例."""
+        source = manager.add_source(StubSource)
+        assert manager.get_source(StubSource) is source
+
+    def test_get_source_by_type_nonexistent(self, manager):
+        """get_source(type) 无该类型实例时应返回 None."""
+        assert manager.get_source(StubSource) is None
+
+    def test_get_source_by_type_returns_first(self, manager):
+        """get_source(type) 有多个同类型实例时返回第一个."""
+        source1 = manager.add_source(StubSource)
+        manager.add_source(StubSource)  # 第二个实例
+        # 返回第一个添加的
+        assert manager.get_source(StubSource) is source1
+
+    def test_get_source_by_type_distinguishes_types(self, manager):
+        """get_source(type) 在不同类型间应正确区分."""
+        stub = manager.add_source(StubSource)
+        other = manager.add_source(OtherSource)
+        assert manager.get_source(StubSource) is stub
+        assert manager.get_source(OtherSource) is other
+
+    def test_get_source_by_type_with_config_key(self, manager):
+        """get_source(type, config_key) 应匹配 config_key."""
+        source = manager.add_source(StubSource, config_key="mykey")
+        assert manager.get_source(StubSource, "mykey") is source
+
+    def test_get_source_by_type_with_config_key_nonexistent(self, manager):
+        """get_source(type, config_key) config_key 不匹配时应返回 None."""
+        manager.add_source(StubSource, config_key="key_a")
+        assert manager.get_source(StubSource, "key_b") is None
+
+    def test_get_source_by_type_config_key_among_multi(self, manager):
+        """get_source(type, config_key) 在同类型多实例中应精确匹配."""
+        manager.add_source(StubSource, config_key="key_a")
+        target = manager.add_source(StubSource, config_key="key_b")
+        manager.add_source(StubSource, config_key="key_c")
+        assert manager.get_source(StubSource, "key_b") is target
+
+    def test_get_source_by_type_without_config_key_among_multi(self, manager):
+        """get_source(type) 在多实例中返回第一个，不受 config_key 影响."""
+        source1 = manager.add_source(StubSource, config_key="key_a")
+        manager.add_source(StubSource, config_key="key_b")
+        assert manager.get_source(StubSource) is source1

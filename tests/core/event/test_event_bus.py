@@ -294,3 +294,54 @@ class TestEventBus:
         await asyncio.sleep(0)
         assert not pattern_received.empty()
         assert enum_received.empty()
+
+    # ============ 防止 Task 被 GC（commit 9acbdb3）============
+
+    @pytest.mark.asyncio
+    async def test_background_task_tracked_and_cleaned(self, fixed_uuid: UUID):
+        """publish 后回调 task 被 _background_tasks 跟踪，完成后自动移除."""
+        bus = EventBus()
+        started = asyncio.Event()
+        can_finish = asyncio.Event()
+
+        async def cb(event):
+            started.set()
+            await can_finish.wait()
+
+        bus.add_subscriber(fixed_uuid, cb, BusType.EVENT_A)
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await started.wait()
+
+        # task 尚未完成，应被强引用
+        assert len(bus._background_tasks) == 1
+
+        # 让回调完成
+        can_finish.set()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+        # task 已完成，应从 _background_tasks 移除
+        assert len(bus._background_tasks) == 0
+
+    @pytest.mark.asyncio
+    async def test_multiple_publish_tracks_separate_tasks(self, fixed_uuid: UUID):
+        """多次 publish 应各自独立跟踪 task."""
+        bus = EventBus()
+        can_finish = asyncio.Event()
+
+        async def cb(event):
+            await can_finish.wait()
+
+        bus.add_subscriber(fixed_uuid, cb, BusType.EVENT_A)
+
+        # 连续发布两个事件
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+
+        # 两个 task 都应在 _background_tasks 中
+        assert len(bus._background_tasks) == 2
+
+        can_finish.set()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert len(bus._background_tasks) == 0
