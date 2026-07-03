@@ -27,34 +27,121 @@ __version__ = "2.1.1-dev"
 # NOTE: 这里保存的是针对不同目标（console/file）和不同日志级别的消息格式模板
 LOG_MESSAGE_FORMATS = {
     "console": {
-        "DEBUG": f"{Color.CYAN}[%(asctime)s.%(msecs)s]{Color.RESET} "
-        f"{Color.BLUE}%(colored_levelname)-8s{Color.RESET} "
-        f"{Color.GRAY}[%(threadName)s|%(processName)s]{Color.RESET} "
-        f"{Color.MAGENTA}%(name)s{Color.RESET} "
-        f"{Color.YELLOW}%(filename)s:%(lineno)d %(funcName)s{Color.RESET} "
-        f"{Color.RESET}| %(message)s{Color.RESET}",
-        "INFO": f"{Color.CYAN}[%(asctime)s]{Color.RESET} "
-        f"{Color.GREEN}%(colored_levelname)-8s{Color.RESET} "
-        f"{Color.MAGENTA}%(name)s{Color.RESET} ➜ "
-        f"{Color.RESET}%(message)s{Color.RESET}",
-        "WARNING": f"{Color.CYAN}[%(asctime)s]{Color.RESET} "
-        f"{Color.YELLOW}%(colored_levelname)-8s{Color.RESET} "
-        f"{Color.MAGENTA}%(name)s{Color.RESET} "
-        f"{Color.YELLOW}➜{Color.RESET} "
-        f"{Color.RESET}%(message)s{Color.RESET}",
-        "ERROR": f"{Color.CYAN}[%(asctime)s]{Color.RESET} "
-        f"{Color.RED}%(colored_levelname)-8s{Color.RESET} "
-        f"{Color.GRAY}[%(filename)s]{Color.RESET}"
-        f"{Color.MAGENTA}%(name)s:%(lineno)d{Color.RESET} "
-        f"{Color.RED}➜{Color.RESET} "
-        f"{Color.RESET}%(message)s{Color.RESET}",
-        "CRITICAL": f"{Color.CYAN}[%(asctime)s]{Color.RESET} "
-        f"{Color.RED}{Color.BOLD}%(colored_levelname)-8s{Color.RESET} "
-        f"{Color.GRAY}{{%(module)s}}{Color.RESET}"
-        f"{Color.MAGENTA}[%(filename)s]{Color.RESET}"
-        f"{Color.MAGENTA}%(name)s:%(lineno)d{Color.RESET} "
-        f"{Color.RED}➜{Color.RESET} "
-        f"{Color.RESET}%(message)s{Color.RESET}",
+        "DEBUG": (
+            Color.CYAN
+            + "[%(asctime)s.%(msecs)s]"
+            + Color.RESET
+            + " "
+            + Color.BLUE
+            + "%(colored_levelname)-8s"
+            + Color.RESET
+            + " "
+            + Color.GRAY
+            + "[%(threadName)s|%(processName)s]"
+            + Color.RESET
+            + " "
+            + Color.MAGENTA
+            + "%(name)s"
+            + Color.RESET
+            + " "
+            + Color.YELLOW
+            + "%(filename)s:%(lineno)d %(funcName)s"
+            + Color.RESET
+            + " "
+            + Color.RESET
+            + "| %(message)s"
+            + Color.RESET
+        ),
+        "INFO": (
+            Color.CYAN
+            + "[%(asctime)s]"
+            + Color.RESET
+            + " "
+            + Color.GREEN
+            + "%(colored_levelname)-8s"
+            + Color.RESET
+            + " "
+            + Color.MAGENTA
+            + "%(name)s"
+            + Color.RESET
+            + " ➜ "
+            + Color.RESET
+            + "%(message)s"
+            + Color.RESET
+        ),
+        "WARNING": (
+            Color.CYAN
+            + "[%(asctime)s]"
+            + Color.RESET
+            + " "
+            + Color.YELLOW
+            + "%(colored_levelname)-8s"
+            + Color.RESET
+            + " "
+            + Color.MAGENTA
+            + "%(name)s"
+            + Color.RESET
+            + " "
+            + Color.YELLOW
+            + "➜"
+            + Color.RESET
+            + " "
+            + Color.RESET
+            + "%(message)s"
+            + Color.RESET
+        ),
+        "ERROR": (
+            Color.CYAN
+            + "[%(asctime)s]"
+            + Color.RESET
+            + " "
+            + Color.RED
+            + "%(colored_levelname)-8s"
+            + Color.RESET
+            + " "
+            + Color.GRAY
+            + "[%(filename)s]"
+            + Color.RESET
+            + Color.MAGENTA
+            + "%(name)s:%(lineno)d"
+            + Color.RESET
+            + " "
+            + Color.RED
+            + "➜"
+            + Color.RESET
+            + " "
+            + Color.RESET
+            + "%(message)s"
+            + Color.RESET
+        ),
+        "CRITICAL": (
+            Color.CYAN
+            + "[%(asctime)s]"
+            + Color.RESET
+            + " "
+            + Color.RED
+            + Color.BOLD
+            + "%(colored_levelname)-8s"
+            + Color.RESET
+            + " "
+            + Color.GRAY
+            + "{%(module)s}"
+            + Color.RESET
+            + Color.MAGENTA
+            + "[%(filename)s]"
+            + Color.RESET
+            + Color.MAGENTA
+            + "%(name)s:%(lineno)d"
+            + Color.RESET
+            + " "
+            + Color.RED
+            + "➜"
+            + Color.RESET
+            + " "
+            + Color.RESET
+            + "%(message)s"
+            + Color.RESET
+        ),
     },
     "file": {
         "DEBUG": "[%(asctime)s] %(levelname)-8s [%(threadName)s|%(processName)s] %(name)s (%(filename)s:%(funcName)s:%(lineno)d) | %(message)s",
@@ -101,11 +188,25 @@ if tqdm_original is not None:
             # 设置默认进度条格式
             kwargs.setdefault(
                 "bar_format",
-                f"{Color.CYAN}{{desc}}{Color.RESET} "
-                f"{Color.WHITE}{{percentage:3.0f}}%{Color.RESET} "
-                f"{Color.GRAY}[{{n_fmt}}]{Color.RESET}"
-                f"{Color.WHITE}|{{bar:20}}|{Color.RESET}"
-                f"{Color.BLUE}[{{elapsed}}]{Color.RESET}",
+                (
+                    Color.CYAN
+                    + "{desc}"
+                    + Color.RESET
+                    + " "
+                    + Color.WHITE
+                    + "{percentage:3.0f}%"
+                    + Color.RESET
+                    + " "
+                    + Color.GRAY
+                    + "[{n_fmt}]"
+                    + Color.RESET
+                    + Color.WHITE
+                    + "|{bar:20}|"
+                    + Color.RESET
+                    + Color.BLUE
+                    + "[{elapsed}]"
+                    + Color.RESET
+                ),
             )
             kwargs.setdefault("ncols", 80)
             kwargs.setdefault("colour", None)  # 避免基类处理颜色
@@ -133,7 +234,11 @@ if tqdm_original is not None:
 
             # 更新描述信息颜色
             if hasattr(self, "GREEN") and self.desc:
-                self.desc = f"{getattr(Color, valid_color)}{self.desc}{Color.RESET}"
+                self.desc = "%s%s%s" % (
+                    getattr(Color, valid_color),
+                    self.desc,
+                    Color.RESET,
+                )
 
 
 # 日志级别颜色映射
@@ -177,13 +282,13 @@ class DynamicFormatter(logging.Formatter):
         """格式化日志记录，根据记录级别选择对应的格式"""
         # 动态颜色处理
         if self.use_color:
-            record.colored_levelname = (
-                f"{LOG_LEVEL_TO_COLOR.get(record.levelname, Color.RESET)}"
-                f"{record.levelname:8}"
-                f"{Color.RESET}"
+            record.colored_levelname = "%s%8s%s" % (
+                LOG_LEVEL_TO_COLOR.get(record.levelname, Color.RESET),
+                record.levelname,
+                Color.RESET,
             )
             # 添加统一颜色字段
-            record.colored_name = f"{Color.MAGENTA}{record.name}{Color.RESET}"
+            record.colored_name = "%s%s%s" % (Color.MAGENTA, record.name, Color.RESET)
             # 添加毫秒信息用于ERROR级别格式
         else:
             record.colored_levelname = record.levelname
@@ -196,7 +301,7 @@ class DynamicFormatter(logging.Formatter):
         try:
             return formatter.format(record)
         except Exception as e:
-            warnings.warn(f"日志格式化错误: {e!s}")
+            warnings.warn("日志格式化错误: %s" % e)
             # 使用默认格式作为备选
             return self._default_formatter.format(record)
 
@@ -205,7 +310,9 @@ def _get_valid_log_level(level_name: str, default: str):
     """验证并获取有效的日志级别"""
     level = getattr(logging, level_name.upper(), None)
     if not isinstance(level, int):
-        warnings.warn(f"Invalid log level: {level_name}, using {default} instead.")
+        warnings.warn(
+            "Invalid log level: %s, using %s instead." % (level_name, default)
+        )
         return getattr(logging, default)
     return level
 

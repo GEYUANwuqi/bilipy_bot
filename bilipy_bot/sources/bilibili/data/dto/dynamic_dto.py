@@ -261,7 +261,7 @@ class DynamicDTO(BaseDataModel):
             return cls.model_validate(normalized_data)
 
         except Exception as e:
-            _log.error(f"解析动态数据失败: {e}", exc_info=True)
+            _log.error("解析动态数据失败: %s", e, exc_info=True)
             return None
 
     @classmethod
@@ -272,5 +272,5 @@ class DynamicDTO(BaseDataModel):
         try:
             return [cls.from_raw(data) for data in data_dict]
         except Exception as e:
-            _log.error(f"解析动态数据列表失败: {e}", exc_info=True)
+            _log.error("解析动态数据列表失败: %s", e, exc_info=True)
             return [None]

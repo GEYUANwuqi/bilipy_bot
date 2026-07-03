@@ -189,5 +189,5 @@ class DanmakuGiftDTO(BaseDataModel):
             return cls.model_validate(normalized_data)
 
         except Exception as e:
-            _log.error(f"解析礼物消息失败: {e}")
+            _log.error("解析礼物消息失败: %s", e)
             return None

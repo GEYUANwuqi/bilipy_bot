@@ -76,9 +76,9 @@ class BiliDynamicSource(BaseSource):
         for uid in keys:
             if uid not in self._members_list:
                 self._members_list.append(uid)
-                _log.debug(f"添加 UID '{uid}' 到监控列表")
+                _log.debug("添加 UID '%s' 到监控列表", uid)
             else:
-                _log.warning(f"UID '{uid}' 已存在于监控列表中")
+                _log.warning("UID '%s' 已存在于监控列表中", uid)
 
     def remove_members(self, keys: list[int]) -> None:
         """移除监控成员.
@@ -89,9 +89,9 @@ class BiliDynamicSource(BaseSource):
         for uid in keys:
             if uid in self._members_list:
                 self._members_list.remove(uid)
-                _log.debug(f"从监控列表移除 UID '{uid}'")
+                _log.debug("从监控列表移除 UID '%s'", uid)
             else:
-                _log.warning(f"UID '{uid}' 不存在于监控列表中")
+                _log.warning("UID '%s' 不存在于监控列表中", uid)
 
     def set_poll_interval(self, interval: float | int) -> None:
         """设置轮询间隔时间.
@@ -105,7 +105,7 @@ class BiliDynamicSource(BaseSource):
         elif interval <= 30:
             _log.warning("将轮询间隔时间设置为30s及以下，可能导致请求频率过高")
         self.poll_interval = interval
-        _log.info(f"轮询间隔时间已设置为 {self.poll_interval} 秒")
+        _log.info("轮询间隔时间已设置为 %s 秒", self.poll_interval)
 
     @property
     def api(self) -> BilibiliApi:
@@ -136,13 +136,13 @@ class BiliDynamicSource(BaseSource):
 
             if uid not in self._dynamic_data:
                 self._dynamic_data[uid] = DataPair()
-                _log.info(f"初始化 '{uid}' 的动态数据")
+                _log.info("初始化 '%s' 的动态数据", uid)
 
             self._dynamic_data[uid].update(new_data)
             return new_data
 
         except Exception as e:
-            _log.error(f"获取 '{uid}' 动态数据时出错: {e}")
+            _log.error("获取 '%s' 动态数据时出错: %s", uid, e)
             raise
 
     def _get_dynamic_status(self, uid: int) -> DynamicType:
@@ -179,7 +179,7 @@ class BiliDynamicSource(BaseSource):
             new_data = await self._poll_data(uid=uid)
 
             if new_data is None:
-                _log.warning(f"获取 {uid} 动态数据失败")
+                _log.warning("获取 %s 动态数据失败", uid)
                 return
 
             status = self._get_dynamic_status(uid)
@@ -194,7 +194,7 @@ class BiliDynamicSource(BaseSource):
             await self.ctx.bus.publish(self.uuid, event)
 
         except Exception as e:
-            _log.error(f"轮询 UID '{uid}' 动态数据时出错: {e}")
+            _log.error("轮询 UID '%s' 动态数据时出错: %s", uid, e)
             _log.error(traceback.format_exc())
 
     async def _monitor_loop(self) -> None:
@@ -218,7 +218,7 @@ class BiliDynamicSource(BaseSource):
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:
-                        _log.error(f"轮询 UID '{uid}' 时出错: {e}")
+                        _log.error("轮询 UID '%s' 时出错: %s", uid, e)
 
                     if not self.running:
                         break
@@ -229,11 +229,11 @@ class BiliDynamicSource(BaseSource):
                         raise
 
                 self._poll_num += 1
-                _log.debug(f"完成第 {self._poll_num} 轮动态监控")
+                _log.debug("完成第 %s 轮动态监控", self._poll_num)
 
         except asyncio.CancelledError:
             _log.debug("监控循环被取消")
         except Exception as e:
-            _log.error(f"监控循环异常: {e}", exc_info=True)
+            _log.error("监控循环异常: %s", e, exc_info=True)
         finally:
             _log.info("动态监控循环已停止")

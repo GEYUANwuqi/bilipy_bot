@@ -87,7 +87,7 @@ class AuthorData(BaseDataMixin):
     @property
     def jump_url(self) -> str:
         """作者空间跳转链接"""
-        return f"https://space.bilibili.com/{self.uid}"
+        return "https://space.bilibili.com/%s" % self.uid
 
 
 @dataclass(frozen=True)
@@ -144,7 +144,7 @@ class VideoData(BaseDataMixin):
     @property
     def jump_url(self) -> str:
         """视频跳转链接"""
-        return f"https://www.bilibili.com/video/{self.bv_id}/"
+        return "https://www.bilibili.com/video/%s/" % self.bv_id
 
 
 @dataclass(frozen=True)
@@ -173,7 +173,7 @@ class MusicData(BaseDataMixin):
     @property
     def jump_url(self) -> str:
         """音乐跳转链接"""
-        return f"https://www.bilibili.com/audio/au{self.music_id}"
+        return "https://www.bilibili.com/audio/au%s" % self.music_id
 
 
 @dataclass(frozen=True)
@@ -200,7 +200,7 @@ class ArticleData(BaseDataMixin):
     @property
     def jump_url(self) -> str:
         """专栏跳转链接"""
-        return f"https://www.bilibili.com/opus/{self.article_id}"
+        return "https://www.bilibili.com/opus/%s" % self.article_id
 
 
 @dataclass(frozen=True)
@@ -247,7 +247,7 @@ class LiveRcmdData(BaseDataMixin):
     @property
     def jump_url(self) -> str:
         """直播间跳转链接"""
-        return f"https://live.bilibili.com/{self.room_id}"
+        return "https://live.bilibili.com/%s" % self.room_id
 
 
 @dataclass(frozen=True)
@@ -324,7 +324,7 @@ class DynamicData(BaseDataMixin):
     @property
     def jump_url(self) -> str:
         """动态跳转链接"""
-        return f"https://t.bilibili.com/{self.dynamic_id}"
+        return "https://t.bilibili.com/%s" % self.dynamic_id
 
     @property
     def is_live(self) -> bool:

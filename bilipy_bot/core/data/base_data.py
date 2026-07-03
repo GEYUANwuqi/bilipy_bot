@@ -10,7 +10,7 @@ class BaseDataMixin:
 
     def __repr__(self):
         core_properties_str: str = self._get_core_properties_str()
-        return f"{self.__class__.__name__}({core_properties_str})"
+        return "%s(%s)" % (self.__class__.__name__, core_properties_str)
 
     def __str__(self):
         return self.__repr__()
@@ -22,7 +22,7 @@ class BaseDataMixin:
             for k, v in vars(self).items()
             if not k.startswith("_") and k not in excludes
         }
-        parts = [f"{k}={v!r}" for k, v in props.items()]
+        parts = ["%s=%r" % (k, v) for k, v in props.items()]
         return ", ".join(parts)
 
 

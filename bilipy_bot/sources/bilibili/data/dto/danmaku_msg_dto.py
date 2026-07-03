@@ -119,5 +119,5 @@ class DanmakuMsgDTO(BaseDataModel):
             return cls.model_validate(normalized_data)
 
         except Exception as e:
-            _log.error(f"解析弹幕数据失败: {e}", exc_info=True)
+            _log.error("解析弹幕数据失败: %s", e, exc_info=True)
             return None

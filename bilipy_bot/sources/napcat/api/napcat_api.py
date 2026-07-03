@@ -111,7 +111,7 @@ class NapcatClient:
         await self.client.start()
         self._listener_id = await self.client.create_listener()
         self._task = asyncio.create_task(self._process_messages())
-        _log.info(f"Napcat client started with listener: {self._listener_id}")
+        _log.info("Napcat client started with listener: %s", self._listener_id)
 
     async def stop(self):
         """停止客户端"""
@@ -135,7 +135,7 @@ class NapcatClient:
         Args:
             message: 请求内容，Dict
         """
-        _log.debug(f"Sent message: {message}")
+        _log.debug("Sent message: %s", message)
         echo = str(uuid4())
         message["echo"] = echo
         listener_id = None
@@ -143,7 +143,7 @@ class NapcatClient:
         try:
             listener_id = await self.client.create_listener()
             await self.client.send(message)
-            _log.debug(f"发送请求{echo}")
+            _log.debug("发送请求%s", echo)
 
             while True:
                 #  等待响应，直到收到带有相同 echo 的消息
@@ -154,15 +154,15 @@ class NapcatClient:
                             assert isinstance(message, str)
                             results: dict = json.loads(message)
                         except json.JSONDecodeError as e:
-                            _log.error(f"解析错误: {e}")
+                            _log.error("解析错误: %s", e)
                             return None
                         if results.get("echo") == echo:
                             return results
                     case _:
-                        _log.debug(f"未知类型返回: {t}, 内容: {message}")
+                        _log.debug("未知类型返回: %s, 内容: %s", t, message)
                         return None
         except asyncio.CancelledError:
-            _log.debug(f"请求 {echo} 被取消")
+            _log.debug("请求 %s 被取消", echo)
             raise
         finally:
             _ = (
@@ -205,9 +205,9 @@ class NapcatClient:
                                 data
                             )  # post_type: ignore (运行时设置 handler)
                         except json.JSONDecodeError:
-                            _log.error(f"Failed to parse message: {message}")
+                            _log.error("Failed to parse message: %s", message)
                         except Exception as e:
-                            _log.error(f"Handler error: {e}")
+                            _log.error("Handler error: %s", e)
                     elif msg_type == MessageType.Close:
                         _log.warning("Received close message")
                         break
@@ -216,7 +216,7 @@ class NapcatClient:
                     # 超时是正常的，继续等待
                     continue
                 except Exception as e:
-                    _log.error(f"Error processing message: {e}")
+                    _log.error("Error processing message: %s", e)
         except asyncio.CancelledError:
             # 任务被取消（stop() 调用），优雅退出
             _log.info("Message processing stopped")

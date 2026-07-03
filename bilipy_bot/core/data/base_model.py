@@ -91,11 +91,11 @@ class BaseDataModel(BaseModel, BaseDataMixin, metaclass=MetaDataModel):
 
         value = raw.get(field)
         if value is None:
-            raise ValueError(f"Missing discriminator field: {field}")
+            raise ValueError("Missing discriminator field: %s" % field)
 
         subclass = cls._registry.get(value)
         if subclass is None:
-            raise ValueError(f"Unknown type value: {value}")
+            raise ValueError("Unknown type value: %s" % value)
 
         # 递归检查子类是否还有自己的 discriminator_field（多层分发）
         sub_field = getattr(subclass, "discriminator_field", None)
@@ -126,7 +126,7 @@ class BaseDataModel(BaseModel, BaseDataMixin, metaclass=MetaDataModel):
         """
         subclass = cls._registry.get(type_value)
         if subclass is None:
-            raise ValueError(f"Unknown type value: {type_value}")
+            raise ValueError("Unknown type value: %s" % type_value)
         if raw:
             return subclass.model_validate(data)
         else:
@@ -173,7 +173,7 @@ class AutoDispatchList(RootModel[list[BaseDataModelT]], Generic[BaseDataModelT])
 
     def __repr__(self):
         core_properties_str: str = self._get_core_properties_str()
-        return f"{self.__class__.__name__}({core_properties_str})"
+        return "%s(%s)" % (self.__class__.__name__, core_properties_str)
 
     def __str__(self):
         return self.__repr__()
@@ -185,5 +185,5 @@ class AutoDispatchList(RootModel[list[BaseDataModelT]], Generic[BaseDataModelT])
             for k, v in vars(self).items()
             if not k.startswith("_") and k not in excludes
         }
-        parts = [f"{k}={v!r}" for k, v in props.items()]
+        parts = ["%s=%r" % (k, v) for k, v in props.items()]
         return ", ".join(parts)

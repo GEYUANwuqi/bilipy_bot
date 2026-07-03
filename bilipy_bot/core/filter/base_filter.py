@@ -26,7 +26,7 @@ class BaseFilter(ABC):
         pass
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} filters={self.filters}>"
+        return "<%s filters=%s>" % (self.__class__.__name__, self.filters)
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -50,9 +50,11 @@ class AndFilter(BaseFilter):
         """检查事件是否通过所有过滤器."""
         for f in self.filters:
             if not f.check(event):
-                _log.debug(f"事件{event.id}被过滤器参数 {f.filters} 拦截, 不再继续检查")
+                _log.debug(
+                    "事件%s被过滤器参数 %s 拦截, 不再继续检查", event.id, f.filters
+                )
                 return False
-        _log.debug(f"事件{event.id}通过所有{self}与过滤器")
+        _log.debug("事件%s通过所有%s与过滤器", event.id, self)
         return True
 
 
@@ -66,7 +68,7 @@ class OrFilter(BaseFilter):
         """检查事件是否通过任一过滤器."""
         for f in self.filters:
             if f.check(event):
-                _log.debug(f"事件{event.id}通过过滤器参数 {f.filters}, 不再继续检查")
+                _log.debug("事件%s通过过滤器参数 %s, 不再继续检查", event.id, f.filters)
                 return True
-        _log.debug(f"事件{event.id}未通过{self}或过滤器")
+        _log.debug("事件%s未通过%s或过滤器", event.id, self)
         return False

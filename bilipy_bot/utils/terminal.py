@@ -88,7 +88,7 @@ class Color:
 
     Example:
         >>> Color._COLOR = is_ansi_supported()
-        >>> print(f"{Color.RED}红色文本{Color.RESET}")
+        >>> print("%s%s%s" % (Color.RED, "红色文本", Color.RESET))
         # 输出红色文本，后跟重置代码
     """
 
@@ -185,7 +185,7 @@ class Color:
 
         Example:
             >>> rgb_color = Color.from_rgb(255, 0, 0)
-            >>> print(f"{rgb_color}纯红文本{Color.RESET}")
+            >>> print("%s%s%s" % (rgb_color, "纯红文本", Color.RESET))
         """
         if not cls._COLOR:
             return ""
@@ -193,9 +193,9 @@ class Color:
             raise ValueError("RGB 值超出范围 0-255")
 
         if background:
-            return f"\033[48;2;{r};{g};{b}m"
+            return "\033[48;2;%s;%s;%sm" % (r, g, b)
         else:
-            return f"\033[38;2;{r};{g};{b}m"
+            return "\033[38;2;%s;%s;%sm" % (r, g, b)
 
     @classmethod
     def rgb(cls, r: int, g: int, b: int) -> str:
@@ -212,7 +212,7 @@ class Color:
 
         Example:
             >>> color = Color.rgb(0, 255, 0)
-            >>> print(f"{color}绿色文本{Color.RESET}")
+            >>> print("%s%s%s" % (color, "绿色文本", Color.RESET))
         """
         return cls.from_rgb(r, g, b, background=False)
 
@@ -231,7 +231,7 @@ class Color:
 
         Example:
             >>> bg_color = Color.bg_rgb(0, 0, 255)
-            >>> print(f"{bg_color}{Color.WHITE}蓝色背景文本{Color.RESET}")
+            >>> print("%s%s%s%s" % (bg_color, Color.WHITE, "蓝色背景文本", Color.RESET))
         """
         return cls.from_rgb(r, g, b, background=True)
 
@@ -252,7 +252,7 @@ class Color:
 
         Example:
             >>> color = Color.color256(196)  # 256 色中的红色
-            >>> print(f"{color}256 色文本{Color.RESET}")
+            >>> print("%s%s%s" % (color, "256 色文本", Color.RESET))
         """
         if not cls._COLOR:
             return ""
@@ -260,9 +260,9 @@ class Color:
             raise ValueError("颜色代码超出范围 0-255")
 
         if background:
-            return f"\033[48;5;{color_code}m"
+            return "\033[48;5;%sm" % color_code
         else:
-            return f"\033[38;5;{color_code}m"
+            return "\033[38;5;%sm" % color_code
 
     @classmethod
     def rgb256(cls, r: int, g: int, b: int, background: bool = False) -> str:
@@ -285,7 +285,7 @@ class Color:
 
         Example:
             >>> color = Color.rgb256(128, 0, 128)  # 紫色
-            >>> print(f"{color}256 色近似紫色文本{Color.RESET}")
+            >>> print("%s%s%s" % (color, "256 色近似紫色文本", Color.RESET))
         """
         if not cls._COLOR:
             return ""

@@ -55,7 +55,7 @@ class RoomInfoData(BaseDataMixin):
     @property
     def jump_url(self) -> str:
         """直播间跳转链接"""
-        return f"https://live.bilibili.com/{self.room_id}"
+        return "https://live.bilibili.com/%s" % self.room_id
 
 
 @dataclass(frozen=True)

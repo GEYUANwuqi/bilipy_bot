@@ -185,7 +185,7 @@ class WebSocketListener:
             asyncio.CancelledError: 任务被取消时抛出
         """
         if self._closed:
-            raise ListenerClosedError(f"Listener {self.id} is closed")
+            raise ListenerClosedError("Listener %s is closed" % self.id)
 
         try:
             if timeout is None:
@@ -196,7 +196,7 @@ class WebSocketListener:
             raise
         except Exception as e:
             if self._closed:
-                raise ListenerClosedError(f"Listener {self.id} is closed") from e
+                raise ListenerClosedError("Listener %s is closed" % self.id) from e
             raise
 
     def get_nowait(self) -> tuple[Any, MessageType] | None:
@@ -209,7 +209,7 @@ class WebSocketListener:
             ListenerClosedError: 监听器已关闭时抛出
         """
         if self._closed:
-            raise ListenerClosedError(f"Listener {self.id} is closed")
+            raise ListenerClosedError("Listener %s is closed" % self.id)
 
         try:
             return self.queue.get_nowait()
@@ -309,7 +309,7 @@ class AioHttpWebSocketConnection:
 
         self.state = WebSocketState.Connecting
         self.metrics["connection_attempts"] += 1
-        self.logger.info(f"Connecting to {self.config.uri}")
+        self.logger.info("Connecting to %s", self.config.uri)
 
         try:
             # 创建 aiohttp 会话
@@ -333,7 +333,7 @@ class AioHttpWebSocketConnection:
 
             self.state = WebSocketState.CONNECTED
             self.metrics["successful_connections"] += 1
-            self.logger.info(f"Connected to {self.config.uri}")
+            self.logger.info("Connected to %s", self.config.uri)
 
         except Exception as e:
             self.state = WebSocketState.Disconnected
@@ -344,7 +344,7 @@ class AioHttpWebSocketConnection:
                 await self.session.close()
                 self.session = None
 
-            self.logger.error(f"Connection failed: {self.config.uri}, error: {e}")
+            self.logger.error("Connection failed: %s, error: %s", self.config.uri, e)
             if "wbits=" in str(e):
                 self.logger.error("Detected zlib wbits compression error")
                 if self.config.compression > 0:
@@ -354,7 +354,7 @@ class AioHttpWebSocketConnection:
                     self.logger.info("Disable compression reconnection")
                     self.config.compression = 0
 
-            raise ConnectionError(f"Connection failed: {e}") from e
+            raise ConnectionError("Connection failed: %s" % e) from e
 
     async def close(self) -> None:
         """关闭 WebSocket 连接并清理资源"""
@@ -368,13 +368,13 @@ class AioHttpWebSocketConnection:
             if self.websocket:
                 await self.websocket.close()
         except Exception as e:
-            self.logger.error(f"WebSocket close error: {e}")
+            self.logger.error("WebSocket close error: %s", e)
 
         try:
             if self.session:
                 await self.session.close()
         except Exception as e:
-            self.logger.error(f"Session close error: {e}")
+            self.logger.error("Session close error: %s", e)
         finally:
             self.websocket = None
             self.session = None
@@ -414,7 +414,7 @@ class AioHttpWebSocketConnection:
 
         except Exception as e:
             self.metrics["errors"] += 1
-            self.logger.error(f"Send error: {e}")
+            self.logger.error("Send error: %s", e)
             raise
 
     async def receive(self) -> tuple[Any, MessageType]:
@@ -457,7 +457,7 @@ class AioHttpWebSocketConnection:
 
             elif msg.type == WSMsgType.ERROR:
                 self.metrics["errors"] += 1
-                self.logger.error(f"WebSocket error: {msg.data}")
+                self.logger.error("WebSocket error: %s", msg.data)
                 return msg.data, MessageType.Error
 
             else:
@@ -468,7 +468,7 @@ class AioHttpWebSocketConnection:
             raise
         except Exception as e:
             self.metrics["errors"] += 1
-            self.logger.error(f"Receive error: {e}")
+            self.logger.error("Receive error: %s", e)
             raise
 
     def is_connected(self) -> bool:
@@ -742,7 +742,7 @@ class AsyncWebSocketClient:
 
             self._listeners[listener.id] = listener
 
-        self.logger.debug(f"Listener created: {listener.id}")
+        self.logger.debug("Listener created: %s", listener.id)
         return listener.id
 
     async def remove_listener(self, listener_id: ListenerId) -> None:
@@ -756,7 +756,7 @@ class AsyncWebSocketClient:
 
         if listener:
             listener.close()
-            self.logger.debug(f"Listener removed: {listener_id}")
+            self.logger.debug("Listener removed: %s", listener_id)
 
     async def get_message(
         self, listener_id: ListenerId, timeout: float | None = None
@@ -779,7 +779,7 @@ class AsyncWebSocketClient:
             listener = self._listeners.get(listener_id)
 
         if not listener:
-            raise ListenerEvictedError(f"Listener {listener_id} not found")
+            raise ListenerEvictedError("Listener %s not found" % listener_id)
 
         return await listener.get(timeout)
 
@@ -802,7 +802,7 @@ class AsyncWebSocketClient:
             listener = self._listeners.get(listener_id)
 
         if not listener:
-            raise ListenerEvictedError(f"Listener {listener_id} not found")
+            raise ListenerEvictedError("Listener %s not found" % listener_id)
 
         return listener.get_nowait()
 
@@ -846,7 +846,7 @@ class AsyncWebSocketClient:
         if oldest_id:
             await self.remove_listener(oldest_id)
             self.logger.warning(
-                f"Evicted oldest listener due to max listeners: {oldest_id}"
+                "Evicted oldest listener due to max listeners: %s", oldest_id
             )
 
     async def _broadcast_message(self, message: Any, msg_type: MessageType) -> None:
@@ -871,7 +871,7 @@ class AsyncWebSocketClient:
         # 移除无法处理消息的监听器
         for listener_id in listeners_to_remove:
             await self.remove_listener(listener_id)
-            self.logger.warning(f"Listener evicted due to buffer full: {listener_id}")
+            self.logger.warning("Listener evicted due to buffer full: %s", listener_id)
 
     def get_metrics(self) -> dict[str, Any]:
         """获取客户端运行指标
@@ -926,12 +926,12 @@ class AsyncWebSocketClient:
                 # 处理异常
                 for task in done:
                     if task.exception():
-                        self.logger.error(f"Task error: {task.exception()}")
+                        self.logger.error("Task error: %s", task.exception())
 
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            self.logger.error(f"Main loop error: {e}")
+            self.logger.error("Main loop error: %s", e)
         finally:
             await self.stop()
             self.logger.debug("Main loop ended")
@@ -945,17 +945,19 @@ class AsyncWebSocketClient:
         if self.reconnection.should_reconnect():
             delay = self.reconnection.get_delay()
             if delay > 0:
-                self.logger.info(f"Reconnection delay: {delay:.2f}s")
+                self.logger.info("Reconnection delay: %.2fs", delay)
                 await asyncio.sleep(delay)
 
             self.reconnection.on_attempt()
-            self.logger.info(f"Reconnection attempt: {self.reconnection.attempt_count}")
+            self.logger.info(
+                "Reconnection attempt: %s", self.reconnection.attempt_count
+            )
 
             try:
                 await self.connection.connect()
                 self.reconnection.on_success()
             except ConnectionError as e:
-                self.logger.error(f"Reconnection failed: {e}")
+                self.logger.error("Reconnection failed: %s", e)
         else:
             self.logger.error("Max reconnection attempts reached")
             await self.stop()
@@ -985,7 +987,7 @@ class AsyncWebSocketClient:
                 await self._send_queue.put(message)
                 break
             except Exception as e:
-                self.logger.error(f"Send processing error: {e}")
+                self.logger.error("Send processing error: %s", e)
             finally:
                 try:
                     self._send_queue.task_done()
@@ -1013,7 +1015,7 @@ class AsyncWebSocketClient:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                self.logger.error(f"Receive processing error: {e}")
+                self.logger.error("Receive processing error: %s", e)
                 # 接收错误通常意味着连接问题，关闭连接触发重连
                 try:
                     await self.connection.close()

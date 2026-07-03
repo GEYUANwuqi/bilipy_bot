@@ -76,9 +76,9 @@ class BiliLiveSource(BaseSource):
         for room_id in keys:
             if room_id not in self._room_list:
                 self._room_list.append(room_id)
-                _log.debug(f"添加房间 '{room_id}' 到监控列表")
+                _log.debug("添加房间 '%s' 到监控列表", room_id)
             else:
-                _log.warning(f"房间 '{room_id}' 已存在于监控列表中")
+                _log.warning("房间 '%s' 已存在于监控列表中", room_id)
 
     def remove_members(self, keys: list[int]) -> None:
         """移除监控房间.
@@ -89,9 +89,9 @@ class BiliLiveSource(BaseSource):
         for room_id in keys:
             if room_id in self._room_list:
                 self._room_list.remove(room_id)
-                _log.debug(f"从监控列表移除房间 '{room_id}'")
+                _log.debug("从监控列表移除房间 '%s'", room_id)
             else:
-                _log.warning(f"房间 '{room_id}' 不存在于监控列表中")
+                _log.warning("房间 '%s' 不存在于监控列表中", room_id)
 
     def set_poll_interval(self, interval: float | int) -> None:
         """设置轮询间隔时间.
@@ -105,7 +105,7 @@ class BiliLiveSource(BaseSource):
         elif interval <= 30:
             _log.warning("将轮询间隔时间设置为30s及以下，可能导致请求频率过高")
         self.poll_interval = interval
-        _log.info(f"轮询间隔时间已设置为 {self.poll_interval} 秒")
+        _log.info("轮询间隔时间已设置为 %s 秒", self.poll_interval)
 
     @property
     def api(self) -> BilibiliApi:
@@ -136,13 +136,13 @@ class BiliLiveSource(BaseSource):
 
             if room_id not in self._live_data:
                 self._live_data[room_id] = DataPair()
-                _log.info(f"初始化房间 '{room_id}' 的直播数据")
+                _log.info("初始化房间 '%s' 的直播数据", room_id)
 
             self._live_data[room_id].update(new_data)
             return new_data
 
         except Exception as e:
-            _log.error(f"获取房间 '{room_id}' 直播数据时出错: {e}")
+            _log.error("获取房间 '%s' 直播数据时出错: %s", room_id, e)
             raise
 
     async def _poll_live(self, room_id: int) -> None:
@@ -155,7 +155,7 @@ class BiliLiveSource(BaseSource):
             new_data = await self._poll_data(room_id=room_id)
 
             if new_data is None:
-                _log.warning(f"获取房间 {room_id} 直播数据失败")
+                _log.warning("获取房间 %s 直播数据失败", room_id)
                 return
 
             status = self._get_live_status(room_id)
@@ -164,7 +164,7 @@ class BiliLiveSource(BaseSource):
             await self.ctx.bus.publish(self.uuid, event)
 
         except Exception as e:
-            _log.error(f"轮询房间 '{room_id}' 直播数据时出错: {e}")
+            _log.error("轮询房间 '%s' 直播数据时出错: %s", room_id, e)
             _log.error(traceback.format_exc())
 
     def _get_live_status(
@@ -220,7 +220,7 @@ class BiliLiveSource(BaseSource):
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:
-                        _log.error(f"轮询房间 '{room_id}' 时出错: {e}")
+                        _log.error("轮询房间 '%s' 时出错: %s", room_id, e)
 
                     if not self.running:
                         break
@@ -231,11 +231,11 @@ class BiliLiveSource(BaseSource):
                         raise
 
                 self._poll_num += 1
-                _log.debug(f"完成第 {self._poll_num} 轮直播监控")
+                _log.debug("完成第 %s 轮直播监控", self._poll_num)
 
         except asyncio.CancelledError:
             _log.debug("监控循环被取消")
         except Exception as e:
-            _log.error(f"监控循环异常: {e}", exc_info=True)
+            _log.error("监控循环异常: %s", e, exc_info=True)
         finally:
             _log.info("直播监控循环已停止")

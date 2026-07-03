@@ -81,12 +81,13 @@ class RuntimeConfig:
         """
         path = Path(path)
         if not path.exists():
-            raise FileNotFoundError(f"配置文件不存在: {path}")
+            raise FileNotFoundError("配置文件不存在: %s" % path)
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
             raise ValueError(
-                f"配置文件格式错误: 顶层应为映射 (dict)，实际得到 {type(data).__name__}"
+                "配置文件格式错误: 顶层应为映射 (dict)，实际得到 %s"
+                % type(data).__name__
             )
         configs: dict[str, Any] = {}
         for key, value in data.items():
@@ -95,7 +96,7 @@ class RuntimeConfig:
                 try:
                     configs[key] = builder(value)
                 except Exception as e:
-                    raise ValueError(f"配置项 '{key}' 构建失败: {e}") from e
+                    raise ValueError("配置项 '%s' 构建失败: %s" % (key, e)) from e
             else:
                 configs[key] = value
         return cls(**configs)

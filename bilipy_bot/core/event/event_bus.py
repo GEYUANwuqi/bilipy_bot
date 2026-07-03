@@ -44,7 +44,7 @@ class EventBus:
             TypeError: 如果回调函数不是协程函数
         """
         if not inspect.iscoroutinefunction(func):
-            raise TypeError(f"回调函数 '{func.__name__}' 必须是协程函数")
+            raise TypeError("回调函数 '%s' 必须是协程函数" % func.__name__)
 
         @wraps(func)
         async def wrapper(event: Event) -> None:
@@ -73,9 +73,10 @@ class EventBus:
         )
         self._subscriber_group.add(uuid, subscriber)
         _log.debug(
-            f"为 '{uuid}' 注册订阅者"
-            f"callback={callback.__name__}, "
-            f"status_filter={status})"
+            "为 '%s' 注册订阅者 callback=%s, status_filter=%s)",
+            uuid,
+            callback.__name__,
+            status,
         )
 
     def subscribe(
@@ -126,10 +127,10 @@ class EventBus:
 
         if exc is not None:
             _log.exception(
-                f"订阅者回调执行失败 "
-                f"(uuid={uuid}, "
-                f"callback={callback_name}, "
-                f"status={status_value})",
+                "订阅者回调执行失败 (uuid=%s, callback=%s, status=%s)",
+                uuid,
+                callback_name,
+                status_value,
                 exc_info=exc,
             )
 
@@ -157,6 +158,8 @@ class EventBus:
                 sv=event.status.value: (self._task_done_callback(t, u, cn, sv))
             )
             _log.debug(
-                f"触发订阅者 (uuid={uuid}, "
-                f"callback={subscriber.callback.__name__}, status={event.status.value})"
+                "触发订阅者 (uuid=%s, callback=%s, status=%s)",
+                uuid,
+                subscriber.callback.__name__,
+                event.status.value,
             )

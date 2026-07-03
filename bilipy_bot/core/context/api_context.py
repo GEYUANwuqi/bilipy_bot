@@ -34,7 +34,7 @@ class APIContext:
             cls: API类
             config_key: 配置键
         """
-        _log.debug(f"读取 {config_key} 的 {cls.__name__} 实例")
+        _log.debug("读取 %s 的 %s 实例", config_key, cls.__name__)
         with self._lock:
             if config_key not in self._instances[cls]:
                 self._instances[cls][config_key] = cls.create(

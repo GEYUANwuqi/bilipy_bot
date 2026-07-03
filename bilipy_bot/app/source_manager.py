@@ -82,7 +82,7 @@ class SourceManager:
         source = source_cls(**kwargs)
 
         self._sources[source.uuid] = source
-        _log.info(f"添加事件源: {source.__class__.__name__} (uuid={source.uuid})")
+        _log.info("添加事件源: %s (uuid=%s)", source.__class__.__name__, source.uuid)
         return source
 
     def remove_source(self, source_id: UUID) -> BaseSource | None:
@@ -96,9 +96,9 @@ class SourceManager:
         """
         source = self._sources.pop(source_id, None)
         if source:
-            _log.info(f"移除事件源: {source.__class__.__name__} (uuid={source_id})")
+            _log.info("移除事件源: %s (uuid=%s)", source.__class__.__name__, source_id)
         else:
-            _log.warning(f"事件源 {source_id} 不存在")
+            _log.warning("事件源 %s 不存在", source_id)
         return source
 
     @overload
@@ -165,15 +165,15 @@ class SourceManager:
         # 为每个 source 注入上下文
         for source in self._sources.values():
             source.bind(self._ctx)
-            _log.debug(f"绑定上下文到 {source.__class__.__name__}")
+            _log.debug("绑定上下文到 %s", source.__class__.__name__)
 
         # 启动所有 source
         for source in self._sources.values():
             try:
                 await source.start()
-                _log.debug(f"启动 {source.__class__.__name__}")
+                _log.debug("启动 %s", source.__class__.__name__)
             except Exception as e:
-                _log.error(f"启动 {source.__class__.__name__} 失败: {e}")
+                _log.error("启动 %s 失败: %s", source.__class__.__name__, e)
 
         self._running = True
         _log.info("SourceManager 已启动")
@@ -195,9 +195,9 @@ class SourceManager:
         for source in self._sources.values():
             try:
                 await source.stop()
-                _log.debug(f"停止 {source.__class__.__name__}")
+                _log.debug("停止 %s", source.__class__.__name__)
             except Exception as e:
-                _log.error(f"停止 {source.__class__.__name__} 失败: {e}")
+                _log.error("停止 %s 失败: %s", source.__class__.__name__, e)
 
         self._running = False
         _log.info("SourceManager 已停止")

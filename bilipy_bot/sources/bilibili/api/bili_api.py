@@ -71,13 +71,13 @@ class BilibiliApi(BaseApi):
         user = User(credential=self._credential, uid=uid)
         dict_info = await user.get_dynamics_new()
         max_id = get_max_id(dict_info)
-        _log.debug(f"获取到最大时间戳的索引为'{max_id}'")
+        _log.debug("获取到最大时间戳的索引为'%s'", max_id)
         if max_id is None:
             raise ValueError("未获取到动态数据或者动态数据为不完整")
         dynamic_info = dict_info["items"][max_id]
         dto = DynamicDTO.from_raw(dynamic_info)
         if not dto:
-            raise ValueError(f"构造 {uid} 用户动态DTO对象失败")
+            raise ValueError("构造 %s 用户动态DTO对象失败" % uid)
         info = DynamicData.from_dto(dto)
         return info
 
@@ -107,7 +107,7 @@ class BilibiliApi(BaseApi):
         live = await live_room.get_room_info()
         dto = LiveRoomDTO.from_raw(live)
         if dto is None:
-            raise ValueError(f"构造直播间 {room_id} DTO对象失败")
+            raise ValueError("构造直播间 %s DTO对象失败" % room_id)
         info = LiveRoomData.from_dto(dto)
         return info
 

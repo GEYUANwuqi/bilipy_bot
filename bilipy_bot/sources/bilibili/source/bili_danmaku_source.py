@@ -49,13 +49,13 @@ class BiliDanmakuSource(BaseSource):
             async def _on_connected(_):
                 ready.set()
                 if danmaku.get_status() == 2:
-                    _log.info(f"房间 {room_id} 的弹幕姬已连接")
+                    _log.info("房间 %s 的弹幕姬已连接", room_id)
 
             try:
                 asyncio.get_event_loop().create_task(danmaku.connect())
                 _log.debug("等待房间 %d 的弹幕姬连接成功...", room_id)
             except Exception as e:
-                _log.error(f"房间 {room_id} 弹幕姬异常退出: {e}")
+                _log.error("房间 %s 弹幕姬异常退出: %s", room_id, e)
             finally:
                 ready.set()  # 防止异常时 ready 永远不被 set
 
@@ -65,9 +65,9 @@ class BiliDanmakuSource(BaseSource):
     def _start_room_thread(self, room_id: int, danmaku: "LiveDanmaku") -> None:
         """为已有的 danmaku 对象启动独立线程并等待连接建立."""
         if room_id in self._threads and self._threads[room_id].is_alive():
-            _log.warning(f"房间 {room_id} 的弹幕姬已在运行中")
+            _log.warning("房间 %s 的弹幕姬已在运行中", room_id)
             return
-        name = f"LiveDanmaku({room_id})"
+        name = "LiveDanmaku(%s)" % room_id
         danmaku.logger = getLogger(name)
         danmaku.logger.setLevel(DEBUG if self.debug else INFO)
         ready = threading.Event()
@@ -78,21 +78,21 @@ class BiliDanmakuSource(BaseSource):
             daemon=True,
         )
         self._threads[room_id] = t
-        _log.debug(f"正在为房间 {room_id} 启动弹幕姬线程...")
+        _log.debug("正在为房间 %s 启动弹幕姬线程...", room_id)
         t.start()
 
     def start_room(self, room_id: int) -> None:
         """启动已有的房间监控（stop_room 后可重新启动）."""
         danmaku = self.danmaku_list.get(room_id)
         if danmaku is None:
-            _log.warning(f"房间 {room_id} 不存在，请先调用 add_new_room")
+            _log.warning("房间 %s 不存在，请先调用 add_new_room", room_id)
             return
         self._start_room_thread(room_id, danmaku)
 
     def add_new_room(self, room_id: int) -> None:
         """新建房间监控并在独立线程中启动."""
         if room_id in self.danmaku_list:
-            _log.warning(f"房间 {room_id} 已存在，如需重启请调用 start_room")
+            _log.warning("房间 %s 已存在，如需重启请调用 start_room", room_id)
             return
         danmaku = self.api.get_live_danmaku(room_id)
         danmaku.add_event_listener("LIVE", self.on_live)
@@ -100,7 +100,7 @@ class BiliDanmakuSource(BaseSource):
         danmaku.add_event_listener("SEND_GIFT", self.on_gift)
         danmaku.add_event_listener("GUARD_BUY", self.on_guard)
         self.danmaku_list[room_id] = danmaku
-        _log.debug(f"新建了房间 {room_id} 的弹幕姬对象，正在启动线程...")
+        _log.debug("新建了房间 %s 的弹幕姬对象，正在启动线程...", room_id)
         self._start_room_thread(room_id, danmaku)
 
     def stop_room(self, room_id: int) -> None:
@@ -108,14 +108,14 @@ class BiliDanmakuSource(BaseSource):
         danmaku = self.danmaku_list.get(room_id)
         loop = self._loops.get(room_id)
         if danmaku is None or loop is None:
-            _log.warning(f"未找到房间 {room_id} 的弹幕姬或其事件循环")
+            _log.warning("未找到房间 %s 的弹幕姬或其事件循环", room_id)
             return
         # 先在房间线程的事件循环中调用 disconnect，等待其完成
         future = asyncio.run_coroutine_threadsafe(danmaku.disconnect(), loop)
         try:
             future.result(timeout=10)
         except Exception as e:
-            _log.error(f"停止房间 {room_id} 时出错: {e}")
+            _log.error("停止房间 %s 时出错: %s", room_id, e)
         # disconnect 完成后，通知 loop.run_forever() 退出，线程自然结束
         loop.call_soon_threadsafe(loop.stop)
         # 等待线程真正退出，确保连接已完全断开
@@ -124,17 +124,17 @@ class BiliDanmakuSource(BaseSource):
             t.join(timeout=15)
             if t.is_alive():
                 _log.warning(
-                    f"房间 {room_id} 的线程未能在超时内退出，连接可能未完全断开"
+                    "房间 %s 的线程未能在超时内退出，连接可能未完全断开", room_id
                 )
             else:
-                _log.info(f"房间 {room_id} 的弹幕姬已暂停")
+                _log.info("房间 %s 的弹幕姬已暂停", room_id)
         self._threads.pop(room_id, None)
 
     def remove_room(self, room_id: int) -> None:
         """停止并彻底移除房间监控（同时清理 danmaku 对象）."""
         self.stop_room(room_id)  # 断开连接并等待线程退出
         self.danmaku_list.pop(room_id, None)
-        _log.info(f"房间 {room_id} 的弹幕姬已移除")
+        _log.info("房间 %s 的弹幕姬已移除", room_id)
 
     async def start(self) -> None:
         """启动弹幕监控."""
