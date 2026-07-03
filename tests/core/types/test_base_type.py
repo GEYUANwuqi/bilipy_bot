@@ -137,3 +137,55 @@ class TestBaseType:
         """Pattern.fullmatch 行为：必须完全匹配，不能只匹配前缀."""
         pattern = re.compile(r"test\.")
         assert not TestType.ACTIVE.matches(pattern)
+
+
+class NestedType(BaseType):
+    ALL = "nested.all"
+    PARENT = "nested.parent"
+    CHILD_A = "nested.parent.child_a"
+    CHILD_B = "nested.parent.child_b"
+    SIBLING = "nested.other"
+
+
+class TestHierarchicalMatching:
+    """层级匹配：父状态匹配子状态."""
+
+    def test_parent_matches_child(self):
+        """父状态应匹配子状态（前缀匹配）."""
+        assert NestedType.CHILD_A.matches(NestedType.PARENT)
+
+    def test_child_does_not_match_parent(self):
+        """子状态不应反向匹配父状态（单向）."""
+        assert not NestedType.PARENT.matches(NestedType.CHILD_A)
+
+    def test_all_still_matches_all(self):
+        """ALL 仍通配同 scope 下所有状态."""
+        assert NestedType.CHILD_A.matches(NestedType.ALL)
+        assert NestedType.PARENT.matches(NestedType.ALL)
+
+    def test_sibling_does_not_match(self):
+        """不同父节点的同级状态不应匹配."""
+        assert not NestedType.CHILD_A.matches(NestedType.SIBLING)
+        assert not NestedType.SIBLING.matches(NestedType.PARENT)
+
+    def test_exact_match_still_works(self):
+        """完全相同状态仍匹配."""
+        assert NestedType.CHILD_A.matches(NestedType.CHILD_A)
+
+    def test_different_scope_no_match(self):
+        """不同 scope 即使是前缀也不匹配."""
+
+        class ScopeB(BaseType):
+            PARENT = "scope_b.parent"
+            CHILD = "scope_b.parent.child"
+
+        assert not NestedType.CHILD_A.matches(ScopeB.PARENT)
+
+    def test_prefix_boundary_respects_dot(self):
+        """前缀匹配必须到`.`边界，避免部分段误匹配."""
+
+        class TestType(BaseType):
+            PARTIAL = "test.parent.c"
+            CHILD = "test.parent.child"
+
+        assert not TestType.CHILD.matches(TestType.PARTIAL)

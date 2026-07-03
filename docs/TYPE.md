@@ -27,20 +27,20 @@ class BaseType(str, Enum):
             rule: 要匹配的标签
 
         Returns:
-            bool: 在作用域相同且具体状态相同或rule为通配符时返回True，否则返回False
+            bool: 匹配结果
         """
         if type(self) is type(rule):  # Type匹配
             if self.scope == rule.scope:  # 作用域匹配
-                if self.state == rule.state:  # 具体状态匹配
+                # 精确匹配、通配、或层级父匹配子（如 "message" 匹配 "message.group"）
+                if (
+                    self.state == rule.state
+                    or rule.state == "all"
+                    or self.state.startswith(rule.state + ".")
+                ):
                     return True
-                elif rule.state == "all":  # 通配符
-                    return True
-                else:
-                    return False
-            else:
                 return False
-        else:
             return False
+        return False
 
 BaseTypeT = TypeVar("BaseTypeT", bound=BaseType)
 ```
@@ -51,6 +51,7 @@ BaseTypeT = TypeVar("BaseTypeT", bound=BaseType)
 - `scope`：作用域，表示事件类别
 - `state`：状态，表示具体事件类型
 - 通配符：`"all"` 匹配同一作用域下的所有状态
+- 层级匹配：父状态自动匹配子状态（如 `"message"` 匹配 `"message.group"`）
 
 ------
 
@@ -122,48 +123,81 @@ MyType.REQUEST.matches(MyType.ALL)  # True
 MyType.ALL.matches(MyType.MESSAGE)  # False
 ```
 
+### 层级匹配
+
+当状态值使用点号形成层级结构时（如 `"message.group"`），父状态自动匹配子状态：
+
+```python
+# 父状态匹配子状态
+MyType.GROUP_MESSAGE.matches(MyType.MESSAGE)  # True
+MyType.PRIVATE_MESSAGE.matches(MyType.MESSAGE)  # True
+
+# 子状态不反向匹配父状态（单向）
+MyType.MESSAGE.matches(MyType.GROUP_MESSAGE)  # False
+
+# ALL 仍通配所有层级
+MyType.GROUP_MESSAGE.matches(MyType.ALL)  # True
+```
+
 ------
 
 ## 完整示例
 
-以下是一个完整的 Type 适配示例，参考 [napcat_type](../bilipy_bot/sources/napcat/type/napcat_type.py)：
+以下是一个完整的 Type 适配示例，参考 [napcat_type](../bilipy_bot/sources/napcat/types/napcat_type.py)：
 
 ```python
+from typing import Any
 from bilipy_bot.core.types import BaseType
 
 
 class NapcatType(BaseType):
-    """napcat状态枚举."""
-    ALL = "napcat.all"         # 通配符
-    META = "napcat.meta"       # 元信息
-    MESSAGE = "napcat.message" # 群/私聊消息
-    REQUEST = "napcat.request" # 请求消息
-    NOTICE = "napcat.notice"   # 通知消息
-    SENT = "napcat.sent"       # 自身消息
-    UNKNOWN = "napcat.unknown" # 未知消息
+    """NapCat 事件类型枚举——支持层级匹配."""
+
+    # 通配
+    ALL = "napcat.all"
+    UNKNOWN = "napcat.unknown"
+
+    # 元事件
+    META = "napcat.meta"
+    LIFECYCLE_META = "napcat.meta.lifecycle"
+    HEARTBEAT_META = "napcat.meta.heartbeat"
+
+    # 消息事件
+    MESSAGE = "napcat.message"
+    GROUP_MESSAGE = "napcat.message.group"
+    PRIVATE_MESSAGE = "napcat.message.private"
+
+    # 自身消息
+    SENT = "napcat.sent"
+    GROUP_SENT = "napcat.sent.group"
+    PRIVATE_SENT = "napcat.sent.private"
+
+    # 请求事件
+    REQUEST = "napcat.request"
+    FRIEND_REQUEST = "napcat.request.friend"
+    GROUP_REQUEST = "napcat.request.group"
+
+    # 通知事件
+    NOTICE = "napcat.notice"
+    GROUP_UPLOAD_NOTICE = "napcat.notice.group_upload"
+    POKE_NOTIFY = "napcat.notice.poke"
+    # ...
 
     @classmethod
-    def get_type(cls, post_type: str) -> "NapcatType":
-        """根据 post_type 返回对应的枚举实例.
-
-        Args:
-            post_type: 事件类型字符串
-
-        Returns:
-            NapcatType 枚举实例
-        """
-        if post_type == "meta_event":
-            return NapcatType.META
-        elif post_type == "message":
+    def get_specific_type(cls, message: dict[str, Any]) -> "NapcatType":
+        """根据完整消息字典返回最具体的 NapcatType."""
+        post_type = message.get("post_type", "")
+        if post_type == "message":
+            if message.get("message_type") == "group":
+                return NapcatType.GROUP_MESSAGE
+            elif message.get("message_type") == "private":
+                return NapcatType.PRIVATE_MESSAGE
             return NapcatType.MESSAGE
-        elif post_type == "request":
-            return NapcatType.REQUEST
-        elif post_type == "notice":
-            return NapcatType.NOTICE
-        elif post_type == "message_sent":
-            return NapcatType.SENT
-        else:
-            return NapcatType.UNKNOWN
+        if post_type == "notice":
+            # 按 notice_type 进一步分发...
+            ...
+        # ... 其他 post_type
+        return NapcatType.UNKNOWN
 ```
 
 ------
@@ -198,9 +232,11 @@ class LiveType(BaseType):
 # ========== QQ事件类型 ==========
 
 class NapcatType(BaseType):
-    """napcat状态枚举."""
+    """napcat状态枚举（支持层级匹配）."""
     ALL = "napcat.all"
     MESSAGE = "napcat.message"
+    GROUP_MESSAGE = "napcat.message.group"
+    PRIVATE_MESSAGE = "napcat.message.private"
     NOTICE = "napcat.notice"
 ```
 

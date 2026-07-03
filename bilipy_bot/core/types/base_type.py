@@ -23,7 +23,9 @@ class BaseType(str, Enum):
 
         支持三种匹配方式：
 
-        - ``BaseType``: 按枚举类型匹配（需同 type、同 scope，state 为 "all" 时通配）
+        - ``BaseType``: 按枚举类型匹配（需同 type、同 scope）
+          - state 为 "all" 时通配同 scope 下所有状态
+          - 支持层级匹配：父状态匹配子状态（如 "message" 匹配 "message.group"）
         - ``str``: 作为正则表达式，用 ``re.fullmatch`` 与 ``self.value`` 匹配
         - ``re.Pattern[str]``: 编译好的正则对象，直接调用其 ``fullmatch`` 方法
 
@@ -34,10 +36,14 @@ class BaseType(str, Enum):
             bool: 匹配结果
         """
         if isinstance(rule, BaseType):
-            # 枚举匹配：需同 type、同 scope，state="all" 通配
+            # 枚举匹配：需同 type、同 scope；state="all" 通配；层级父匹配子
             if type(self) is type(rule):
                 if self.scope == rule.scope:
-                    if self.state == rule.state or rule.state == "all":
+                    if (
+                        self.state == rule.state
+                        or rule.state == "all"
+                        or self.state.startswith(rule.state + ".")
+                    ):
                         return True
                     return False
                 return False
