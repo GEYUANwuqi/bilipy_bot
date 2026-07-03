@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, ClassVar, TypeVar
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     from bilipy_bot.core.context import AppContext
+    from bilipy_bot.core.types import BaseType
 
 
 class BaseSource(ABC):
@@ -18,9 +19,15 @@ class BaseSource(ABC):
         uuid: 唯一标识符，由 SourceManager 内部管理
         running: 运行状态
         config_key: 配置键，子类覆盖此类属性作为默认值
+        supported_types: 事件源支持的 ``BaseType`` 枚举类，用于订阅规则编译
     """
 
     config_key: str = ""
+
+    # 事件源支持的 BaseType 枚举类。子类必须覆盖此属性，
+    # 例如 supported_types = DynamicType。
+    # 未声明时订阅将抛出 TypeError。
+    supported_types: ClassVar[type["BaseType"] | None] = None
 
     def __init__(self, uuid: UUID | None = None, **kwargs):
         """初始化事件源.

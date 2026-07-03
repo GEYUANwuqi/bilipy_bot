@@ -14,8 +14,15 @@ from bilipy_bot.core.source import BaseSource
 from bilipy_bot.core.types import BaseType
 
 
+class MockType(BaseType):
+    ALL = "mock.all"
+    EVENT = "mock.event"
+
+
 class StubSource(BaseSource):
     """Minimal source for testing BotApp delegation."""
+
+    supported_types = MockType
 
     def __init__(self, uuid: UUID | None = None, **kwargs):
         super().__init__(uuid=uuid)
@@ -40,11 +47,6 @@ class MockApi(BaseApi):
     @classmethod
     def create(cls, ctx, config_key):
         return cls()
-
-
-class MockType(BaseType):
-    ALL = "mock.all"
-    EVENT = "mock.event"
 
 
 class MockData(BaseDataMixin):
@@ -133,8 +135,8 @@ class TestBotApp:
             pass
 
         # Verify it was registered
-        subs = app.bus._subscriber_group.get_subscriber(source.uuid)
-        assert len(subs) == 1
+        callbacks = app.bus._subscriber_group.get_callbacks(source.uuid, MockType.EVENT)
+        assert len(callbacks) == 1
 
     def test_add_subscriber(self, app):
         """add_subscriber 应注册订阅者."""
@@ -144,8 +146,8 @@ class TestBotApp:
             pass
 
         app.add_subscriber(source.uuid, callback, MockType.ALL)
-        subs = app.bus._subscriber_group.get_subscriber(source.uuid)
-        assert len(subs) == 1
+        callbacks = app.bus._subscriber_group.get_callbacks(source.uuid, MockType.EVENT)
+        assert len(callbacks) == 1
 
     def test_running_property_initially_false(self, app):
         """初始 running 应为 False."""

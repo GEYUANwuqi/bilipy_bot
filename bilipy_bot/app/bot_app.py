@@ -169,7 +169,10 @@ class BotApp:
             async def on_danmaku(event: Event):
                 ...
         """
-        return self.bus.subscribe(source_id, status)
+        source = self._manager.get_source(source_id)
+        if source is None:
+            raise ValueError("事件源 %s 不存在，请先通过 add_source 添加" % source_id)
+        return self.bus.subscribe(source_id, status, source.supported_types)
 
     def add_subscriber(
         self,
@@ -184,7 +187,10 @@ class BotApp:
             callback: 异步回调函数
             status: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern`` 正则）
         """
-        self.bus.add_subscriber(source_id, callback, status)
+        source = self._manager.get_source(source_id)
+        if source is None:
+            raise ValueError("事件源 %s 不存在，请先通过 add_source 添加" % source_id)
+        self.bus.add_subscriber(source_id, callback, status, source.supported_types)
 
     # ============ 生命周期（委托 SourceManager）============ #
 

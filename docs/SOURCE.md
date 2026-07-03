@@ -13,7 +13,10 @@ class BaseSource(ABC):
     Attributes:
         uuid: 唯一标识符，由 SourceManager 内部管理
         running: 运行状态
+        supported_types: ``BaseType`` 枚举类，声明该事件源所能发出的所有事件类型
     """
+
+    supported_types: ClassVar[type[BaseType] | None] = None
 
     @abstractmethod
     def __init__(self, **kwargs):
@@ -60,6 +63,30 @@ BaseSourceT = TypeVar("BaseSourceT", bound=BaseSource)
 - `ctx`：获取应用上下文（在 bind 之后才能使用）
 
 > 注：`bind` 方法在 `SourceManager` 启动时调用，当事件源初始化时，它是不持有上下文的
+
+### 声明 supported_types（必须）
+
+每个事件源**必须**声明 `supported_types` 类属性，指定该事件源所能发出的所有事件类型：
+
+```python
+from bilipy_bot.core.types import BaseType
+
+class MySourceType(BaseType):
+    ALL = "my_source.all"
+    MESSAGE = "my_source.message"
+    NOTICE = "my_source.notice"
+
+
+class MySource(BaseSource):
+    supported_types = MySourceType  # <-- 声明事件类型枚举
+    ...
+```
+
+`supported_types` 的作用：
+
+- **订阅规则编译**：框架在注册订阅时，根据此声明将订阅规则（`BaseType`、`str` 正则或 `re.Pattern`）展开为具体状态值，建立 `uuid → status → callbacks` 的派发表
+- **运行时优化**：事件发布时直接 O(1) 查表触发回调，无需遍历和匹配
+- **未声明的后果**：未设置 `supported_types` 的 Source 在订阅时会抛出 `TypeError`
 
 ------
 
@@ -197,6 +224,8 @@ class MySource(BaseSource):
     通过轮询或 WebSocket 接收事件并发布到 EventBus。
     """
 
+    supported_types = MySourceType
+
     def __init__(self, config_key: str = "my_source"):
         """初始化事件源.
 
@@ -304,6 +333,8 @@ class NapcatSource(BaseSource):
 
     使用 WebSocket 协议连接 NapCat 服务器，接收并发布事件。
     """
+
+    supported_types = NapcatType
 
     def __init__(self, config_key: str = "napcat"):
         """初始化 Napcat 事件源.

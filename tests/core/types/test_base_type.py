@@ -189,3 +189,67 @@ class TestHierarchicalMatching:
             CHILD = "test.parent.child"
 
         assert not TestType.CHILD.matches(TestType.PARTIAL)
+
+
+class TestMatchingStatuses:
+    """测试 matching_statuses 类方法."""
+
+    def test_base_type_rule_exact(self):
+        """BaseType 规则应匹配对应的具体成员."""
+        result = TestType.matching_statuses(TestType.ACTIVE)
+        assert TestType.ACTIVE in result
+        assert TestType.INACTIVE not in result
+
+    def test_base_type_rule_wildcard(self):
+        """ALL 规则应匹配所有具体成员（排除 ALL 自身）."""
+        result = TestType.matching_statuses(TestType.ALL)
+        assert TestType.ACTIVE in result
+        assert TestType.INACTIVE in result
+        assert TestType.ALL not in result  # ALL 被排除
+
+    def test_str_regex_rule(self):
+        """str 正则应展开到所有匹配的具体成员."""
+        result = TestType.matching_statuses(r"test\.(active|inactive)")
+        assert TestType.ACTIVE in result
+        assert TestType.INACTIVE in result
+
+    def test_str_regex_no_match(self):
+        """不匹配的 str 正则应返回空列表."""
+        result = TestType.matching_statuses(r"test\.nonexistent")
+        assert result == []
+
+    def test_pattern_rule(self):
+        """re.Pattern 应展开到所有匹配的具体成员."""
+        pattern = re.compile(r"test\.active")
+        result = TestType.matching_statuses(pattern)
+        assert TestType.ACTIVE in result
+        assert TestType.INACTIVE not in result
+
+    def test_excludes_wildcard_member(self):
+        """state='all' 的成员不应出现在结果中."""
+        result = TestType.matching_statuses(TestType.ALL)
+        assert TestType.ALL not in result
+
+    def test_cross_type_returns_empty(self):
+        """不同类型之间不应有匹配."""
+
+        class OtherType(BaseType):
+            ALL = "other.all"
+            VALUE = "other.value"
+
+        result = TestType.matching_statuses(OtherType.VALUE)
+        assert result == []
+
+    def test_hierarchical_matching(self):
+        """层级父状态展开时应匹配所有子状态."""
+
+        class HierType(BaseType):
+            ALL = "hier.all"
+            PARENT = "hier.parent"
+            CHILD_A = "hier.parent.a"
+            CHILD_B = "hier.parent.b"
+
+        result = HierType.matching_statuses(HierType.PARENT)
+        assert HierType.PARENT in result  # 自身
+        assert HierType.CHILD_A in result  # 子状态
+        assert HierType.CHILD_B in result  # 子状态

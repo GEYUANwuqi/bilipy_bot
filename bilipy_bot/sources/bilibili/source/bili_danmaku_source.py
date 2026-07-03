@@ -17,6 +17,8 @@ _log = getLogger("BiliDanmakuSource")
 
 
 class BiliDanmakuSource(BaseSource):
+    supported_types = DanmakuType
+
     def __init__(
         self, room_id: list[int], debug: bool = False, config_key: str = "bilibili"
     ):

@@ -55,5 +55,20 @@ class BaseType(str, Enum):
         # str 正则匹配：直接与 self.value 全量匹配
         return bool(re.fullmatch(rule, self.value))
 
+    @classmethod
+    def matching_statuses(cls, rule: _BaseTypeSelf) -> list["BaseType"]:
+        """返回当前枚举类中所有匹配给定规则的成员.
+
+        遍历当前枚举类的所有成员，筛掉通配标签（state="all"），
+        返回余下成员中能通过 ``matches(rule)`` 的元素列表。
+
+        Args:
+            rule: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern`` 正则）
+
+        Returns:
+            匹配的枚举成员列表（不含 state="all" 的通配成员）
+        """
+        return [m for m in cls if m.state != "all" and m.matches(rule)]
+
 
 BaseTypeT = TypeVar("BaseTypeT", bound=BaseType)

@@ -21,6 +21,8 @@ class NapcatSource(BaseSource):
     使用ws协议连接napcat服务器，接收并发布事件。
     """
 
+    supported_types = NapcatType
+
     def __init__(self, config_key: str = "napcat"):
         """初始化 Napcat 事件源.
         Args:

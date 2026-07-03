@@ -19,6 +19,8 @@ class BiliDynamicSource(BaseSource):
     负责轮询B站动态并发布事件。
     """
 
+    supported_types = DynamicType
+
     def __init__(
         self,
         poll_interval: float | int = 60,

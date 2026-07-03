@@ -13,7 +13,6 @@ from .subscriber import Subscriber, SubscriberGroup
 if TYPE_CHECKING:
     from bilipy_bot.core.types import BaseType
 
-
 _log = getLogger(__name__)
 
 
@@ -57,6 +56,7 @@ class EventBus:
         uuid: UUID,
         callback: Callable[[Event], Coroutine[Any, Any, None]],
         status: Union[str, re.Pattern[str], "BaseType"],
+        supported_types: "type[BaseType] | None" = None,
     ) -> None:
         """添加订阅者.
 
@@ -64,6 +64,8 @@ class EventBus:
             uuid: 发布器的唯一标识符
             callback: 回调函数，接收 Event 参数
             status: 状态过滤器（``BaseType`` 枚举或 ``str`` 正则）
+            supported_types: 事件源声明的 ``BaseType`` 枚举类。
+                订阅规则将在注册期编译为具体状态到回调的映射。
         """
         wrapper = self._wrap_callback(callback)
 
@@ -71,7 +73,7 @@ class EventBus:
             callback=wrapper,
             status_filter=status,
         )
-        self._subscriber_group.add(uuid, subscriber)
+        self._subscriber_group.add(uuid, subscriber, supported_types)
         _log.debug(
             "为 '%s' 注册订阅者 callback=%s, status_filter=%s)",
             uuid,
@@ -80,13 +82,17 @@ class EventBus:
         )
 
     def subscribe(
-        self, uuid: UUID, status: Union[str, re.Pattern[str], "BaseType"]
+        self,
+        uuid: UUID,
+        status: Union[str, re.Pattern[str], "BaseType"],
+        supported_types: "type[BaseType] | None" = None,
     ) -> Callable:
         """装饰器：订阅事件.
 
         Args:
             uuid: 发布器的唯一标识符
             status: 状态过滤器（``BaseType`` 枚举或 ``str`` 正则）
+            supported_types: 事件源声明的 ``BaseType`` 枚举类
 
         Returns:
             装饰器函数
@@ -98,7 +104,7 @@ class EventBus:
         """
 
         def decorator(func: Callable[[Event], Coroutine[Any, Any, None]]) -> Callable:
-            self.add_subscriber(uuid, func, status)
+            self.add_subscriber(uuid, func, status, supported_types)
             return func
 
         return decorator
@@ -143,22 +149,22 @@ class EventBus:
             uuid: 发布器的唯一标识符
             event: 要发布的事件
         """
-        # 存入当前快照
-        subscribers = tuple(self._subscriber_group.get_subscriber(uuid))
-        for subscriber in subscribers:
-            if not event.status.matches(subscriber.status_filter):
-                continue
+        # 查表派发：根据 uuid + 状态值直接获取所有已编译的回调
+        callbacks = self._subscriber_group.get_callbacks(uuid, event.status)
+
+        for callback in callbacks:
+            callback_name = getattr(callback, "__name__", "<lambda>")
             # 异步执行回调，保留强引用防止 GC 回收
-            task = asyncio.create_task(subscriber.callback(event))
+            task = asyncio.create_task(callback(event))
             self._background_tasks.add(task)
             task.add_done_callback(
-                lambda t, u=uuid, cn=subscriber.callback.__name__, sv=event.status.value: (
+                lambda t, u=uuid, cn=callback_name, sv=event.status.value: (
                     self._task_done_callback(t, u, cn, sv)
                 )
             )
             _log.debug(
                 "触发订阅者 (uuid=%s, callback=%s, status=%s)",
                 uuid,
-                subscriber.callback.__name__,
+                callback_name,
                 event.status.value,
             )

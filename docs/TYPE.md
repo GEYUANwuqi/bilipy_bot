@@ -45,7 +45,10 @@ class BaseType(str, Enum):
 BaseTypeT = TypeVar("BaseTypeT", bound=BaseType)
 ```
 
-`BaseType` 提供了一个公共的方法 `matches()` 用于判断两个标签是否匹配。
+`BaseType` 提供了以下方法：
+
+- `matches(rule)`：判断当前标签是否匹配给定规则
+- `matching_statuses(rule)`：（类方法）返回当前枚举类中所有匹配给定规则的成员
 
 - 标签值格式：`scope.state`（如 `"dynamic.new"`）
 - `scope`：作用域，表示事件类别
@@ -110,6 +113,27 @@ MyType.MESSAGE.matches(MyType.NOTICE)  # False
 # 不同类型
 DynamicType.NEW.matches(MyType.MESSAGE)  # False
 ```
+
+### 批量匹配（订阅规则编译）
+
+```python
+# matching_statuses 返回枚举类中所有匹配给定规则的成员（排除 "all" 通配符）
+
+# BaseType 规则
+MyType.matching_statuses(MyType.MESSAGE)         # → [MyType.MESSAGE]
+MyType.matching_statuses(MyType.ALL)             # → [MyType.MESSAGE, MyType.NOTICE, ...]（所有具体状态）
+
+# str 正则需要展开
+MyType.matching_statuses(r"my_source\.message")  # → [MyType.MESSAGE]
+
+# re.Pattern 展开
+import re
+pat = re.compile(r"my_source\.(message|notice)")
+MyType.matching_statuses(pat)                    # → [MyType.MESSAGE, MyType.NOTICE]
+```
+
+该方法用于框架内部的订阅规则编译：将用户的订阅规则在注册期一次性展开为具体状态值，
+使运行时事件发布退化为 O(1) 查表派发。
 
 ### 通配符匹配
 
