@@ -320,8 +320,7 @@ class NapcatSource(BaseSource):
         Args:
             message: 原始消息字典
         """
-        post_type = message.get("post_type", "")
-        napcat_type = NapcatType.get_type(post_type)
+        napcat_type = NapcatType.get_specific_type(message)
         event: Optional[Event] = None
 
         try:

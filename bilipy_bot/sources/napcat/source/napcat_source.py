@@ -31,8 +31,7 @@ class NapcatSource(BaseSource):
 
     async def _process_messages(self, message: dict[str, Any]) -> None:
         """处理接收到的消息."""
-        post_type = message.get("post_type", "")
-        napcat_type = NapcatType.get_type(post_type)
+        napcat_type = NapcatType.get_specific_type(message)
         event: Event | None = None
 
         try:
