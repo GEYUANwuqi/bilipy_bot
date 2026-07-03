@@ -102,6 +102,37 @@ class EventBus:
 
         return decorator
 
+    def _task_done_callback(
+        self,
+        task: asyncio.Task,
+        uuid: UUID,
+        callback_name: str,
+        status_value: str,
+    ) -> None:
+        """后台任务完成回调，检查并记录异常.
+
+        Args:
+            task: 已完成的 asyncio.Task
+            uuid: 发布器的唯一标识符
+            callback_name: 回调函数名
+            status_value: 事件状态值
+        """
+        self._background_tasks.discard(task)
+
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            return
+
+        if exc is not None:
+            _log.exception(
+                f"订阅者回调执行失败 "
+                f"(uuid={uuid}, "
+                f"callback={callback_name}, "
+                f"status={status_value})",
+                exc_info=exc,
+            )
+
     async def publish(self, uuid: UUID, event: Event) -> None:
         """发布事件.
 
@@ -111,20 +142,21 @@ class EventBus:
             uuid: 发布器的唯一标识符
             event: 要发布的事件
         """
-        for subscriber in self._subscriber_group.get_subscriber(uuid):
-            try:
-                if not event.status.matches(subscriber.status_filter):
-                    continue
-                # 异步执行回调，保留强引用防止 GC 回收
-                task = asyncio.create_task(subscriber.callback(event))
-                self._background_tasks.add(task)
-                task.add_done_callback(self._background_tasks.discard)
-                _log.debug(
-                    f"触发订阅者 (uuid={uuid}, "
-                    f"callback={subscriber.callback.__name__}, status={event.status.value})"
-                )
-            except Exception as e:
-                _log.error(
-                    f"执行订阅者回调时出错 "
-                    f"(发布器uuid={uuid}, callback={subscriber.callback.__name__}): {e}"
-                )
+        # 存入当前快照
+        subscribers = tuple(self._subscriber_group.get_subscriber(uuid))
+        for subscriber in subscribers:
+            if not event.status.matches(subscriber.status_filter):
+                continue
+            # 异步执行回调，保留强引用防止 GC 回收
+            task = asyncio.create_task(subscriber.callback(event))
+            self._background_tasks.add(task)
+            task.add_done_callback(
+                lambda t,
+                u=uuid,
+                cn=subscriber.callback.__name__,
+                sv=event.status.value: (self._task_done_callback(t, u, cn, sv))
+            )
+            _log.debug(
+                f"触发订阅者 (uuid={uuid}, "
+                f"callback={subscriber.callback.__name__}, status={event.status.value})"
+            )
