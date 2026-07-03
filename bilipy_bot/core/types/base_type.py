@@ -1,5 +1,8 @@
+import re
 from enum import Enum
-from typing import TypeVar
+from typing import TypeVar, Union
+
+_BaseTypeSelf = Union[str, re.Pattern[str], "BaseType"]
 
 
 class BaseType(str, Enum):
@@ -15,25 +18,36 @@ class BaseType(str, Enum):
         """返回标签的状态."""
         return self.value.split(".", 1)[1]
 
-    def matches(self, rule: "BaseType") -> bool:
+    def matches(self, rule: _BaseTypeSelf) -> bool:
         """判断状态是否匹配.
 
+        支持三种匹配方式：
+
+        - ``BaseType``: 按枚举类型匹配（需同 type、同 scope，state 为 "all" 时通配）
+        - ``str``: 作为正则表达式，用 ``re.fullmatch`` 与 ``self.value`` 匹配
+        - ``re.Pattern[str]``: 编译好的正则对象，直接调用其 ``fullmatch`` 方法
+
         Args:
-            rule: 要匹配的标签
+            rule: 状态过滤器（``BaseType`` 枚举，``str`` 正则，或编译好的 ``re.Pattern``）
 
         Returns:
-            bool: 同时匹配type, scope, state
+            bool: 匹配结果
         """
-        if type(self) is type(rule):  # Type匹配
-            if self.scope == rule.scope:  # 作用域匹配
-                if self.state == rule.state or rule.state == "all":  # 具体状态匹配
-                    return True
-                else:
+        if isinstance(rule, BaseType):
+            # 枚举匹配：需同 type、同 scope，state="all" 通配
+            if type(self) is type(rule):
+                if self.scope == rule.scope:
+                    if self.state == rule.state or rule.state == "all":
+                        return True
                     return False
-            else:
                 return False
-        else:
             return False
+
+        if isinstance(rule, re.Pattern):
+            return bool(rule.fullmatch(self.value))
+
+        # str 正则匹配：直接与 self.value 全量匹配
+        return bool(re.fullmatch(rule, self.value))
 
 
 BaseTypeT = TypeVar("BaseTypeT", bound=BaseType)

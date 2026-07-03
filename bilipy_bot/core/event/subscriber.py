@@ -1,7 +1,8 @@
+import re
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from logging import getLogger
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 from uuid import UUID
 
 from .event import Event
@@ -18,11 +19,11 @@ class Subscriber:
 
     Attributes:
         callback: 回调函数
-        status_filter: 状态过滤器
+        status_filter: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern[str]`` 正则）
     """
 
     callback: Callable[[Event], Coroutine[Any, Any, None]]
-    status_filter: "BaseType"
+    status_filter: Union[str, re.Pattern[str], "BaseType"]
 
 
 class SubscriberGroup:

@@ -1,5 +1,7 @@
 """Tests for BaseType enum matching logic."""
 
+import re
+
 from bilipy_bot.core.types import BaseType
 
 
@@ -76,3 +78,62 @@ class TestBaseType:
 
         assert Varied.A.matches(Varied.ALL)
         assert Varied.B.matches(Varied.ALL)
+
+    # ============ str 正则匹配 ============
+
+    def test_matches_str_regex_exact(self):
+        """str 正则精确匹配枚举值."""
+        assert TestType.ACTIVE.matches("test.active")
+
+    def test_matches_str_regex_wildcard(self):
+        """str 正则 ``.*`` 通配应匹配."""
+        assert TestType.ACTIVE.matches(r"test\..*")
+        assert TestType.INACTIVE.matches(r"test\..*")
+
+    def test_matches_str_regex_group(self):
+        """str 正则字符组应正确匹配."""
+        assert TestType.ACTIVE.matches(r"test\.(active|inactive)")
+        assert TestType.INACTIVE.matches(r"test\.(active|inactive)")
+
+    def test_matches_str_regex_no_match(self):
+        """不匹配的 str 正则应返回 False."""
+        assert not TestType.ACTIVE.matches(r"test\.inactive")
+        assert not TestType.ACTIVE.matches(r"other\..*")
+
+    def test_matches_str_regex_scope_pattern(self):
+        """str 正则匹配 scope 维度."""
+
+        class ScopeType(BaseType):
+            A = "scope_a.event"
+            B = "scope_b.event"
+
+        assert ScopeType.A.matches(r"scope_a\..*")
+        assert not ScopeType.B.matches(r"scope_a\..*")
+
+    def test_matches_str_regex_fullmatch_enforced(self):
+        """re.fullmatch 行为：正则必须完全匹配整个值，不能只匹配前缀."""
+        assert TestType.ACTIVE.matches(r"test\.active")
+        assert not TestType.ACTIVE.matches(r"test\.")  # 不完整，fullmatch 失败
+
+    # ============ re.Pattern[str] 匹配 ============
+
+    def test_matches_pattern_exact(self):
+        """编译好的 Pattern 精确匹配枚举值."""
+        pattern = re.compile(r"test\.active")
+        assert TestType.ACTIVE.matches(pattern)
+
+    def test_matches_pattern_wildcard(self):
+        """编译好的 Pattern 通配匹配."""
+        pattern = re.compile(r"test\..*")
+        assert TestType.ACTIVE.matches(pattern)
+        assert TestType.INACTIVE.matches(pattern)
+
+    def test_matches_pattern_no_match(self):
+        """不匹配的 Pattern 应返回 False."""
+        pattern = re.compile(r"test\.inactive")
+        assert not TestType.ACTIVE.matches(pattern)
+
+    def test_matches_pattern_fullmatch_enforced(self):
+        """Pattern.fullmatch 行为：必须完全匹配，不能只匹配前缀."""
+        pattern = re.compile(r"test\.")
+        assert not TestType.ACTIVE.matches(pattern)

@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable, Coroutine
 from logging import getLogger
 from typing import Any, overload
@@ -143,13 +144,13 @@ class BotApp:
     def subscribe(
         self,
         source_id: UUID,
-        status: BaseType,
+        status: str | re.Pattern[str] | BaseType,
     ) -> Callable:
         """装饰器：订阅事件.
 
         Args:
             source_id: 事件源的 UUID
-            status: 状态过滤器
+            status: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern`` 正则）
 
         Returns:
             装饰器函数
@@ -158,6 +159,15 @@ class BotApp:
             @app.subscribe(source.uuid, LiveType.OPEN)
             async def on_open(event: Event):
                 ...
+
+            @app.subscribe(source.uuid, r".*\\.message")
+            async def on_message(event: Event):
+                ...
+
+            pattern = re.compile(r"danmaku\\.(msg|gift)")
+            @app.subscribe(source.uuid, pattern)
+            async def on_danmaku(event: Event):
+                ...
         """
         return self.bus.subscribe(source_id, status)
 
@@ -165,14 +175,14 @@ class BotApp:
         self,
         source_id: UUID,
         callback: Callable[[Event], Coroutine[Any, Any, None]],
-        status: BaseType,
+        status: str | re.Pattern[str] | BaseType,
     ) -> None:
         """手动注册订阅者.
 
         Args:
             source_id: 事件源的 UUID
             callback: 异步回调函数
-            status: 状态过滤器
+            status: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern`` 正则）
         """
         self.bus.add_subscriber(source_id, callback, status)
 

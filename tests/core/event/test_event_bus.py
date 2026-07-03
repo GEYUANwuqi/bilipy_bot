@@ -1,6 +1,7 @@
 """Tests for EventBus publish/subscribe flow."""
 
 import asyncio
+import re
 from uuid import UUID
 
 import pytest
@@ -147,3 +148,149 @@ class TestEventBus:
         result = received.get_nowait()
         assert result.data.value == "hello"
         assert result.status == BusType.EVENT_A
+
+    # ============ str 和 re.Pattern 正则过滤 ============
+
+    @pytest.mark.asyncio
+    async def test_publish_str_regex_matching(self, fixed_uuid: UUID):
+        """str 正则作为 status_filter，匹配时应触发回调."""
+        bus = EventBus()
+        received = asyncio.Queue()
+
+        async def cb(event):
+            await received.put(event)
+
+        bus.add_subscriber(fixed_uuid, cb, r"bus\.event_a")
+        event = Event(data=MockData(), status=BusType.EVENT_A)
+        await bus.publish(fixed_uuid, event)
+
+        await asyncio.sleep(0)
+        assert not received.empty()
+
+    @pytest.mark.asyncio
+    async def test_publish_str_regex_non_matching(self, fixed_uuid: UUID):
+        """str 正则为 status_filter，不匹配时不触发回调."""
+        bus = EventBus()
+        received = asyncio.Queue()
+
+        async def cb(event):
+            await received.put(event)
+
+        bus.add_subscriber(fixed_uuid, cb, r"bus\.event_a")
+        event = Event(data=MockData(), status=BusType.EVENT_B)
+        await bus.publish(fixed_uuid, event)
+
+        await asyncio.sleep(0)
+        assert received.empty()
+
+    @pytest.mark.asyncio
+    async def test_publish_str_regex_wildcard(self, fixed_uuid: UUID):
+        """str 正则 ``.*`` 通配应匹配多个状态."""
+        bus = EventBus()
+        received = asyncio.Queue()
+
+        async def cb(event):
+            await received.put(event)
+
+        bus.add_subscriber(fixed_uuid, cb, r"bus\..*")
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_B))
+
+        await asyncio.sleep(0)
+        assert received.qsize() == 2
+
+    @pytest.mark.asyncio
+    async def test_publish_pattern_matching(self, fixed_uuid: UUID):
+        """编译好的 re.Pattern 作为 status_filter，匹配时应触发回调."""
+        bus = EventBus()
+        received = asyncio.Queue()
+        pattern = re.compile(r"bus\.event_a")
+
+        async def cb(event):
+            await received.put(event)
+
+        bus.add_subscriber(fixed_uuid, cb, pattern)
+        event = Event(data=MockData(), status=BusType.EVENT_A)
+        await bus.publish(fixed_uuid, event)
+
+        await asyncio.sleep(0)
+        assert not received.empty()
+
+    @pytest.mark.asyncio
+    async def test_publish_pattern_non_matching(self, fixed_uuid: UUID):
+        """编译好的 re.Pattern 作为 status_filter，不匹配时不触发回调."""
+        bus = EventBus()
+        received = asyncio.Queue()
+        pattern = re.compile(r"bus\.event_a")
+
+        async def cb(event):
+            await received.put(event)
+
+        bus.add_subscriber(fixed_uuid, cb, pattern)
+        event = Event(data=MockData(), status=BusType.EVENT_B)
+        await bus.publish(fixed_uuid, event)
+
+        await asyncio.sleep(0)
+        assert received.empty()
+
+    @pytest.mark.asyncio
+    async def test_publish_pattern_wildcard(self, fixed_uuid: UUID):
+        """编译好的 Pattern ``.*`` 通配应匹配多个状态."""
+        bus = EventBus()
+        received = asyncio.Queue()
+        pattern = re.compile(r"bus\..*")
+
+        async def cb(event):
+            await received.put(event)
+
+        bus.add_subscriber(fixed_uuid, cb, pattern)
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_B))
+
+        await asyncio.sleep(0)
+        assert received.qsize() == 2
+
+    @pytest.mark.asyncio
+    async def test_publish_str_regex_with_enum_mixed(self, fixed_uuid: UUID):
+        """同一事件源同时存在 str 正则和枚举订阅者，两者独立过滤."""
+        bus = EventBus()
+        str_received = asyncio.Queue()
+        enum_received = asyncio.Queue()
+
+        async def cb_str(event):
+            await str_received.put(event)
+
+        async def cb_enum(event):
+            await enum_received.put(event)
+
+        bus.add_subscriber(fixed_uuid, cb_str, r"bus\.event_a")
+        bus.add_subscriber(fixed_uuid, cb_enum, BusType.EVENT_B)
+
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+
+        await asyncio.sleep(0)
+        assert not str_received.empty()
+        assert enum_received.empty()
+
+    @pytest.mark.asyncio
+    async def test_publish_pattern_with_enum_mixed(self, fixed_uuid: UUID):
+        """同一事件源同时存在 re.Pattern 和枚举订阅者，两者独立过滤."""
+        bus = EventBus()
+        pattern_received = asyncio.Queue()
+        enum_received = asyncio.Queue()
+        pattern = re.compile(r"bus\.event_a")
+
+        async def cb_pattern(event):
+            await pattern_received.put(event)
+
+        async def cb_enum(event):
+            await enum_received.put(event)
+
+        bus.add_subscriber(fixed_uuid, cb_pattern, pattern)
+        bus.add_subscriber(fixed_uuid, cb_enum, BusType.EVENT_B)
+
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+
+        await asyncio.sleep(0)
+        assert not pattern_received.empty()
+        assert enum_received.empty()

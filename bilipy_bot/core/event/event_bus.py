@@ -1,9 +1,10 @@
 import asyncio
 import inspect
+import re
 from collections.abc import Callable, Coroutine
 from functools import wraps
 from logging import getLogger
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 from uuid import UUID
 
 from .event import Event
@@ -55,14 +56,14 @@ class EventBus:
         self,
         uuid: UUID,
         callback: Callable[[Event], Coroutine[Any, Any, None]],
-        status: "BaseType",
+        status: Union[str, re.Pattern[str], "BaseType"],
     ) -> None:
         """添加订阅者.
 
         Args:
             uuid: 发布器的唯一标识符
             callback: 回调函数，接收 Event 参数
-            status: 状态过滤器（同时用于确定事件类别）
+            status: 状态过滤器（``BaseType`` 枚举或 ``str`` 正则）
         """
         wrapper = self._wrap_callback(callback)
 
@@ -74,15 +75,17 @@ class EventBus:
         _log.debug(
             f"为 '{uuid}' 注册订阅者"
             f"callback={callback.__name__}, "
-            f"status_filter={status.value})"
+            f"status_filter={status})"
         )
 
-    def subscribe(self, uuid: UUID, status: "BaseType") -> Callable:
+    def subscribe(
+        self, uuid: UUID, status: Union[str, re.Pattern[str], "BaseType"]
+    ) -> Callable:
         """装饰器：订阅事件.
 
         Args:
             uuid: 发布器的唯一标识符
-            status: 状态过滤器（同时用于确定事件类别）
+            status: 状态过滤器（``BaseType`` 枚举或 ``str`` 正则）
 
         Returns:
             装饰器函数
