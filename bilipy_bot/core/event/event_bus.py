@@ -152,10 +152,9 @@ class EventBus:
             task = asyncio.create_task(subscriber.callback(event))
             self._background_tasks.add(task)
             task.add_done_callback(
-                lambda t,
-                u=uuid,
-                cn=subscriber.callback.__name__,
-                sv=event.status.value: (self._task_done_callback(t, u, cn, sv))
+                lambda t, u=uuid, cn=subscriber.callback.__name__, sv=event.status.value: (
+                    self._task_done_callback(t, u, cn, sv)
+                )
             )
             _log.debug(
                 "触发订阅者 (uuid=%s, callback=%s, status=%s)",
