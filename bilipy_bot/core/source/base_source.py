@@ -15,10 +15,14 @@ class BaseSource(ABC):
     - 通过 EventBus 发布事件
     - 管理自己的生命周期（start/stop）
 
+    子类只需实现 :meth:`on_start` 和 :meth:`on_stop`，
+    无需手动管理 ``self.running`` 状态——
+    :meth:`start` 和 :meth:`stop` 已自动处理。
+
     Attributes:
         uuid: 唯一标识符，由 SourceManager 内部管理
-        running: 运行状态
-        config_key: 配置键，子类覆盖此类属性作为默认值
+        running: 运行状态（由 start/stop 自动管理，子类不应直接修改）
+        config_key: 配置键，子类可覆盖此类属性作为默认值
         supported_types: 事件源支持的 ``BaseType`` 枚举类，用于订阅规则编译
     """
 
@@ -29,32 +33,64 @@ class BaseSource(ABC):
     # 未声明时订阅将抛出 TypeError。
     supported_types: ClassVar[type["BaseType"] | None] = None
 
-    def __init__(self, uuid: UUID | None = None, **kwargs):
+    def __init_subclass__(cls) -> None:
+        """子类初始化检查."""
+        super().__init_subclass__()
+
+        if cls.__name__ == "BaseSource":
+            return
+
+        if not hasattr(cls, "supported_types"):
+            raise TypeError(f"{cls.__name__} must define supported_types")
+
+    def __init__(self, uuid: UUID | None = None, **kwargs) -> None:
         """初始化事件源.
 
         Args:
             uuid: 可选，指定 UUID，默认自动生成
+            **kwargs: 可接受 ``config_key`` 参数，覆盖类级默认值
         """
         self.uuid: UUID = uuid or uuid4()
         self.running: bool = False
-        self.config_key: str = kwargs.get("config_key", "")
-        self._ctx: AppContext | None = None
+        self._ctx: "AppContext | None" = None
+        if "config_key" in kwargs:
+            self.config_key = kwargs.pop("config_key")
 
-    @abstractmethod
     async def start(self) -> None:
-        """启动事件源.
+        """启动事件源（模板方法）.
 
-        子类实现具体的启动逻辑（如开始轮询）。
+        自动管理 ``running`` 状态，然后委托给 :meth:`on_start`。
+        子类不应重写此方法，应实现 :meth:`on_start`。
         """
-        pass
+        if self.running:
+            return
+        self.running = True
+        await self.on_start()
+
+    async def stop(self) -> None:
+        """停止事件源（模板方法）.
+
+        自动管理 ``running`` 状态，然后委托给 :meth:`on_stop`。
+        子类不应重写此方法，应实现 :meth:`on_stop`。
+        """
+        if not self.running:
+            return
+        self.running = False
+        await self.on_stop()
 
     @abstractmethod
-    async def stop(self) -> None:
-        """停止事件源.
+    async def on_start(self) -> None:
+        """子类实现：事件源启动逻辑.
 
-        子类实现具体的停止逻辑。
+        在 :meth:`start` 中被调用，此时 ``self.running`` 已为 ``True``。
         """
-        pass
+
+    @abstractmethod
+    async def on_stop(self) -> None:
+        """子类实现：事件源停止逻辑.
+
+        在 :meth:`stop` 中被调用，此时 ``self.running`` 已为 ``False``。
+        """
 
     def bind(self, ctx: "AppContext") -> None:
         """绑定应用上下文.

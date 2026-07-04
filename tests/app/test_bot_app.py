@@ -25,17 +25,15 @@ class StubSource(BaseSource):
     supported_types = MockType
 
     def __init__(self, uuid: UUID | None = None, **kwargs):
-        super().__init__(uuid=uuid)
+        super().__init__(uuid=uuid, **kwargs)
         self.started = False
         self.stopped = False
 
-    async def start(self):
+    async def on_start(self):
         self.started = True
-        self.running = True
 
-    async def stop(self):
+    async def on_stop(self):
         self.stopped = True
-        self.running = False
 
 
 class MockApi(BaseApi):

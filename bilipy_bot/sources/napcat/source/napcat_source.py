@@ -22,14 +22,14 @@ class NapcatSource(BaseSource):
     """
 
     supported_types = NapcatType
+    config_key = "napcat"
 
-    def __init__(self, config_key: str = "napcat"):
-        """初始化 Napcat 事件源.
-        Args:
-            config_key: 配置键，默认"napcat"
-        """
-        super().__init__()
-        self.config_key = config_key
+    async def on_start(self) -> None:
+        self.api.set_handler(self._process_messages)
+        await self.api.start()
+
+    async def on_stop(self) -> None:
+        await self.api.stop()
 
     async def _process_messages(self, message: dict[str, Any]) -> None:
         """处理接收到的消息."""
@@ -50,13 +50,6 @@ class NapcatSource(BaseSource):
 
         if event is not None:
             await self.ctx.bus.publish(self.uuid, event)
-
-    async def start(self) -> None:
-        self.api.set_handler(self._process_messages)
-        await self.api.start()
-
-    async def stop(self) -> None:
-        await self.api.stop()
 
     @property
     def api(self) -> NapcatApi:

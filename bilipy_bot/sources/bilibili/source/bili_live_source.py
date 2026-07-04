@@ -20,21 +20,20 @@ class BiliLiveSource(BaseSource):
     """
 
     supported_types = LiveType
+    config_key = "bilibili"
 
     def __init__(
         self,
         poll_interval: float | int = 20,
         watch_targets: list[int] | None = None,
-        config_key: str = "bilibili",
+        **kwargs,
     ):
         """初始化直播事件源.
         Args:
             poll_interval: 轮询间隔时间（秒）
             watch_targets: 监听用户列表
-            config_key: 配置键，默认"bilibili"
         """
-        super().__init__()
-        self.config_key: str = config_key
+        super().__init__(**kwargs)
         self.poll_interval: float | int = poll_interval
         self._poll_num: int = 0
         self._room_list: list[int] = []
@@ -43,23 +42,13 @@ class BiliLiveSource(BaseSource):
         if watch_targets is not None:
             self.add_members(watch_targets)
 
-    async def start(self) -> None:
+    async def on_start(self) -> None:
         """启动直播监控."""
-        if self.running:
-            _log.warning("直播监控已在运行中")
-            return
-
-        self.running = True
         self._task = asyncio.create_task(self._monitor_loop())
         _log.info("B站直播监控已启动")
 
-    async def stop(self) -> None:
+    async def on_stop(self) -> None:
         """停止直播监控."""
-        if not self.running:
-            _log.warning("直播监控未在运行")
-            return
-
-        self.running = False
         if self._task and not self._task.done():
             self._task.cancel()
             try:

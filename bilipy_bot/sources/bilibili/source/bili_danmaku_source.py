@@ -17,19 +17,21 @@ _log = getLogger("BiliDanmakuSource")
 
 
 class BiliDanmakuSource(BaseSource):
-    supported_types = DanmakuType
+    """B站直播弹幕事件源.
 
-    def __init__(
-        self, room_id: list[int], debug: bool = False, config_key: str = "bilibili"
-    ):
+    负责轮询B站直播间弹幕并发布事件。
+    """
+
+    supported_types = DanmakuType
+    config_key = "bilibili"
+
+    def __init__(self, room_id: list[int], debug: bool = False, **kwargs):
         """初始化B站弹幕源
         Args:
             room_id: 房间号列表
             debug: 是否开启调试
-            config_key: 配置键，默认"bilibili"
         """
-        super().__init__()
-        self.config_key: str = config_key
+        super().__init__(**kwargs)
         self.room_id: list[int] = room_id
         self.danmaku_list: dict[int, LiveDanmaku] = {}
         self.debug = debug
@@ -138,25 +140,17 @@ class BiliDanmakuSource(BaseSource):
         self.danmaku_list.pop(room_id, None)
         _log.info("房间 %s 的弹幕姬已移除", room_id)
 
-    async def start(self) -> None:
+    async def on_start(self) -> None:
         """启动弹幕监控."""
         if not self.ctx.config.get_config(self.config_key):
             raise RuntimeError("未找到Credential配置")
-        if self.running:
-            _log.warning("B站弹幕姬已在运行中")
-            return
         self._main_loop = asyncio.get_running_loop()  # 保存主事件循环
-        self.running = True
         for rid in self.room_id:
             self.add_new_room(rid)
         _log.info("B站弹幕姬已启动")
 
-    async def stop(self) -> None:
+    async def on_stop(self) -> None:
         """停止所有房间监控."""
-        if not self.running:
-            _log.warning("B站弹幕姬未在运行")
-            return
-        self.running = False
         for rid in list(self._threads.keys()):
             self.remove_room(rid)
 

@@ -19,25 +19,23 @@ class StubSource(BaseSource):
         self.stopped = False
         self.start_exception: Exception | None = None
 
-    async def start(self):
+    async def on_start(self):
         if self.start_exception:
             raise self.start_exception
         self.started = True
-        self.running = True
 
-    async def stop(self):
+    async def on_stop(self):
         self.stopped = True
-        self.running = False
 
 
 class OtherSource(BaseSource):
     """A second source type for type-lookup tests."""
 
-    async def start(self):
-        self.running = True
+    async def on_start(self):
+        pass
 
-    async def stop(self):
-        self.running = False
+    async def on_stop(self):
+        pass
 
 
 @pytest.fixture
