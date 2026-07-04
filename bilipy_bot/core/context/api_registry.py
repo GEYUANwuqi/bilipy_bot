@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 from collections import defaultdict
 from logging import getLogger
 from threading import Lock
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from bilipy_bot.app.config import RuntimeConfig
 from bilipy_bot.core.api import BaseApiT
+
+if TYPE_CHECKING:
+    from bilipy_bot.app.config import RuntimeConfig
 
 _log = getLogger("ApiRegistry")
 
@@ -12,7 +16,7 @@ _log = getLogger("ApiRegistry")
 class ApiRegistry:
     """API 注册器，负责管理 API 单例和配置."""
 
-    def __init__(self, config: RuntimeConfig):
+    def __init__(self, config: "RuntimeConfig"):
         """初始化 ApiRegistry 实例.
         Args:
             config (RuntimeConfig): 运行时 API 配置实例

@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING
 from bilipy_bot.core.event import Event
 from bilipy_bot.core.source import BaseSource
 
-from .. import BilibiliApi, DanmakuType
+from ..api import BilibiliApi
 from ..data import DanmakuGiftData, DanmakuGuardData, DanmakuMsgData
 from ..data.dto import DanmakuGiftDTO, DanmakuGuardDTO, DanmakuMsgDTO
+from ..types import DanmakuType
 
 if TYPE_CHECKING:
     from bilibili_api.live import LiveDanmaku
