@@ -14,7 +14,7 @@ class SourceManager:
     """SourceManager 类，专注于事件源的生命周期管理.
 
     负责添加/移除事件源，并统一管理其启动、停止流程和异步任务。
-    高层概念（EventBus、APIContext、AppContext）由 BotApp 持有并通过
+    高层概念（EventBus、ApiRegistry、AppContext）由 BotApp 持有并通过
     AppContext 注入。
 
     Attributes:

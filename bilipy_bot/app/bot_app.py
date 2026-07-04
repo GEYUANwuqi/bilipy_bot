@@ -125,7 +125,7 @@ class BotApp:
         """
         return self._manager.get_source(source, config_key)
 
-    # ============ API 访问（委托 APIContext）============ #
+    # ============ API 访问（委托 ApiRegistry）============ #
 
     def get_api(self, api_cls: type[BaseApiT], config_key: str) -> BaseApiT:
         """获取 API 单例实例.

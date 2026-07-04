@@ -6,16 +6,16 @@ from typing import Any
 from bilipy_bot.app.config import RuntimeConfig
 from bilipy_bot.core.api import BaseApiT
 
-_log = getLogger("APIContext")
+_log = getLogger("ApiRegistry")
 
 
-class APIContext:
-    """API上下文管理，负责管理 API 单例和配置."""
+class ApiRegistry:
+    """API 注册器，负责管理 API 单例和配置."""
 
     def __init__(self, config: RuntimeConfig):
-        """初始化 APIContext 实例.
+        """初始化 ApiRegistry 实例.
         Args:
-            config (RuntimeConfig): 运行时API配置实例
+            config (RuntimeConfig): 运行时 API 配置实例
         """
         self.config = config
         self._lock = Lock()

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Self, TypeVar
 
 if TYPE_CHECKING:
-    from bilipy_bot.core.context import APIContext
+    from bilipy_bot.core.context import ApiRegistry
 
 
 class BaseApi(ABC):
@@ -12,7 +12,7 @@ class BaseApi(ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls, ctx: "APIContext", config_key: str) -> Self:
+    def create(cls, ctx: "ApiRegistry", config_key: str) -> Self:
         """API实例工厂方法"""
         pass
 

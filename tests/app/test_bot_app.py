@@ -7,7 +7,7 @@ import pytest
 from bilipy_bot.app import BotApp
 from bilipy_bot.app.config import RuntimeConfig
 from bilipy_bot.core.api import BaseApi
-from bilipy_bot.core.context import APIContext, AppContext
+from bilipy_bot.core.context import ApiRegistry, AppContext
 from bilipy_bot.core.data import BaseDataMixin
 from bilipy_bot.core.event import EventBus
 from bilipy_bot.core.source import BaseSource
@@ -79,7 +79,7 @@ class TestBotApp:
 
     def test_construction_with_injected_ctx(self, config):
         """注入的 AppContext 应被使用."""
-        api_ctx = APIContext(config)
+        api_ctx = ApiRegistry(config)
         bus = EventBus()
         ctx = AppContext(config, event_bus=bus, api_ctx=api_ctx)
         app = BotApp(config, ctx=ctx)
@@ -103,8 +103,8 @@ class TestBotApp:
         assert app.manager is not None
 
     def test_api_ctx_property(self, app):
-        """api_ctx 属性应返回 APIContext."""
-        assert isinstance(app.api_ctx, APIContext)
+        """api_ctx 属性应返回 ApiRegistry."""
+        assert isinstance(app.api_ctx, ApiRegistry)
 
     def test_add_source(self, app):
         """add_source 应委托给 SourceManager 并返回实例."""
@@ -120,7 +120,7 @@ class TestBotApp:
         assert app.get_source(source.uuid) is None
 
     def test_get_api(self, app):
-        """get_api 应委托给 APIContext."""
+        """get_api 应委托给 ApiRegistry."""
         api = app.get_api(MockApi, "test")
         assert isinstance(api, MockApi)
 

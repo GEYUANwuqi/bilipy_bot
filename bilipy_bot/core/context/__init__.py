@@ -1,7 +1,7 @@
-from .api_context import APIContext
+from .api_registry import ApiRegistry
 from .app_context import AppContext
 
 __all__ = [
-    "APIContext",
+    "ApiRegistry",
     "AppContext",
 ]

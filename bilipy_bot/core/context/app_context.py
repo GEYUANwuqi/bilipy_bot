@@ -1,7 +1,7 @@
 from bilipy_bot.app.config import RuntimeConfig
 from bilipy_bot.core.event import EventBus
 
-from .api_context import APIContext
+from .api_registry import ApiRegistry
 
 
 class AppContext:
@@ -20,17 +20,17 @@ class AppContext:
         self,
         config: RuntimeConfig,
         event_bus: EventBus | None = None,
-        api_ctx: APIContext | None = None,
+        api_ctx: ApiRegistry | None = None,
     ):
         """初始化 AppContext.
 
         Args:
             config: 运行时配置
             event_bus: 可选，注入自定义 EventBus，默认自动创建
-            api_ctx: 可选，注入自定义 APIContext，默认自动创建
+            api_ctx: 可选，注入自定义 ApiRegistry，默认自动创建
         """
         self._config = config
-        self._api_ctx = api_ctx or APIContext(config)
+        self._api_ctx = api_ctx or ApiRegistry(config)
         self._bus = event_bus or EventBus()
 
     @property
@@ -39,7 +39,7 @@ class AppContext:
         return self._config
 
     @property
-    def api_ctx(self) -> APIContext:
+    def api_ctx(self) -> ApiRegistry:
         """获取 API 上下文."""
         return self._api_ctx
 

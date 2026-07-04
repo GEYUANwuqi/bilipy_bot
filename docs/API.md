@@ -15,7 +15,7 @@ class BaseApi(ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls, ctx: "APIContext", config_key: str) -> Self:
+    def create(cls, ctx: "ApiRegistry", config_key: str) -> Self:
         """API实例工厂方法"""
         pass
 
@@ -60,17 +60,17 @@ class MyApiConfig:
 
 ```python
 from bilipy_bot.core.api import BaseApi
-from bilipy_bot.core.context import APIContext
+from bilipy_bot.core.context import ApiRegistry
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bilipy_bot.core.context import APIContext
+    from bilipy_bot.core.context import ApiRegistry
 
 class MyApi(BaseApi):
     """MyApi 实现"""
 
     @classmethod
-    def create(cls, ctx: "APIContext", config_key: str = "my_api") -> "MyApi":
+    def create(cls, ctx: "ApiRegistry", config_key: str = "my_api") -> "MyApi":
         """
         从上下文创建 MyApi 实例
         Args:
@@ -120,7 +120,7 @@ from logging import getLogger
 from dataclasses import dataclass
 from uuid import uuid4
 
-from bilipy_bot.core.context import APIContext
+from bilipy_bot.core.context import ApiRegistry
 from bilipy_bot.core.api import BaseApi
 
 _log = getLogger("MyApi")
@@ -169,7 +169,7 @@ class MyApi(BaseApi):
     """MyApi 实现"""
 
     @classmethod
-    def create(cls, ctx: APIContext, config_key: str = "my_api") -> "MyApi":
+    def create(cls, ctx: ApiRegistry, config_key: str = "my_api") -> "MyApi":
         """从上下文创建 MyApi 实例"""
         config = ctx.config.get_config(config_key)
         return cls(config)

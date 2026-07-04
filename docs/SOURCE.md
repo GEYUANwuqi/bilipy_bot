@@ -168,17 +168,17 @@ class NoticeEvent(MyEvent):
 ```python
 # my_source/api/my_api.py
 from bilipy_bot.core.api import BaseApi
-from bilipy_bot.core.context import APIContext
+from bilipy_bot.core.context import ApiRegistry
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bilipy_bot.core.context import APIContext
+    from bilipy_bot.core.context import ApiRegistry
 
 class MyApi(BaseApi):
     """我的 API 实现"""
 
     @classmethod
-    def create(cls, ctx: "APIContext", config_key: str = "my_source") -> "MyApi":
+    def create(cls, ctx: "ApiRegistry", config_key: str = "my_source") -> "MyApi":
         """从上下文创建实例"""
         config = ctx.config.get_config(config_key)
         return cls(config)

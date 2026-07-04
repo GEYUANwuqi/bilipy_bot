@@ -12,7 +12,7 @@ from ..data import DynamicData, LiveRoomData, get_max_id
 from ..data.dto import DynamicDTO, LiveRoomDTO
 
 if TYPE_CHECKING:
-    from bilipy_bot.core.context import APIContext
+    from bilipy_bot.core.context import ApiRegistry
 
 _log = getLogger("BilibiliApi")
 
@@ -26,7 +26,7 @@ class BilibiliApi(BaseApi):
         self._credential = credential
 
     @classmethod
-    def create(cls, ctx: "APIContext", config_key: str = "bilibili") -> "BilibiliApi":
+    def create(cls, ctx: "ApiRegistry", config_key: str = "bilibili") -> "BilibiliApi":
         """
         从上下文创建 BilibiliApi 实例
         Args:

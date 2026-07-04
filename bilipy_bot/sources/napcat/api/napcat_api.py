@@ -7,7 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from bilipy_bot.core.api import BaseApi
-from bilipy_bot.core.context import APIContext
+from bilipy_bot.core.context import ApiRegistry
 from bilipy_bot.utils import AsyncWebSocketClient, ListenerId, MessageType
 
 _log = getLogger("NapcatApi")
@@ -235,7 +235,7 @@ class NapcatApi(BaseApi):
     """Napcat API，提供与 Napcat QQ Bot 交互的接口"""
 
     @classmethod
-    def create(cls, ctx: APIContext, config_key: str = "napcat") -> "NapcatApi":
+    def create(cls, ctx: ApiRegistry, config_key: str = "napcat") -> "NapcatApi":
         """
         从上下文创建 NapcatApi 实例
         Args:
