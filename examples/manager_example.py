@@ -5,7 +5,6 @@
 3. 管理生命周期
 """
 
-import asyncio
 from logging import getLogger
 
 from bilipy_bot.app import BotApp, Event
@@ -102,31 +101,4 @@ async def handle_live_close(event: Event[LiveRoomData]):
     _log.info(f"[下播通知] {name} 下播了")
 
 
-# ============ 主函数 ============ #
-
-
-async def main():
-    _log.info("启动 BotApp 监控...")
-    dynamic_source = app.get_source(BiliDynamicSource)
-    live_source = app.get_source(BiliLiveSource)
-    assert dynamic_source is not None and live_source is not None
-    _log.info(f"动态监控轮询间隔: {dynamic_source.poll_interval} 秒")
-    _log.info(f"直播监控轮询间隔: {live_source.poll_interval} 秒")
-
-    # 使用异步上下文管理器
-    async with app:
-        _log.info("监控已启动，按 Ctrl+C 停止...")
-        try:
-            # 保持运行 300 秒
-            await asyncio.sleep(300)
-        except asyncio.CancelledError:
-            _log.info("收到取消信号")
-
-    _log.info("监控已停止")
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        _log.info("程序被中断")
+app.run()

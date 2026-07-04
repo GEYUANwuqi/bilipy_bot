@@ -196,48 +196,4 @@ async def periodic_task():
             _log.error(f"定时任务错误: {e}")
 
 
-# ============ 主函数 ============ #
-
-
-async def main():
-    # 从自动加载的配置中获取 napcat 配置（仅用于展示）
-    napcat_config = app.config.get_config("napcat")
-
-    _log.info("=" * 60)
-    _log.info("启动 NapCat BotApp")
-    _log.info("=" * 60)
-    _log.info(f"WebSocket 地址: {napcat_config.url}")
-    _log.info(f"心跳间隔: {napcat_config.heartbeat} 秒")
-    _log.info(f"重连尝试次数: {napcat_config.reconnect_attempts}")
-    _log.info("=" * 60)
-
-    try:
-        # 使用异步上下文管理器
-        async with app:
-            _log.info("✅ 管理器已启动，开始监听事件...")
-
-            # 创建定时任务（可选）
-            # task = asyncio.create_task(periodic_task())
-
-            # 保持运行
-            _log.info("按 Ctrl+C 停止程序")
-            try:
-                # 无限运行，直到手动停止
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                _log.info("收到停止信号...")
-
-    except Exception as e:
-        _log.error(f"程序运行错误: {e}", exc_info=True)
-
-    _log.info("✅ 程序已停止")
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        _log.info("程序被中断")
-    except Exception as e:
-        _log.error(f"程序异常: {e}", exc_info=True)
+app.run()

@@ -1,3 +1,4 @@
+import asyncio
 import re
 from collections.abc import Coroutine
 from logging import getLogger
@@ -213,6 +214,32 @@ class BotApp:
     async def close(self) -> None:
         """关闭应用，释放所有资源."""
         await self._manager.close()
+
+    # ============ 阻塞式入口 ============ #
+
+    def run(self, duration: float | None = None) -> None:
+        """阻塞运行 BotApp，直到被中断或达到指定时长.
+
+        这是最简使用方式，适合大多数场景。
+        高级用户仍可使用 ``async with`` 或 ``await start/stop`` 进行精细控制。
+
+        Args:
+            duration: 可选，运行时长（秒）。为 ``None`` 则持续运行直到 ``Ctrl+C``。
+        """
+
+        async def _run() -> None:
+            async with self:
+                if duration is not None:
+                    await asyncio.sleep(duration)
+                    _log.info("BotApp 运行 %s 秒，自动停止", duration)
+                else:
+                    # 无限等待直到被取消
+                    await asyncio.Event().wait()
+
+        try:
+            asyncio.run(_run())
+        except KeyboardInterrupt:
+            _log.info("BotApp 被用户中断")
 
     # ============ 异步上下文管理器 ============ #
 
