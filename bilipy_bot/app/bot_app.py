@@ -1,7 +1,7 @@
 import re
-from collections.abc import Callable, Coroutine
+from collections.abc import Coroutine
 from logging import getLogger
-from typing import Any, overload
+from typing import Any, Callable, ParamSpec, overload
 from uuid import UUID
 
 from bilipy_bot.core.api import BaseApiT
@@ -12,6 +12,8 @@ from bilipy_bot.core.types import BaseType
 
 from .config import RuntimeConfig
 from .source_manager import SourceManager
+
+_BotSourceP = ParamSpec("_BotSourceP")
 
 _log = getLogger(__name__)
 
@@ -90,17 +92,23 @@ class BotApp:
 
     # ============ Source 管理（委托 SourceManager）============ #
 
-    def add_source(self, source_cls: type[BaseSourceT], **kwargs: Any) -> BaseSourceT:
+    def add_source(
+        self,
+        source_cls: Callable[_BotSourceP, BaseSourceT],
+        *args: _BotSourceP.args,
+        **kwargs: _BotSourceP.kwargs,
+    ) -> BaseSourceT:
         """添加事件源.
 
         Args:
             source_cls: 事件源类
+            *args: 事件源初始化位置参数
             **kwargs: 事件源初始化关键字参数
 
         Returns:
             事件源实例
         """
-        return self._manager.add_source(source_cls, **kwargs)
+        return self._manager.add_source(source_cls, *args, **kwargs)
 
     def remove_source(self, source_id: UUID):
         """移除事件源."""

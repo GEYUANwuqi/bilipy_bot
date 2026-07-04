@@ -1,8 +1,10 @@
 from logging import getLogger
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Callable, ParamSpec, overload
 from uuid import UUID
 
 from bilipy_bot.core.source import BaseSource, BaseSourceT
+
+_SourceP = ParamSpec("_SourceP")
 
 if TYPE_CHECKING:
     from bilipy_bot.core.context import AppContext
@@ -63,11 +65,17 @@ class SourceManager:
 
     # ============ Source 管理 ============ #
 
-    def add_source(self, source_cls: type[BaseSourceT], **kwargs: Any) -> BaseSourceT:
+    def add_source(
+        self,
+        source_cls: Callable[_SourceP, BaseSourceT],
+        *args: _SourceP.args,
+        **kwargs: _SourceP.kwargs,
+    ) -> BaseSourceT:
         """添加事件源.
 
         Args:
             source_cls: 事件源类
+            *args: 事件源初始化位置参数
             **kwargs: 事件源初始化关键字参数
 
         Returns:
@@ -79,7 +87,7 @@ class SourceManager:
         if self._closed:
             raise RuntimeError("SourceManager 已关闭，无法添加事件源")
 
-        source = source_cls(**kwargs)
+        source = source_cls(*args, **kwargs)
 
         self._sources[source.uuid] = source
         _log.info("添加事件源: %s (uuid=%s)", source.__class__.__name__, source.uuid)
