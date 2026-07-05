@@ -321,7 +321,7 @@ from logging import getLogger
 
 from bilipy_bot.core.source import BaseSource
 from bilipy_bot.core.event import Event
-from bilipy_bot.sources.napcat.data import NapcatEvent
+from bilipy_bot.sources.napcat.data import NapcatData
 from bilipy_bot.sources.napcat.api import NapcatApi
 from bilipy_bot.sources.napcat.types import NapcatType
 
@@ -356,7 +356,7 @@ class NapcatSource(BaseSource):
 
         try:
             # 使用 BaseDataModel 的自动分发构造
-            napcat_event = NapcatEvent.from_dict(message)
+            napcat_event = NapcatData.from_dict(message)
 
             if napcat_type.matches(NapcatType.ALL):
                 event = Event(data=napcat_event, status=napcat_type)
@@ -408,12 +408,13 @@ source_id = source.uuid
 
 # 订阅事件
 from bilipy_bot.sources.napcat import NapcatType
-from bilipy_bot.sources.napcat.data import NapcatGroupMessageEvent
+from bilipy_bot.sources.napcat.data import NapcatGroupMessageData
+from bilipy_bot.sources.napcat.events import NapcatGroupMessageEvent
 
-@app.subscribe(source_id, NapcatType.MESSAGE)
-async def handle_message(event):
+@app.subscribe(source_id, NapcatType.MESSAGE, event_filter=GroupFilter(123456))
+async def handle_message(event: NapcatGroupMessageEvent):
     data = event.data
-    if isinstance(data, NapcatGroupMessageEvent):
+    if isinstance(data, NapcatGroupMessageData):
         print(f"收到群消息: {data.message.plain_text}")
 
 # 启动应用

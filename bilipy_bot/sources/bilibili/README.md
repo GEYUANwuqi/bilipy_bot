@@ -115,10 +115,11 @@ async def handle_live_open(event: Event[LiveRoomData]):
     _log.info(f"[开播通知] {name} 开播了！{title} https://live.bilibili.com/{room_id}")
 ```
 
-1. `@manager.subscribe` 的两个参数分别是事件源的uuid和事件类型，事件类型需要使用事件源定义的type枚举类，例如 `DynamicType` 和 `LiveType`
+1. `@app.subscribe` 的两个参数分别是事件源的uuid和事件类型，事件类型需要使用事件源定义的type枚举类，例如 `DynamicType` 和 `LiveType`
 2. 事件处理函数需要是异步函数， `event` 参数用于事件传参 (你也可以把这个参数改成其他名字) ，可以通过注解的方式来标注 `event.data` 的类型，例如 `Event[DynamicData]` 和 `Event[LiveRoomData]`
+3. 可选地，可以通过 `event_filter` 参数传入过滤器进行内容级筛选，例如只接收特定群组的消息（详见 [FILTER.md](../../docs/FILTER.md)）
 
-> 如果你不想使用装饰器，也可以直接调用 `manager.add_subscriber` 方法来订阅事件，只需要多传入一个事件处理函数 `callback` 即可
+> 如果你不想使用装饰器，也可以直接调用 `app.add_subscriber` 方法来订阅事件，只需要多传入一个事件处理函数 `callback` 即可
 
 ------
 
