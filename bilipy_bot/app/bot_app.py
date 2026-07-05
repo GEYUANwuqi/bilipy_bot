@@ -2,7 +2,7 @@ import asyncio
 import re
 from collections.abc import Coroutine
 from logging import getLogger
-from typing import Any, Callable, ParamSpec, overload
+from typing import TYPE_CHECKING, Any, Callable, ParamSpec, overload
 from uuid import UUID
 
 from bilipy_bot.core.api import BaseApiT
@@ -10,6 +10,9 @@ from bilipy_bot.core.context import AppContext
 from bilipy_bot.core.event import Event, EventBus
 from bilipy_bot.core.source import BaseSource, BaseSourceT
 from bilipy_bot.core.types import BaseType
+
+if TYPE_CHECKING:
+    from bilipy_bot.core.filter import BaseFilter
 
 from .config import RuntimeConfig
 from .source_manager import SourceManager
@@ -154,12 +157,15 @@ class BotApp:
         self,
         source_id: UUID,
         status: str | re.Pattern[str] | BaseType,
+        *,
+        event_filter: "BaseFilter | None" = None,
     ) -> Callable:
         """装饰器：订阅事件.
 
         Args:
             source_id: 事件源的 UUID
             status: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern`` 正则）
+            event_filter: 可选的事件内容过滤器，只有通过过滤器的事件才触发回调
 
         Returns:
             装饰器函数
@@ -181,13 +187,17 @@ class BotApp:
         source = self._manager.get_source(source_id)
         if source is None:
             raise ValueError("事件源 %s 不存在，请先通过 add_source 添加" % source_id)
-        return self.bus.subscribe(source_id, status, source.supported_types)
+        return self.bus.subscribe(
+            source_id, status, source.supported_types, event_filter=event_filter
+        )
 
     def add_subscriber(
         self,
         source_id: UUID,
         callback: Callable[[Event], Coroutine[Any, Any, None]],
         status: str | re.Pattern[str] | BaseType,
+        *,
+        event_filter: "BaseFilter | None" = None,
     ) -> None:
         """手动注册订阅者.
 
@@ -195,11 +205,18 @@ class BotApp:
             source_id: 事件源的 UUID
             callback: 异步回调函数
             status: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern`` 正则）
+            event_filter: 可选的事件内容过滤器，只有通过过滤器的事件才触发回调
         """
         source = self._manager.get_source(source_id)
         if source is None:
             raise ValueError("事件源 %s 不存在，请先通过 add_source 添加" % source_id)
-        self.bus.add_subscriber(source_id, callback, status, source.supported_types)
+        self.bus.add_subscriber(
+            source_id,
+            callback,
+            status,
+            source.supported_types,
+            event_filter=event_filter,
+        )
 
     # ============ 生命周期（委托 SourceManager）============ #
 

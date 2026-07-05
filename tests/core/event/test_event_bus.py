@@ -7,6 +7,7 @@ import pytest
 
 from bilipy_bot.core.data import BaseDataMixin
 from bilipy_bot.core.event import Event, EventBus
+from bilipy_bot.core.filter import BaseFilter
 from bilipy_bot.core.types import BaseType
 
 
@@ -354,3 +355,203 @@ class TestEventBus:
         await asyncio.sleep(0)
         await asyncio.sleep(0)
         assert len(bus._background_tasks) == 0
+
+
+# ============ 过滤器相关测试 ============
+
+
+class _PassFilter(BaseFilter):
+    """始终返回 True 的过滤器。"""
+
+    def __init__(self, label: str = "") -> None:
+        self.filters = [self]
+        self._label = label
+
+    def check(self, event: Event) -> bool:
+        return True
+
+
+class _BlockFilter(BaseFilter):
+    """始终返回 False 的过滤器。"""
+
+    def __init__(self, label: str = "") -> None:
+        self.filters = [self]
+        self._label = label
+
+    def check(self, event: Event) -> bool:
+        return False
+
+
+class TestEventBusWithFilter:
+    """Test EventBus event_filter integration."""
+
+    @pytest.mark.asyncio
+    async def test_publish_with_filter_passing(self, fixed_uuid: UUID):
+        """event_filter.check() 返回 True 时应触发回调."""
+        bus = EventBus()
+        received = asyncio.Queue()
+
+        async def cb(event):
+            await received.put(event)
+
+        bus.add_subscriber(
+            fixed_uuid,
+            cb,
+            BusType.EVENT_A,
+            supported_types=BusType,
+            event_filter=_PassFilter(),
+        )
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await asyncio.sleep(0)
+        assert not received.empty()
+
+    @pytest.mark.asyncio
+    async def test_publish_with_filter_blocking(self, fixed_uuid: UUID):
+        """event_filter.check() 返回 False 时应阻止回调."""
+        bus = EventBus()
+        received = asyncio.Queue()
+
+        async def cb(event):
+            await received.put(event)
+
+        bus.add_subscriber(
+            fixed_uuid,
+            cb,
+            BusType.EVENT_A,
+            supported_types=BusType,
+            event_filter=_BlockFilter(),
+        )
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await asyncio.sleep(0)
+        assert received.empty()
+
+    @pytest.mark.asyncio
+    async def test_publish_with_and_filter_short_circuit(self, fixed_uuid: UUID):
+        """AndFilter: 第一个 filter 返回 False 时不再检查后续."""
+        call_count = 0
+
+        class TrackingFilter(BaseFilter):
+            def __init__(self, returns: bool):
+                self.filters = [self]
+                self._returns = returns
+
+            def check(self, event: Event) -> bool:
+                nonlocal call_count
+                call_count += 1
+                return self._returns
+
+        bus = EventBus()
+        received = asyncio.Queue()
+
+        async def cb(event):
+            await received.put(event)
+
+        # AndFilter: 第一个返回 False → 短路，第二个不应被调用
+        and_filter = TrackingFilter(False) & TrackingFilter(True)
+        bus.add_subscriber(
+            fixed_uuid,
+            cb,
+            BusType.EVENT_A,
+            supported_types=BusType,
+            event_filter=and_filter,
+        )
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await asyncio.sleep(0)
+
+        assert received.empty()
+        assert call_count == 1  # 仅第一个 filter 被调用
+
+    @pytest.mark.asyncio
+    async def test_publish_with_or_filter_short_circuit(self, fixed_uuid: UUID):
+        """OrFilter: 第一个 filter 返回 True 时不再检查后续."""
+        call_count = 0
+
+        class TrackingFilter(BaseFilter):
+            def __init__(self, returns: bool):
+                self.filters = [self]
+                self._returns = returns
+
+            def check(self, event: Event) -> bool:
+                nonlocal call_count
+                call_count += 1
+                return self._returns
+
+        bus = EventBus()
+        received = asyncio.Queue()
+
+        async def cb(event):
+            await received.put(event)
+
+        # OrFilter: 第一个返回 True → 短路，第二个不应被调用
+        or_filter = TrackingFilter(True) | TrackingFilter(False)
+        bus.add_subscriber(
+            fixed_uuid,
+            cb,
+            BusType.EVENT_A,
+            supported_types=BusType,
+            event_filter=or_filter,
+        )
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await asyncio.sleep(0)
+
+        assert not received.empty()
+        assert call_count == 1  # 仅第一个 filter 被调用
+
+    @pytest.mark.asyncio
+    async def test_publish_no_filter_unchanged(self, fixed_uuid: UUID):
+        """不提供 event_filter 时，行为应与改动前完全一致."""
+        bus = EventBus()
+        received = asyncio.Queue()
+
+        async def cb(event):
+            await received.put(event)
+
+        bus.add_subscriber(fixed_uuid, cb, BusType.EVENT_A, supported_types=BusType)
+
+        # 回调是裸回调，而非 filtered_wrapper
+        callbacks = bus._subscriber_group.get_callbacks(fixed_uuid, BusType.EVENT_A)
+        assert len(callbacks) == 1
+        cb_name = getattr(callbacks[0], "__name__", "<lambda>")
+        assert cb_name == "cb"  # 保留原始函数名
+
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await asyncio.sleep(0)
+        assert not received.empty()
+
+    @pytest.mark.asyncio
+    async def test_subscribe_decorator_with_filter(self, fixed_uuid: UUID):
+        """subscribe 装饰器的 event_filter 应正确传递并生效."""
+        bus = EventBus()
+        received = asyncio.Queue()
+
+        @bus.subscribe(
+            fixed_uuid,
+            BusType.EVENT_A,
+            supported_types=BusType,
+            event_filter=_BlockFilter(),
+        )
+        async def handler(event):
+            await received.put(event)
+
+        await bus.publish(fixed_uuid, Event(data=MockData(), status=BusType.EVENT_A))
+        await asyncio.sleep(0)
+        assert received.empty()
+
+    @pytest.mark.asyncio
+    async def test_wraps_preserves_name(self, fixed_uuid: UUID):
+        """包装后的回调应保留原始函数名."""
+        bus = EventBus()
+
+        async def my_handler(event):
+            pass
+
+        bus.add_subscriber(
+            fixed_uuid,
+            my_handler,
+            BusType.EVENT_A,
+            supported_types=BusType,
+            event_filter=_PassFilter(),
+        )
+        callbacks = bus._subscriber_group.get_callbacks(fixed_uuid, BusType.EVENT_A)
+        assert len(callbacks) == 1
+        assert callbacks[0].__name__ == "my_handler"

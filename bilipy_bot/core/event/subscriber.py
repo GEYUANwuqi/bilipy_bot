@@ -2,10 +2,13 @@ import re
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 from uuid import UUID
 
 from bilipy_bot.core.types import BaseType
+
+if TYPE_CHECKING:
+    from bilipy_bot.core.filter import BaseFilter
 
 from .event import Event
 
@@ -19,10 +22,12 @@ class Subscriber:
     Attributes:
         callback: 回调函数
         status_filter: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern[str]`` 正则）
+        event_filter: 事件过滤器（``BaseFilter`` 实例，仅用于调试/内省）
     """
 
     callback: Callable[[Event], Coroutine[Any, Any, None]]
     status_filter: Union[str, re.Pattern[str], "BaseType"]
+    event_filter: "BaseFilter | None" = None
 
 
 class SubscriberGroup:

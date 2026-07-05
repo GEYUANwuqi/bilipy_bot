@@ -4,6 +4,7 @@
 """
 
 from bilipy_bot.core.event import Event
+from bilipy_bot.core.filter import AndFilter, BaseFilter, OrFilter
 
 from .bot_app import BotApp
 from .config import RuntimeConfig
@@ -15,4 +16,8 @@ __all__ = [
     "Event",
     # 配置
     "RuntimeConfig",
+    # 过滤器
+    "AndFilter",
+    "BaseFilter",
+    "OrFilter",
 ]

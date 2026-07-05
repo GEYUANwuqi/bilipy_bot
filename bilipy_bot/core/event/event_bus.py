@@ -11,6 +11,7 @@ from .event import Event
 from .subscriber import Subscriber, SubscriberGroup
 
 if TYPE_CHECKING:
+    from bilipy_bot.core.filter import BaseFilter
     from bilipy_bot.core.types import BaseType
 
 _log = getLogger(__name__)
@@ -27,14 +28,18 @@ class EventBus:
         self._background_tasks: set[asyncio.Task] = set()
 
     def _wrap_callback(
-        self, func: Callable
+        self,
+        func: Callable,
+        event_filter: "BaseFilter | None" = None,
     ) -> Callable[[Event], Coroutine[Any, Any, None]]:
         """检查并包装回调函数.
 
-        验证函数是否为协程函数，并用 @wraps 保留原函数元信息
+        验证函数是否为协程函数，并用 @wraps 保留原函数元信息。
+        若提供了 event_filter，将过滤逻辑一并包装到回调中。
 
         Args:
             func: 原始回调函数
+            event_filter: 可选的事件内容过滤器
 
         Returns:
             包装后的回调函数
@@ -44,6 +49,16 @@ class EventBus:
         """
         if not inspect.iscoroutinefunction(func):
             raise TypeError("回调函数 '%s' 必须是协程函数" % func.__name__)
+
+        if event_filter is not None:
+
+            @wraps(func)
+            async def wrapper(event: Event) -> None:
+                if event_filter.check(event):
+                    return await func(event)
+                _log.debug("事件%s被过滤器 %s 拦截", event.id, event_filter)
+
+            return wrapper
 
         @wraps(func)
         async def wrapper(event: Event) -> None:
@@ -57,6 +72,8 @@ class EventBus:
         callback: Callable[[Event], Coroutine[Any, Any, None]],
         status: Union[str, re.Pattern[str], "BaseType"],
         supported_types: "type[BaseType] | None" = None,
+        *,
+        event_filter: "BaseFilter | None" = None,
     ) -> None:
         """添加订阅者.
 
@@ -66,12 +83,14 @@ class EventBus:
             status: 状态过滤器（``BaseType`` 枚举或 ``str`` 正则）
             supported_types: 事件源声明的 ``BaseType`` 枚举类。
                 订阅规则将在注册期编译为具体状态到回调的映射。
+            event_filter: 可选的事件内容过滤器，只有通过过滤器的事件才触发回调。
         """
-        wrapper = self._wrap_callback(callback)
+        wrapper = self._wrap_callback(callback, event_filter=event_filter)
 
         subscriber = Subscriber(
             callback=wrapper,
             status_filter=status,
+            event_filter=event_filter,
         )
         self._subscriber_group.add(uuid, subscriber, supported_types)
         _log.debug(
@@ -86,6 +105,8 @@ class EventBus:
         uuid: UUID,
         status: Union[str, re.Pattern[str], "BaseType"],
         supported_types: "type[BaseType] | None" = None,
+        *,
+        event_filter: "BaseFilter | None" = None,
     ) -> Callable:
         """装饰器：订阅事件.
 
@@ -93,6 +114,7 @@ class EventBus:
             uuid: 发布器的唯一标识符
             status: 状态过滤器（``BaseType`` 枚举或 ``str`` 正则）
             supported_types: 事件源声明的 ``BaseType`` 枚举类
+            event_filter: 可选的事件内容过滤器，只有通过过滤器的事件才触发回调
 
         Returns:
             装饰器函数
@@ -104,7 +126,9 @@ class EventBus:
         """
 
         def decorator(func: Callable[[Event], Coroutine[Any, Any, None]]) -> Callable:
-            self.add_subscriber(uuid, func, status, supported_types)
+            self.add_subscriber(
+                uuid, func, status, supported_types, event_filter=event_filter
+            )
             return func
 
         return decorator
