@@ -63,7 +63,7 @@ class HeartbeatStatus(BaseDataModel):
 # ==================== 事件基类 ====================
 
 
-class NapcatEvent(BaseDataModel):
+class NapcatData(BaseDataModel):
     """OneBot11 事件基类
 
     使用 post_type 字段进行一级分发
@@ -78,7 +78,7 @@ class NapcatEvent(BaseDataModel):
 # ==================== 消息事件 ====================
 
 
-class NapcatMessageEvent(NapcatEvent):
+class NapcatMessageData(NapcatData):
     """消息事件基类
 
     使用 message_type 字段进行二级分发
@@ -96,7 +96,7 @@ class NapcatMessageEvent(NapcatEvent):
     font: int
 
 
-class NapcatPrivateMessageEvent(NapcatMessageEvent):
+class NapcatPrivateMessageData(NapcatMessageData):
     """私聊消息事件"""
 
     discriminator_value: ClassVar[str] = "private"
@@ -107,7 +107,7 @@ class NapcatPrivateMessageEvent(NapcatMessageEvent):
     sender: FriendSender
 
 
-class NapcatGroupMessageEvent(NapcatMessageEvent):
+class NapcatGroupMessageData(NapcatMessageData):
     """群消息事件"""
 
     discriminator_value: ClassVar[str] = "group"
@@ -120,7 +120,7 @@ class NapcatGroupMessageEvent(NapcatMessageEvent):
 # ==================== 消息发送事件（自身消息上报） ====================
 
 
-class NapcatMessageSentEvent(NapcatEvent):
+class NapcatMessageSentData(NapcatData):
     """消息发送事件基类（自身发送的消息上报）
 
     使用 message_type 字段进行二级分发
@@ -138,7 +138,7 @@ class NapcatMessageSentEvent(NapcatEvent):
     font: int
 
 
-class NapcatPrivateMessageSentEvent(NapcatMessageSentEvent):
+class NapcatPrivateMessageSentData(NapcatMessageSentData):
     """私聊消息发送事件"""
 
     discriminator_value: ClassVar[str] = "private"
@@ -148,7 +148,7 @@ class NapcatPrivateMessageSentEvent(NapcatMessageSentEvent):
     sender: FriendSender
 
 
-class NapcatGroupMessageSentEvent(NapcatMessageSentEvent):
+class NapcatGroupMessageSentData(NapcatMessageSentData):
     """群消息发送事件"""
 
     discriminator_value: ClassVar[str] = "group"
@@ -161,7 +161,7 @@ class NapcatGroupMessageSentEvent(NapcatMessageSentEvent):
 # ==================== 通知事件 ====================
 
 
-class NapcatNoticeEvent(NapcatEvent):
+class NapcatNoticeData(NapcatData):
     """通知事件基类
 
     使用 notice_type 字段进行二级分发
@@ -173,7 +173,7 @@ class NapcatNoticeEvent(NapcatEvent):
     notice_type: str
 
 
-class NapcatGroupUploadNoticeEvent(NapcatNoticeEvent):
+class NapcatGroupUploadNoticeData(NapcatNoticeData):
     """群文件上传事件"""
 
     discriminator_value: ClassVar[str] = "group_upload"
@@ -183,7 +183,7 @@ class NapcatGroupUploadNoticeEvent(NapcatNoticeEvent):
     file: FileInfo
 
 
-class NapcatGroupAdminNoticeEvent(NapcatNoticeEvent):
+class NapcatGroupAdminNoticeData(NapcatNoticeData):
     """群管理员变动事件"""
 
     discriminator_value: ClassVar[str] = "group_admin"
@@ -193,7 +193,7 @@ class NapcatGroupAdminNoticeEvent(NapcatNoticeEvent):
     user_id: int
 
 
-class NapcatGroupDecreaseNoticeEvent(NapcatNoticeEvent):
+class NapcatGroupDecreaseNoticeData(NapcatNoticeData):
     """群成员减少事件"""
 
     discriminator_value: ClassVar[str] = "group_decrease"
@@ -204,7 +204,7 @@ class NapcatGroupDecreaseNoticeEvent(NapcatNoticeEvent):
     user_id: int
 
 
-class NapcatGroupIncreaseNoticeEvent(NapcatNoticeEvent):
+class NapcatGroupIncreaseNoticeData(NapcatNoticeData):
     """群成员增加事件"""
 
     discriminator_value: ClassVar[str] = "group_increase"
@@ -215,7 +215,7 @@ class NapcatGroupIncreaseNoticeEvent(NapcatNoticeEvent):
     user_id: int
 
 
-class NapcatGroupBanNoticeEvent(NapcatNoticeEvent):
+class NapcatGroupBanNoticeData(NapcatNoticeData):
     """群禁言事件"""
 
     discriminator_value: ClassVar[str] = "group_ban"
@@ -227,7 +227,7 @@ class NapcatGroupBanNoticeEvent(NapcatNoticeEvent):
     duration: int  # 禁言时长，单位秒
 
 
-class NapcatFriendAddNoticeEvent(NapcatNoticeEvent):
+class NapcatFriendAddNoticeData(NapcatNoticeData):
     """好友添加事件"""
 
     discriminator_value: ClassVar[str] = "friend_add"
@@ -235,7 +235,7 @@ class NapcatFriendAddNoticeEvent(NapcatNoticeEvent):
     user_id: int
 
 
-class NapcatGroupRecallNoticeEvent(NapcatNoticeEvent):
+class NapcatGroupRecallNoticeData(NapcatNoticeData):
     """群消息撤回事件"""
 
     discriminator_value: ClassVar[str] = "group_recall"
@@ -246,7 +246,7 @@ class NapcatGroupRecallNoticeEvent(NapcatNoticeEvent):
     message_id: int
 
 
-class NapcatFriendRecallNoticeEvent(NapcatNoticeEvent):
+class NapcatFriendRecallNoticeData(NapcatNoticeData):
     """好友消息撤回事件"""
 
     discriminator_value: ClassVar[str] = "friend_recall"
@@ -255,7 +255,7 @@ class NapcatFriendRecallNoticeEvent(NapcatNoticeEvent):
     message_id: int
 
 
-class NapcatNotifyEvent(NapcatNoticeEvent):
+class NapcatNotifyData(NapcatNoticeData):
     """通知事件（戳一戳/运气王/荣誉等）
 
     使用 sub_type 字段进行三级分发
@@ -267,7 +267,7 @@ class NapcatNotifyEvent(NapcatNoticeEvent):
     sub_type: str
 
 
-class NapcatPokeNotifyEvent(NapcatNotifyEvent):
+class NapcatPokeNotifyData(NapcatNotifyData):
     """戳一戳事件"""
 
     discriminator_value: ClassVar[str] = "poke"
@@ -277,7 +277,7 @@ class NapcatPokeNotifyEvent(NapcatNotifyEvent):
     target_id: int
 
 
-class NapcatLuckyKingNotifyEvent(NapcatNotifyEvent):
+class NapcatLuckyKingNotifyData(NapcatNotifyData):
     """运气王事件"""
 
     discriminator_value: ClassVar[str] = "lucky_king"
@@ -287,7 +287,7 @@ class NapcatLuckyKingNotifyEvent(NapcatNotifyEvent):
     target_id: int  # 运气王
 
 
-class NapcatHonorNotifyEvent(NapcatNotifyEvent):
+class NapcatHonorNotifyData(NapcatNotifyData):
     """荣誉变更事件"""
 
     discriminator_value: ClassVar[str] = "honor"
@@ -297,7 +297,7 @@ class NapcatHonorNotifyEvent(NapcatNotifyEvent):
     user_id: int
 
 
-class NapcatGroupMsgEmojiLikeNoticeEvent(NapcatNoticeEvent):
+class NapcatGroupMsgEmojiLikeNoticeData(NapcatNoticeData):
     """群表情回应事件（NapCat/LLOneBot）"""
 
     discriminator_value: ClassVar[str] = "group_msg_emoji_like"
@@ -308,7 +308,7 @@ class NapcatGroupMsgEmojiLikeNoticeEvent(NapcatNoticeEvent):
     likes: list[EmojiLike]
 
 
-class NapcatReactionNoticeEvent(NapcatNoticeEvent):
+class NapcatReactionNoticeData(NapcatNoticeData):
     """群表情回应事件（Lagrange）"""
 
     discriminator_value: ClassVar[str] = "reaction"
@@ -321,7 +321,7 @@ class NapcatReactionNoticeEvent(NapcatNoticeEvent):
     count: int
 
 
-class NapcatGroupEssenceNoticeEvent(NapcatNoticeEvent):
+class NapcatGroupEssenceNoticeData(NapcatNoticeData):
     """群精华消息事件"""
 
     discriminator_value: ClassVar[str] = "essence"
@@ -333,7 +333,7 @@ class NapcatGroupEssenceNoticeEvent(NapcatNoticeEvent):
     operator_id: int
 
 
-class NapcatGroupCardNoticeEvent(NapcatNoticeEvent):
+class NapcatGroupCardNoticeData(NapcatNoticeData):
     """群名片更新事件"""
 
     discriminator_value: ClassVar[str] = "group_card"
@@ -347,7 +347,7 @@ class NapcatGroupCardNoticeEvent(NapcatNoticeEvent):
 # ==================== 请求事件 ====================
 
 
-class NapcatRequestEvent(NapcatEvent):
+class NapcatRequestData(NapcatData):
     """请求事件基类
 
     使用 request_type 字段进行二级分发
@@ -362,14 +362,14 @@ class NapcatRequestEvent(NapcatEvent):
     comment: str
 
 
-class NapcatFriendRequestEvent(NapcatRequestEvent):
+class NapcatFriendRequestData(NapcatRequestData):
     """好友请求事件"""
 
     discriminator_value: ClassVar[str] = "friend"
     request_type: str = "friend"
 
 
-class NapcatGroupRequestEvent(NapcatRequestEvent):
+class NapcatGroupRequestData(NapcatRequestData):
     """群请求事件"""
 
     discriminator_value: ClassVar[str] = "group"
@@ -381,7 +381,7 @@ class NapcatGroupRequestEvent(NapcatRequestEvent):
 # ==================== 元事件 ====================
 
 
-class NapcatMetaEvent(NapcatEvent):
+class NapcatMetaData(NapcatData):
     """元事件基类
 
     使用 meta_event_type 字段进行二级分发
@@ -393,7 +393,7 @@ class NapcatMetaEvent(NapcatEvent):
     meta_event_type: str
 
 
-class NapcatLifecycleMetaEvent(NapcatMetaEvent):
+class NapcatLifecycleMetaData(NapcatMetaData):
     """生命周期元事件"""
 
     discriminator_value: ClassVar[str] = "lifecycle"
@@ -401,7 +401,7 @@ class NapcatLifecycleMetaEvent(NapcatMetaEvent):
     sub_type: str  # enable/disable/connect
 
 
-class NapcatHeartbeatMetaEvent(NapcatMetaEvent):
+class NapcatHeartbeatMetaData(NapcatMetaData):
     """心跳元事件"""
 
     discriminator_value: ClassVar[str] = "heartbeat"

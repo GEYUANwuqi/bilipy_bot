@@ -7,7 +7,7 @@ from bilipy_bot.core.source import BaseSource
 from ..api import (
     NapcatApi,
 )
-from ..data import NapcatEvent
+from ..data import NapcatData
 from ..types import (
     NapcatType,
 )
@@ -38,7 +38,7 @@ class NapcatSource(BaseSource):
 
         try:
             # 使用 BaseDataModel 的自动分发构造
-            napcat_event = NapcatEvent.from_dict(message)
+            napcat_event = NapcatData.from_dict(message)
 
             if napcat_type.matches(NapcatType.ALL):
                 event = Event(data=napcat_event, status=napcat_type)
