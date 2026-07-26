@@ -14,9 +14,22 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --dev --python "3.12"
 
       - name: Validate tag and branch
         id: meta
@@ -30,12 +43,10 @@ jobs:
             CHANNEL="stable"
             REQUIRED_BRANCH="main"
             PRERELEASE="false"
-            LATEST_FLAG="--latest"
           elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$ ]]; then
             CHANNEL="dev"
             REQUIRED_BRANCH="dev_main"
             PRERELEASE="true"
-            LATEST_FLAG="--latest=false"
           else
             echo "Invalid tag: $TAG"
             echo "Expected stable tag: v3.0.5"
@@ -48,34 +59,55 @@ jobs:
             exit 1
           fi
 
+          PROJECT_VERSION="$(python -c \
+            'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          TAG_VERSION="${TAG#v}"
+          BASE_VERSION="${TAG_VERSION%%-dev.*}"
+          if [[ "$BASE_VERSION" != "$PROJECT_VERSION" ]]; then
+            echo "Tag version $BASE_VERSION does not match project version $PROJECT_VERSION"
+            exit 1
+          fi
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
-          echo "latest_flag=$LATEST_FLAG" >> "$GITHUB_OUTPUT"
 
-      - name: Create stable GitHub Release
-        if: steps.meta.outputs.prerelease == 'false'
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run pyright
+
+      - name: Test with coverage gate
+        run: >
+          uv run pytest
+          --cov=bilipy_bot
+          --cov-report=term-missing
+          --cov-fail-under=70
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Create GitHub Release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ steps.meta.outputs.tag }}
-          LATEST_FLAG: ${{ steps.meta.outputs.latest_flag }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
         run: |
-          gh release create "$TAG_NAME" \
-            --title "$TAG_NAME" \
-            --generate-notes \
-            --verify-tag \
-            $LATEST_FLAG
+          RELEASE_ARGS=(
+            --title "$TAG_NAME"
+            --generate-notes
+            --verify-tag
+          )
 
-      - name: Create dev GitHub Prerelease
-        if: steps.meta.outputs.prerelease == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ steps.meta.outputs.tag }}
-          LATEST_FLAG: ${{ steps.meta.outputs.latest_flag }}
-        run: |
-          gh release create "$TAG_NAME" \
-            --title "$TAG_NAME" \
-            --generate-notes \
-            --verify-tag \
-            --prerelease \
-            $LATEST_FLAG
+          if [[ "$PRERELEASE" == "true" ]]; then
+            RELEASE_ARGS+=(--prerelease --latest=false)
+          else
+            RELEASE_ARGS+=(--latest)
+          fi
+
+          gh release create "$TAG_NAME" dist/* "${RELEASE_ARGS[@]}"

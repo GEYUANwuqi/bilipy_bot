@@ -6,7 +6,12 @@ on:
 
 jobs:
   test:
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v6
@@ -14,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: ".python-version"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -22,16 +27,32 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked --dev
+        run: uv sync --locked --dev --python "${{ matrix.python-version }}"
 
       - name: Lint
+        if: matrix.python-version == '3.12'
         run: uv run ruff check .
 
       - name: Format check
+        if: matrix.python-version == '3.12'
         run: uv run ruff format --check .
 
       - name: Type check
+        if: matrix.python-version == '3.12'
         run: uv run pyright
 
+      - name: Test with coverage gate
+        if: matrix.python-version == '3.12'
+        run: >
+          uv run pytest
+          --cov=bilipy_bot
+          --cov-report=term-missing
+          --cov-fail-under=70
+
       - name: Test
+        if: matrix.python-version != '3.12'
         run: uv run pytest
+
+      - name: Build distributions
+        if: matrix.python-version == '3.12'
+        run: uv build
