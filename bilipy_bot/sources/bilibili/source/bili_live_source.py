@@ -213,16 +213,16 @@ class BiliLiveSource(BaseSource):
                     except Exception as e:
                         _log.error("轮询房间 '%s' 时出错: %s", room_id, e)
 
-                    if not self.running:
-                        break
-
-                    try:
-                        await asyncio.sleep(self.poll_interval)
-                    except asyncio.CancelledError:
-                        raise
-
                 self._poll_num += 1
                 _log.debug("完成第 %s 轮直播监控", self._poll_num)
+
+                if not self.running:
+                    break
+
+                # poll_interval 是「每轮」的间隔。原实现把 sleep 放在 per-room
+                # 循环内，单个房间的实际刷新周期变成 N×interval——开播/下播这类
+                # 事件会被延迟整整 N 倍。
+                await asyncio.sleep(self.poll_interval)
 
         except asyncio.CancelledError:
             _log.debug("监控循环被取消")

@@ -5,6 +5,8 @@ from typing import Any
 
 import yaml
 
+from bilipy_bot.core.exceptions import ConfigError
+
 
 class RuntimeConfig:
     """运行时 API 配置类，存储和管理 API 配置信息.
@@ -55,7 +57,8 @@ class RuntimeConfig:
         Raises:
             FileNotFoundError: 配置文件不存在.
             yaml.YAMLError: YAML 文件格式错误.
-            ValueError: YAML 文件顶层不是键值映射，或配置项构建失败.
+            ConfigError: YAML 文件顶层不是键值映射，或配置项构建失败
+                （``ConfigError`` 同时继承 ``ValueError``）.
 
         Example:
             ``config.yaml`` 内容::
@@ -85,7 +88,7 @@ class RuntimeConfig:
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
-            raise ValueError(
+            raise ConfigError(
                 "配置文件格式错误: 顶层应为映射 (dict)，实际得到 %s"
                 % type(data).__name__
             )
@@ -96,7 +99,7 @@ class RuntimeConfig:
                 try:
                     configs[key] = builder(value)
                 except Exception as e:
-                    raise ValueError("配置项 '%s' 构建失败: %s" % (key, e)) from e
+                    raise ConfigError("配置项 '%s' 构建失败: %s" % (key, e)) from e
             else:
                 configs[key] = value
         return cls(**configs)

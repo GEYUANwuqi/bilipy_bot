@@ -9,6 +9,7 @@ from uuid import uuid4
 from bilipy_bot.core.api import BaseApi
 from bilipy_bot.core.context import ApiRegistry
 from bilipy_bot.utils import AsyncWebSocketClient, ListenerId, MessageType
+from bilipy_bot.utils.websocket import ListenerClosedError, ListenerEvictedError
 
 _log = getLogger("NapcatApi")
 
@@ -114,17 +115,21 @@ class NapcatClient:
         _log.info("Napcat client started with listener: %s", self._listener_id)
 
     async def stop(self):
-        """停止客户端"""
-        if self._task and not self._task.done():
+        """停止客户端（幂等，可被 on_stop 与 ApiRegistry.aclose_all 重复调用）"""
+        task = self._task
+        self._task = None
+        if task and not task.done():
             try:
-                self._task.cancel()
-                await self._task
+                task.cancel()
+                await task
             except asyncio.CancelledError:
                 # 任务被取消是预期行为，忽略异常
                 pass
 
-        if self._listener_id:
-            await self.client.remove_listener(self._listener_id)
+        listener_id = self._listener_id
+        self._listener_id = None
+        if listener_id:
+            await self.client.remove_listener(listener_id)
 
         await self.client.stop()
         _log.info("Napcat client stopped")
@@ -215,6 +220,11 @@ class NapcatClient:
                 except TimeoutError:
                     # 超时是正常的，继续等待
                     continue
+                except (ListenerClosedError, ListenerEvictedError) as e:
+                    # 监听器已关闭或被驱逐：这条 while 再转下去只会立刻拿到
+                    # 同一个异常，变成不带任何 sleep 的 100% CPU 空转。
+                    _log.warning("监听器不可用，停止消息处理: %s", e)
+                    break
                 except Exception as e:
                     _log.error("Error processing message: %s", e)
         except asyncio.CancelledError:
@@ -241,11 +251,21 @@ class NapcatApi(BaseApi):
         Args:
             ctx: API 上下文
             config_key: 配置键
+
+        Raises:
+            ConfigError: 缺少 ``config_key`` 对应的 napcat 配置。
+                napcat 必须有 url/token 才能连接，配置缺失时用 require_config
+                直接报错，而不是把 None 一路带到深处变成
+                ``AttributeError: 'NoneType' object has no attribute 'token'``。
         """
-        return cls(ctx.config.get_config(config_key))
+        return cls(ctx.require_config(config_key))
 
     def __init__(self, config: NapcatConfig):
         self.client = NapcatClient.create(config)
+
+    async def aclose(self) -> None:
+        """释放 WebSocket 连接与后台任务（由 ApiRegistry.aclose_all 调用）."""
+        await self.client.stop()
 
     def set_handler(self, handler: Callable[[dict[str, Any]], Awaitable[None]]):
         """设置消息处理函数"""

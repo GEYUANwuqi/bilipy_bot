@@ -160,7 +160,10 @@ class CommandFilter(BaseFilter):
             return False  # 非消息事件，安全拦截
 
         text = getattr(message, "plain_text", "")
-        command = text.split(maxsplit=1)[0] if text else ""
+        # 先取列表再判空：`"   ".split(maxsplit=1)` 返回 []，
+        # 直接 [0] 会在纯空白消息上抛 IndexError，导致回调 task 异常、事件被吞。
+        parts = text.split(maxsplit=1)
+        command = parts[0] if parts else ""
         result = command in self.filters
         if not result:
             _log.debug("事件 %s 被 CommandFilter 拦截: command=%s", event.id, command)

@@ -5,6 +5,7 @@ from logging import getLogger
 from typing import TYPE_CHECKING, Any, Union
 from uuid import UUID
 
+from bilipy_bot.core.exceptions import SubscriptionError
 from bilipy_bot.core.types import BaseType
 
 if TYPE_CHECKING:
@@ -61,6 +62,7 @@ class SubscriberGroup:
 
         Raises:
             TypeError: 未提供 ``supported_types``
+            SubscriptionError: 订阅规则在 ``supported_types`` 中无任何匹配
         """
         if supported_types is None:
             raise TypeError(
@@ -72,17 +74,41 @@ class SubscriberGroup:
         # 将订阅规则展开到所有匹配的具体状态
         matched = supported_types.matching_statuses(subscriber.status_filter)
 
+        # 无匹配意味着这个订阅永远不会触发——几乎总是状态值或正则写错了。
+        # 静默丢弃会让用户面对"回调不执行"却无从下手，因此直接报错。
         if not matched:
-            _log.warning(
-                "订阅规则 %s 在 %s 中无匹配的具体状态，该订阅将永远不会触发",
-                subscriber.status_filter,
-                supported_types.__name__,
+            raise SubscriptionError(
+                "订阅规则 %r 在 %s 中无匹配的具体状态，该订阅永远不会触发。"
+                "可用的状态值：%s"
+                % (
+                    subscriber.status_filter,
+                    supported_types.__name__,
+                    [member.value for member in supported_types],
+                )
             )
-            return
 
         status_map = self._dispatch_table.setdefault(uuid, {})
         for status in matched:
             status_map.setdefault(status, []).append(subscriber.callback)
+
+    def remove(self, uuid: UUID) -> int:
+        """移除某个事件源的全部订阅.
+
+        用于事件源被移除时清理派发表——否则该 uuid 的回调会永久残留，
+        且同一 uuid 的新事件源会意外继承旧订阅。
+
+        Args:
+            uuid: 发布器的唯一标识符
+
+        Returns:
+            被移除的回调数量（含同一回调注册到多个状态的重复计数）
+        """
+        status_map = self._dispatch_table.pop(uuid, None)
+        if not status_map:
+            return 0
+        removed = sum(len(callbacks) for callbacks in status_map.values())
+        _log.debug("移除 '%s' 的 %s 个订阅回调", uuid, removed)
+        return removed
 
     def get_callbacks(self, uuid: UUID, status: BaseType) -> tuple[Callable, ...]:
         """获取指定事件源和状态值对应的所有回调函数快照.

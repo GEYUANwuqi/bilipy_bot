@@ -26,6 +26,18 @@ class EventBus:
         self._subscriber_group = SubscriberGroup()
         # 持有 create_task 返回的 Task 强引用，防止 GC 回收未完成的任务
         self._background_tasks: set[asyncio.Task] = set()
+        # 已关闭的总线不再接受 publish
+        self._closed = False
+
+    @property
+    def closed(self) -> bool:
+        """是否已关闭（关闭后 :meth:`publish` 不再派发事件）."""
+        return self._closed
+
+    @property
+    def pending_callbacks(self) -> int:
+        """当前尚未完成的回调数量."""
+        return sum(1 for task in self._background_tasks if not task.done())
 
     def _wrap_callback(
         self,
@@ -133,6 +145,66 @@ class EventBus:
 
         return decorator
 
+    def remove_subscribers(self, uuid: UUID) -> int:
+        """移除某个事件源的全部订阅.
+
+        事件源被移除时必须调用，否则派发表中该 uuid 的回调会永久残留。
+
+        Args:
+            uuid: 发布器的唯一标识符
+
+        Returns:
+            被移除的回调数量
+        """
+        return self._subscriber_group.remove(uuid)
+
+    async def close(self, timeout: float = 5.0) -> None:
+        """关闭事件总线：停止接受新事件，并排空正在执行的回调.
+
+        关闭序列：
+
+        1. 置 ``closed`` —— 之后 :meth:`publish` 只记录警告、不再派发；
+        2. 等待所有 in-flight 回调完成，最长 ``timeout`` 秒；
+        3. 超时未完成的回调被 ``cancel()`` 并 ``await`` 到真正结束。
+
+        不做这件事的后果是进程退出时 pending 回调被 GC，
+        Python 会打印 ``Task was destroyed but it is pending!``，
+        且用户回调可能执行到一半被掐断。
+
+        该方法幂等；从回调内部调用时会跳过调用者自身的 task，不会自我等待。
+
+        Args:
+            timeout: 等待回调完成的秒数，超时后强制取消
+        """
+        if self._closed:
+            return
+        self._closed = True
+
+        current = asyncio.current_task()
+        pending = [
+            task
+            for task in self._background_tasks
+            if not task.done() and task is not current
+        ]
+        if not pending:
+            self._background_tasks.clear()
+            _log.debug("EventBus 已关闭（无待完成回调）")
+            return
+
+        _log.info(
+            "EventBus 正在等待 %s 个回调完成（超时 %.1fs）", len(pending), timeout
+        )
+        _, not_done = await asyncio.wait(pending, timeout=timeout)
+
+        if not_done:
+            _log.warning("%s 个回调在 %.1fs 内未完成，强制取消", len(not_done), timeout)
+            for task in not_done:
+                task.cancel()
+            await asyncio.gather(*not_done, return_exceptions=True)
+
+        self._background_tasks.clear()
+        _log.info("EventBus 已关闭")
+
     def _task_done_callback(
         self,
         task: asyncio.Task,
@@ -169,10 +241,20 @@ class EventBus:
 
         发布指定发布器的事件，触发所有匹配的订阅者回调。
 
+        总线已关闭时事件被丢弃（记录警告），避免在关闭排空过程中又派生新回调。
+
         Args:
             uuid: 发布器的唯一标识符
             event: 要发布的事件
         """
+        if self._closed:
+            _log.warning(
+                "EventBus 已关闭，丢弃事件 (uuid=%s, status=%s)",
+                uuid,
+                event.status.value,
+            )
+            return
+
         # 查表派发：根据 uuid + 状态值直接获取所有已编译的回调
         callbacks = self._subscriber_group.get_callbacks(uuid, event.status)
 

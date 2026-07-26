@@ -11,6 +11,7 @@
 3. [如何适配一个 Data数据类](DATA.md)
 4. [如何适配一个 Filter过滤器类](FILTER.md)
 5. [如何适配一个完整的 Source事件源类](SOURCE.md)
+6. [生命周期与错误处理](LIFECYCLE.md)
 
 ------
 

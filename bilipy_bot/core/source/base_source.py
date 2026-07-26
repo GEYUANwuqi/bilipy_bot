@@ -61,11 +61,22 @@ class BaseSource(ABC):
 
         自动管理 ``running`` 状态，然后委托给 :meth:`on_start`。
         子类不应重写此方法，应实现 :meth:`on_start`。
+
+        :meth:`on_start` 抛出异常（含 ``CancelledError``）时，
+        ``running`` 会回滚为 ``False`` 后再向上传播——否则启动失败的事件源
+        会以"运行中"的假象留在应用里，而它的资源其实从未建立起来。
+
+        Raises:
+            Exception: :meth:`on_start` 抛出的任何异常，原样向上传播
         """
         if self.running:
             return
         self.running = True
-        await self.on_start()
+        try:
+            await self.on_start()
+        except BaseException:
+            self.running = False
+            raise
 
     async def stop(self) -> None:
         """停止事件源（模板方法）.

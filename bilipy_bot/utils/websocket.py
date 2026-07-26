@@ -120,6 +120,15 @@ class WebSocketConfig:
             raise ValueError("Reconnect attempts cannot be negative")
 
 
+_CLOSE_SENTINEL = object()
+"""放入监听器队列的关闭哨兵.
+
+``close()`` 需要唤醒已经阻塞在 ``queue.get()`` 上的消费者——只置标志位的话，
+等待者会永远挂在那里等一条永不到来的消息。哨兵被 ``get()`` 识别后转换为
+``ListenerClosedError``，因此不会被误当成业务消息。
+"""
+
+
 class WebSocketListener:
     """WebSocket 消息监听器
 
@@ -189,15 +198,21 @@ class WebSocketListener:
 
         try:
             if timeout is None:
-                return await self.queue.get()
+                item = await self.queue.get()
             else:
-                return await asyncio.wait_for(self.queue.get(), timeout=timeout)
+                item = await asyncio.wait_for(self.queue.get(), timeout=timeout)
         except asyncio.CancelledError:
             raise
         except Exception as e:
             if self._closed:
                 raise ListenerClosedError("Listener %s is closed" % self.id) from e
             raise
+
+        if item[0] is _CLOSE_SENTINEL:
+            # 等待期间监听器被关闭：把哨兵放回去，让其他等待者也能醒
+            self._requeue_close_sentinel()
+            raise ListenerClosedError("Listener %s is closed" % self.id)
+        return item
 
     def get_nowait(self) -> tuple[Any, MessageType] | None:
         """非阻塞获取消息
@@ -212,12 +227,30 @@ class WebSocketListener:
             raise ListenerClosedError("Listener %s is closed" % self.id)
 
         try:
-            return self.queue.get_nowait()
+            item = self.queue.get_nowait()
         except asyncio.QueueEmpty:
             return None
 
+        if item[0] is _CLOSE_SENTINEL:
+            self._requeue_close_sentinel()
+            raise ListenerClosedError("Listener %s is closed" % self.id)
+        return item
+
+    def _requeue_close_sentinel(self) -> None:
+        """把关闭哨兵放回队列，使后续/并发的等待者同样会醒来."""
+        try:
+            self.queue.put_nowait((_CLOSE_SENTINEL, MessageType.Close))
+        except QueueFull:
+            pass
+
     def close(self) -> None:
-        """关闭监听器并清空队列"""
+        """关闭监听器，清空队列并唤醒所有等待者
+
+        幂等。清空积压消息后放入关闭哨兵——只置 ``_closed`` 标志的话，
+        已经阻塞在 ``get()`` 上的消费者不会被唤醒，会一直挂着。
+        """
+        if self._closed:
+            return
         self._closed = True
         # 清空队列以释放等待的消费者
         while not self.queue.empty():
@@ -225,6 +258,7 @@ class WebSocketListener:
                 self.queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
+        self._requeue_close_sentinel()
 
     @property
     def is_closed(self) -> bool:
@@ -509,8 +543,12 @@ class ReconnectionStrategy:
         """检查是否应该继续重连
 
         Returns:
-            bool: 未达到最大重连次数返回 True，0 表示无限重连
+            bool: 未达到最大重连次数返回 True，``reconnect_attempts=0`` 表示无限重连
         """
+        if self.config.reconnect_attempts == 0:
+            # 配置文档一直声明 0 = 无限重连，而原实现是 `0 < 0` → 立即放弃，
+            # 恰好把"永不停止"配成了"一次都不试"。
+            return True
         return self.attempt_count < self.config.reconnect_attempts
 
     def get_delay(self) -> float:
@@ -689,30 +727,45 @@ class AsyncWebSocketClient:
         self.logger.info("WebSocket client started")
 
     async def stop(self) -> None:
-        """停止客户端
+        """停止客户端（外部入口）
 
-        优雅地关闭连接、清理所有监听器和任务。
-        如果已经停止，直接返回。
+        优雅地取消主任务，然后清理监听器与连接。幂等。
+
+        主任务自身**不得**走这条路径：``await self._main_task`` 在主任务里执行
+        会抛 ``RuntimeError``（Task 不能 await 自己），而此时 ``_running``
+        已被置 False，异常传出后 finally 里的再次 stop() 会被开头的早退挡掉，
+        于是监听器与 aiohttp session 全部泄漏。内部收尾请用 :meth:`_shutdown`。
         """
-        if not self._running:
-            return
-
         self._running = False
-        self.logger.debug("WebSocket client stopping")
+        main_task = self._main_task
+        self._main_task = None
 
-        # 取消主任务
-        if self._main_task:
-            self._main_task.cancel()
+        if main_task is not None and main_task is not asyncio.current_task():
+            self.logger.debug("WebSocket client stopping")
+            main_task.cancel()
             try:
-                await self._main_task
+                await main_task
             except asyncio.CancelledError:
                 pass
+            except Exception as e:
+                self.logger.error("Main task ended with error: %s", e)
+
+        await self._shutdown()
+
+    async def _shutdown(self) -> None:
+        """清理监听器与底层连接（幂等，不触碰主任务）
+
+        供 :meth:`stop` 和 :meth:`_main_loop` 的 finally 共用：
+        无论从外部停止还是主循环自己退出，资源释放都走同一条路径。
+        """
+        self._running = False
 
         # 关闭所有监听器
         with self._listeners_lock:
-            for listener in self._listeners.values():
-                listener.close()
+            listeners = list(self._listeners.values())
             self._listeners.clear()
+        for listener in listeners:
+            listener.close()
 
         # 关闭连接
         await self.connection.close()
@@ -734,13 +787,22 @@ class AsyncWebSocketClient:
             buffer_size = self.config.listener_buffer_size
 
         listener = WebSocketListener(buffer_size)
+        evicted: WebSocketListener | None = None
 
         with self._listeners_lock:
-            # 检查监听器数量限制
+            # 检查监听器数量限制。淘汰只在锁内做 dict 操作，
+            # 关闭动作留到临界区之外——在持有非重入锁时调用会重入同一把锁的
+            # remove_listener，是一条确定的死锁路径。
             if len(self._listeners) >= self.config.max_listeners:
-                await self._evict_oldest_listener()
+                evicted = self._pop_oldest_listener_locked()
 
             self._listeners[listener.id] = listener
+
+        if evicted is not None:
+            evicted.close()
+            self.logger.warning(
+                "Evicted oldest listener due to max listeners: %s", evicted.id
+            )
 
         self.logger.debug("Listener created: %s", listener.id)
         return listener.id
@@ -826,28 +888,22 @@ class AsyncWebSocketClient:
         except QueueFull:
             raise WebSocketError("Send queue is full")
 
-    async def _evict_oldest_listener(self) -> None:
-        """淘汰最旧的监听器
+    def _pop_oldest_listener_locked(self) -> WebSocketListener | None:
+        """摘除创建时间最早的监听器并返回它（**调用方必须已持有锁**）
 
-        当监听器数量达到上限时，移除创建时间最早的监听器。
+        只做字典操作、不做任何 ``await``，也不调用 ``close()``——
+        关闭动作由调用方在释放锁之后执行。
+
+        Returns:
+            被摘除的监听器，没有监听器时返回 None
         """
         if not self._listeners:
-            return
+            return None
 
-        # 找到最旧的监听器
-        oldest_id = None
-        oldest_time = float("inf")
-
-        for listener_id, listener in self._listeners.items():
-            if listener.created_at < oldest_time:
-                oldest_time = listener.created_at
-                oldest_id = listener_id
-
-        if oldest_id:
-            await self.remove_listener(oldest_id)
-            self.logger.warning(
-                "Evicted oldest listener due to max listeners: %s", oldest_id
-            )
+        oldest_id = min(
+            self._listeners, key=lambda lid: self._listeners[lid].created_at
+        )
+        return self._listeners.pop(oldest_id, None)
 
     async def _broadcast_message(self, message: Any, msg_type: MessageType) -> None:
         """广播消息到所有监听器
@@ -900,13 +956,17 @@ class AsyncWebSocketClient:
 
         管理连接生命周期，协调发送和接收任务。
         处理连接断开、重连和异常恢复。
+
+        **首次连接也在循环内**，与重连走同一条 :meth:`_handle_disconnected`
+        路径（首次的退避为 0，立即尝试）。原实现把首连放在 while 之前，
+        首连失败会直接落进 finally —— 重连策略对"服务端还没起来"这种最常见的
+        场景完全不生效。
         """
         self.logger.debug("Main loop started")
 
         try:
-            await self.connection.connect()
             while self._running:
-                # 处理连接状态
+                # 处理连接状态（含首次连接）
                 if not self.connection.is_connected():
                     await self._handle_disconnected()
                     continue
@@ -919,48 +979,56 @@ class AsyncWebSocketClient:
                     [send_task, recv_task], return_when=asyncio.FIRST_COMPLETED
                 )
 
-                # 取消未完成的任务
+                # 取消未完成的任务，并等它们真正结束（否则退出时会出现
+                # "Task was destroyed but it is pending!" 告警）
                 for task in pending:
                     task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
 
                 # 处理异常
                 for task in done:
-                    if task.exception():
-                        self.logger.error("Task error: %s", task.exception())
+                    if task.cancelled():
+                        continue
+                    exc = task.exception()
+                    if exc is not None:
+                        self.logger.error("Task error: %s", exc)
 
         except asyncio.CancelledError:
             pass
         except Exception as e:
             self.logger.error("Main loop error: %s", e)
         finally:
-            await self.stop()
+            # 只做资源清理，不要 await 主任务自己
+            await self._shutdown()
             self.logger.debug("Main loop ended")
 
     async def _handle_disconnected(self) -> None:
-        """处理连接断开状态
+        """处理连接（首次或断线重连）
 
-        根据重连策略决定是否重连，并执行退避等待。
-        如果超过最大重连次数，停止客户端。
+        根据重连策略决定是否继续尝试，并执行指数退避等待。
+        超过最大次数时只置 ``_running=False``，让 :meth:`_main_loop` 自然退出、
+        由它的 finally 统一清理——不能在这里 ``await self.stop()``，
+        那等于在主任务内部 await 主任务自己。
         """
-        if self.reconnection.should_reconnect():
-            delay = self.reconnection.get_delay()
-            if delay > 0:
-                self.logger.info("Reconnection delay: %.2fs", delay)
-                await asyncio.sleep(delay)
-
-            self.reconnection.on_attempt()
-            self.logger.info(
-                "Reconnection attempt: %s", self.reconnection.attempt_count
-            )
-
-            try:
-                await self.connection.connect()
-                self.reconnection.on_success()
-            except ConnectionError as e:
-                self.logger.error("Reconnection failed: %s", e)
-        else:
+        if not self.reconnection.should_reconnect():
             self.logger.error("Max reconnection attempts reached")
-            await self.stop()
+            self._running = False
+            return
+
+        delay = self.reconnection.get_delay()
+        if delay > 0:
+            self.logger.info("Reconnection delay: %.2fs", delay)
+            await asyncio.sleep(delay)
+
+        self.reconnection.on_attempt()
+        self.logger.info("Connection attempt: %s", self.reconnection.attempt_count)
+
+        try:
+            await self.connection.connect()
+            self.reconnection.on_success()
+        except ConnectionError as e:
+            self.logger.error("Connection failed: %s", e)
 
     async def _process_send_queue(self) -> None:
         """处理发送队列
@@ -969,8 +1037,11 @@ class AsyncWebSocketClient:
         """
         while self._running:
             if not self.connection.is_connected():
-                await asyncio.sleep(0.1)
-                continue
+                # 直接返回，交还控制权给 _main_loop 去走重连。
+                # 原来这里 sleep(0.1) 后 continue：两个子任务都永不结束，
+                # _main_loop 一直卡在 asyncio.wait 上，断线后既 100% CPU 忙等
+                # 又永远不会重连。
+                return
             try:
                 message = await asyncio.wait_for(self._send_queue.get(), timeout=0.1)
             except TimeoutError:
@@ -1001,13 +1072,21 @@ class AsyncWebSocketClient:
         """
         while self._running:
             if not self.connection.is_connected():
-                await asyncio.sleep(0.1)
-                continue
+                # 同 _process_send_queue：返回主循环触发重连，而不是原地忙等
+                return
             try:
                 message, msg_type = await self.connection.receive()
 
                 # 广播消息到所有监听器
                 await self._broadcast_message(message, msg_type)
+
+                if msg_type == MessageType.Close:
+                    # 服务端主动关闭：连接已经不可用，必须回到主循环走重连。
+                    # 原实现只是广播完继续 while，而 is_connected() 已为 False，
+                    # 于是掉进上面那个 0.1s 忙等分支，永不重连。
+                    self.logger.warning("Received CLOSE frame from server")
+                    await self.connection.close()
+                    return
 
             except TimeoutError:
                 # 只是没有消息，继续等待

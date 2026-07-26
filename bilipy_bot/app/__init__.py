@@ -4,10 +4,19 @@
 """
 
 from bilipy_bot.core.event import Event
+from bilipy_bot.core.exceptions import (
+    ApiError,
+    BilipyError,
+    ConfigError,
+    LifecycleError,
+    SourceError,
+    SourceStartError,
+    SubscriptionError,
+)
 from bilipy_bot.core.filter import AndFilter, BaseFilter, OrFilter
 
 from .bot_app import BotApp
-from .config import RuntimeConfig
+from .config import RuntimeConfig, register_builder
 
 __all__ = [
     # 应用主入口
@@ -16,8 +25,17 @@ __all__ = [
     "Event",
     # 配置
     "RuntimeConfig",
+    "register_builder",
     # 过滤器
     "AndFilter",
     "BaseFilter",
     "OrFilter",
+    # 异常层级
+    "ApiError",
+    "BilipyError",
+    "ConfigError",
+    "LifecycleError",
+    "SourceError",
+    "SourceStartError",
+    "SubscriptionError",
 ]

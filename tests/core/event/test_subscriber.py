@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 
 from bilipy_bot.core.event.subscriber import Subscriber, SubscriberGroup
+from bilipy_bot.core.exceptions import SubscriptionError
 from bilipy_bot.core.types import BaseType
 
 
@@ -108,3 +109,89 @@ class TestSubscriberGroup:
             StubType,
         )
         assert set(group.uids) == {u1, u2}
+
+
+class TestSubscriberGroupNoMatch:
+    """无匹配的订阅规则必须报错，不能静默丢弃（ERR-001）."""
+
+    def test_no_match_raises_subscription_error(self):
+        """规则在 supported_types 中无匹配时应抛 SubscriptionError."""
+        group = SubscriberGroup()
+        uuid = UUID("00000000-0000-0000-0000-000000000001")
+        sub = Subscriber(callback=_async_callback, status_filter=r"typo\.value")
+
+        with pytest.raises(SubscriptionError):
+            group.add(uuid, sub, StubType)
+
+    def test_no_match_error_lists_available_statuses(self):
+        """报错信息应给出可用状态值，便于定位拼写错误."""
+        group = SubscriberGroup()
+        uuid = UUID("00000000-0000-0000-0000-000000000001")
+        sub = Subscriber(callback=_async_callback, status_filter=r"stub\.evnet")
+
+        with pytest.raises(SubscriptionError, match="stub.event"):
+            group.add(uuid, sub, StubType)
+
+    def test_no_match_does_not_register(self):
+        """报错的订阅不应留下任何派发表痕迹."""
+        group = SubscriberGroup()
+        uuid = UUID("00000000-0000-0000-0000-000000000001")
+        sub = Subscriber(callback=_async_callback, status_filter=r"nope\..*")
+
+        with pytest.raises(SubscriptionError):
+            group.add(uuid, sub, StubType)
+
+        assert group.uids == []
+
+
+class TestSubscriberGroupRemove:
+    """remove 应清掉某 uuid 的全部订阅（ARCH-001）."""
+
+    def test_remove_returns_callback_count(self):
+        """remove 应返回被移除的回调数量."""
+        group = SubscriberGroup()
+        uuid = UUID("00000000-0000-0000-0000-000000000001")
+        group.add(
+            uuid,
+            Subscriber(callback=_async_callback, status_filter=StubType.EVENT),
+            StubType,
+        )
+        group.add(
+            uuid,
+            Subscriber(callback=_async_callback, status_filter=StubType.INACTIVE),
+            StubType,
+        )
+        assert group.remove(uuid) == 2
+
+    def test_remove_clears_dispatch_table(self):
+        """remove 后 get_callbacks 应返回空."""
+        group = SubscriberGroup()
+        uuid = UUID("00000000-0000-0000-0000-000000000001")
+        group.add(
+            uuid,
+            Subscriber(callback=_async_callback, status_filter=StubType.ALL),
+            StubType,
+        )
+        group.remove(uuid)
+        assert group.get_callbacks(uuid, StubType.EVENT) == ()
+        assert uuid not in group.uids
+
+    def test_remove_unknown_uuid_returns_zero(self):
+        """移除未注册的 uuid 应返回 0."""
+        group = SubscriberGroup()
+        uuid = UUID("00000000-0000-0000-0000-000000000009")
+        assert group.remove(uuid) == 0
+
+    def test_remove_does_not_affect_other_uuid(self):
+        """移除一个 uuid 不应影响另一个 uuid 的订阅."""
+        group = SubscriberGroup()
+        u1 = UUID("00000000-0000-0000-0000-000000000001")
+        u2 = UUID("00000000-0000-0000-0000-000000000002")
+        for uid in (u1, u2):
+            group.add(
+                uid,
+                Subscriber(callback=_async_callback, status_filter=StubType.EVENT),
+                StubType,
+            )
+        group.remove(u1)
+        assert len(group.get_callbacks(u2, StubType.EVENT)) == 1

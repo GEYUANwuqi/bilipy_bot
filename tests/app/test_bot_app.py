@@ -1,5 +1,8 @@
 """Tests for BotApp delegation and lifecycle."""
 
+import asyncio
+import signal
+import sys
 from uuid import UUID
 
 import pytest
@@ -9,7 +12,7 @@ from bilipy_bot.app.config import RuntimeConfig
 from bilipy_bot.core.api import BaseApi
 from bilipy_bot.core.context import ApiRegistry, AppContext
 from bilipy_bot.core.data import BaseDataMixin
-from bilipy_bot.core.event import EventBus
+from bilipy_bot.core.event import Event, EventBus
 from bilipy_bot.core.source import BaseSource
 from bilipy_bot.core.types import BaseType
 
@@ -48,7 +51,8 @@ class MockApi(BaseApi):
 
 
 class MockData(BaseDataMixin):
-    value: str = ""
+    def __init__(self, value: str = "") -> None:
+        self.value = value
 
 
 @pytest.fixture
@@ -112,10 +116,11 @@ class TestBotApp:
         assert isinstance(source, StubSource)
         assert app.get_source(source.uuid) is source
 
-    def test_remove_source(self, app):
+    @pytest.mark.asyncio
+    async def test_remove_source(self, app):
         """remove_source 应委托给 SourceManager."""
         source = app.add_source(StubSource)
-        removed = app.remove_source(source.uuid)
+        removed = await app.remove_source(source.uuid)
         assert removed is source
         assert app.get_source(source.uuid) is None
 
@@ -171,3 +176,256 @@ class TestBotApp:
             assert app.running
         assert not app.running
         assert app.closed
+
+
+class TestBotAppCloseOrder:
+    """close 必须按 sources → bus → apis 的固定顺序释放（ASYNC-001 / LIFE-001）."""
+
+    @pytest.mark.asyncio
+    async def test_close_closes_bus(self, config):
+        """close 之后 EventBus 应处于已关闭状态."""
+        app = BotApp(config)
+        await app.start()
+        await app.close()
+        assert app.bus.closed
+
+    @pytest.mark.asyncio
+    async def test_close_drains_pending_callbacks(self, config):
+        """close 应等待 in-flight 回调跑完，而不是留下 pending task."""
+        app = BotApp(config)
+        source = app.add_source(StubSource)
+        finished: list[str] = []
+
+        @app.subscribe(source.uuid, MockType.EVENT)
+        async def handler(event):
+            await asyncio.sleep(0.05)
+            finished.append("done")
+
+        await app.start()
+        await app.bus.publish(
+            source.uuid, Event(data=MockData(), status=MockType.EVENT)
+        )
+        await app.close()
+
+        assert finished == ["done"]
+        assert app.bus.pending_callbacks == 0
+
+    @pytest.mark.asyncio
+    async def test_close_releases_api_resources(self, config):
+        """close 应调用每个 API 的 aclose."""
+        closed: list[str] = []
+
+        class ClosableApi(BaseApi):
+            def __init__(self):
+                pass
+
+            @classmethod
+            def create(cls, ctx, config_key):
+                return cls()
+
+            async def aclose(self) -> None:
+                closed.append("api")
+
+        app = BotApp(config)
+        app.get_api(ClosableApi, "test")
+        await app.start()
+        await app.close()
+
+        assert closed == ["api"]
+
+    @pytest.mark.asyncio
+    async def test_close_order_sources_then_bus_then_apis(self, config):
+        """顺序断言：停源时总线还没关，关 API 时总线已经关."""
+        observed: list[str] = []
+        app = BotApp(config)
+
+        class OrderedSource(BaseSource):
+            supported_types = MockType
+
+            async def on_start(self):
+                pass
+
+            async def on_stop(self):
+                observed.append("source_stop:bus_closed=%s" % app.bus.closed)
+
+        class OrderedApi(BaseApi):
+            def __init__(self):
+                pass
+
+            @classmethod
+            def create(cls, ctx, config_key):
+                return cls()
+
+            async def aclose(self) -> None:
+                observed.append("api_close:bus_closed=%s" % app.bus.closed)
+
+        app.add_source(OrderedSource)
+        app.get_api(OrderedApi, "test")
+        await app.start()
+        await app.close()
+
+        assert observed == [
+            "source_stop:bus_closed=False",
+            "api_close:bus_closed=True",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_close_is_idempotent(self, config):
+        """重复 close 不应抛出异常."""
+        app = BotApp(config)
+        await app.start()
+        await app.close()
+        await app.close()
+        assert app.closed
+
+    @pytest.mark.asyncio
+    async def test_close_releases_apis_even_if_source_stop_cancelled(self, config):
+        """停源被取消时，总线与 API 仍应在 finally 中被释放."""
+        closed: list[str] = []
+
+        class CancellingSource(BaseSource):
+            supported_types = MockType
+
+            async def on_start(self):
+                pass
+
+            async def on_stop(self):
+                raise asyncio.CancelledError()
+
+        class ClosableApi(BaseApi):
+            def __init__(self):
+                pass
+
+            @classmethod
+            def create(cls, ctx, config_key):
+                return cls()
+
+            async def aclose(self) -> None:
+                closed.append("api")
+
+        app = BotApp(config)
+        app.add_source(CancellingSource)
+        app.get_api(ClosableApi, "test")
+        await app.start()
+
+        with pytest.raises(asyncio.CancelledError):
+            await app.close()
+
+        assert app.bus.closed
+        assert closed == ["api"]
+
+
+class TestBotAppUnsubscribe:
+    """退订 API（ARCH-001）."""
+
+    @pytest.mark.asyncio
+    async def test_unsubscribe_removes_callbacks(self, app):
+        """unsubscribe 后回调不应再被触发."""
+        source = app.add_source(StubSource)
+        calls: list[str] = []
+
+        @app.subscribe(source.uuid, MockType.EVENT)
+        async def handler(event):
+            calls.append("called")
+
+        assert app.unsubscribe(source.uuid) == 1
+
+        await app.bus.publish(
+            source.uuid, Event(data=MockData(), status=MockType.EVENT)
+        )
+        await asyncio.sleep(0)
+        assert calls == []
+
+    def test_unsubscribe_unknown_source_returns_zero(self, app, fixed_uuid):
+        """未订阅过的事件源应返回 0."""
+        assert app.unsubscribe(fixed_uuid) == 0
+
+
+class TestBotAppDynamicSources:
+    """运行期动态接入事件源（ARCH-001）."""
+
+    @pytest.mark.asyncio
+    async def test_add_subscribe_start_flow(self, config):
+        """add_source → subscribe → start_source 的完整运行期接入流程."""
+        app = BotApp(config)
+        await app.start()
+
+        source = app.add_source(StubSource)
+        received: list[str] = []
+
+        @app.subscribe(source.uuid, MockType.EVENT)
+        async def handler(event):
+            received.append(event.data.value)
+
+        await app.start_source(source)
+        assert source.running
+
+        await app.bus.publish(
+            source.uuid, Event(data=MockData("payload"), status=MockType.EVENT)
+        )
+        await asyncio.sleep(0)
+        assert received == ["payload"]
+        await app.close()
+
+    @pytest.mark.asyncio
+    async def test_stop_source_then_restart(self, config):
+        """stop_source 后可再次 start_source."""
+        app = BotApp(config)
+        source = app.add_source(StubSource)
+        await app.start()
+
+        await app.stop_source(source)
+        assert not source.running
+
+        await app.start_source(source)
+        assert source.running
+        await app.close()
+
+
+class TestBotAppRun:
+    """阻塞式 run 入口与信号处理（ASYNC-005）."""
+
+    def test_run_with_duration_closes_app(self, config):
+        """run(duration) 到时应正常退出并完成关闭."""
+        app = BotApp(config)
+        source = app.add_source(StubSource)
+        app.run(duration=0.01)
+
+        assert source.started
+        assert source.stopped
+        assert app.closed
+        assert app.bus.closed
+
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Windows 的事件循环不支持 add_signal_handler",
+    )
+    def test_run_sigterm_triggers_graceful_close(self, config):
+        """SIGTERM 应走完整关闭路径，而不是直接杀掉进程.
+
+        原实现只捕获 KeyboardInterrupt，容器里 docker stop / k8s 缩容发来的
+        SIGTERM 会让进程直接死掉，清理代码一行都不执行。
+        """
+        app = BotApp(config)
+
+        class SignallingSource(BaseSource):
+            supported_types = MockType
+
+            def __init__(self, **kwargs):
+                super().__init__(**kwargs)
+                self.stopped = False
+
+            async def on_start(self):
+                # 此时信号处理器已注册（run 在 async with 之前安装）
+                loop = asyncio.get_running_loop()
+                loop.call_later(0.02, signal.raise_signal, signal.SIGTERM)
+
+            async def on_stop(self):
+                self.stopped = True
+
+        source = app.add_source(SignallingSource)
+        app.run()  # 无 duration：只能由信号唤醒，否则测试会挂住
+
+        assert source.stopped
+        assert app.closed
+        assert app.bus.closed

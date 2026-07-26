@@ -281,6 +281,26 @@ class TestCommandFilter:
         f = CommandFilter("/help")
         assert not f.check(_make_group_msg(text=""))
 
+    def test_whitespace_only_text_does_not_raise(self):
+        """纯空白消息应被拦截而不是抛 IndexError（BUG-002）.
+
+        回归点：``"   ".split(maxsplit=1)`` 返回空列表，原实现直接取 [0]
+        会抛 IndexError —— 异常发生在回调 task 内，事件被静默吞掉。
+        """
+        f = CommandFilter("/help")
+        assert not f.check(_make_group_msg(text="   "))
+
+    def test_various_whitespace_forms_blocked(self):
+        """制表符/换行等各种空白同样应被安全拦截."""
+        f = CommandFilter("/help")
+        for text in (" ", "\t", "\n", " \t\n ", "　"):
+            assert not f.check(_make_group_msg(text=text))
+
+    def test_leading_whitespace_still_matches_command(self):
+        """命令前有空白时仍应正确提取命令."""
+        f = CommandFilter("/help")
+        assert f.check(_make_group_msg(text="  /help  arg"))
+
 
 # ==================== PrefixFilter 测试 ====================
 

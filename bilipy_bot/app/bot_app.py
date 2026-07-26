@@ -1,5 +1,6 @@
 import asyncio
 import re
+import signal
 from collections.abc import Coroutine
 from logging import getLogger
 from typing import TYPE_CHECKING, Any, Callable, ParamSpec, overload
@@ -37,13 +38,18 @@ class BotApp:
     """
 
     def __init__(
-        self, config: RuntimeConfig | None = None, ctx: AppContext | None = None
+        self,
+        config: RuntimeConfig | None = None,
+        ctx: AppContext | None = None,
+        *,
+        close_timeout: float = 5.0,
     ) -> None:
         """初始化 BotApp.
 
         Args:
             config: 运行时配置，可选，默认从 ``config.yaml`` 自动加载
             ctx:    可选，注入自定义 AppContext，默认自动创建
+            close_timeout: 关闭时等待 in-flight 回调完成的秒数，超时后强制取消
 
         Raises:
             FileNotFoundError: 自动加载时 ``config.yaml`` 不存在
@@ -57,6 +63,8 @@ class BotApp:
 
         # 事件源生命周期管理器
         self._manager = SourceManager(self._ctx)
+
+        self._close_timeout = close_timeout
 
     # ============ 属性 ============ #
 
@@ -111,12 +119,47 @@ class BotApp:
 
         Returns:
             事件源实例
+
+        Note:
+            只做注册，不启动。应用已在运行中时，接入顺序为
+            ``add_source`` → ``subscribe`` → ``await start_source(...)``。
         """
         return self._manager.add_source(source_cls, *args, **kwargs)
 
-    def remove_source(self, source_id: UUID):
-        """移除事件源."""
-        return self._manager.remove_source(source_id)
+    async def remove_source(self, source_id: UUID) -> BaseSource | None:
+        """移除事件源.
+
+        会先停止该事件源，再清理它在 EventBus 上的全部订阅，最后摘除。
+
+        Args:
+            source_id: 事件源的 UUID
+
+        Returns:
+            被移除的事件源，不存在时返回 ``None``
+        """
+        return await self._manager.remove_source(source_id)
+
+    async def start_source(self, source: BaseSource | UUID) -> BaseSource:
+        """启动单个事件源（用于运行期动态接入）.
+
+        Args:
+            source: 事件源实例或其 UUID
+
+        Returns:
+            被启动的事件源
+        """
+        return await self._manager.start_source(source)
+
+    async def stop_source(self, source: BaseSource | UUID) -> BaseSource:
+        """停止单个事件源，保留注册与订阅（可再次 :meth:`start_source`）.
+
+        Args:
+            source: 事件源实例或其 UUID
+
+        Returns:
+            被停止的事件源
+        """
+        return await self._manager.stop_source(source)
 
     @overload
     def get_source(self, source: UUID) -> BaseSource | None: ...
@@ -218,10 +261,26 @@ class BotApp:
             event_filter=event_filter,
         )
 
-    # ============ 生命周期（委托 SourceManager）============ #
+    def unsubscribe(self, source_id: UUID) -> int:
+        """取消某个事件源的全部订阅.
+
+        Args:
+            source_id: 事件源的 UUID
+
+        Returns:
+            被移除的回调数量
+        """
+        return self.bus.remove_subscribers(source_id)
+
+    # ============ 生命周期 ============ #
 
     async def start(self) -> None:
-        """启动应用（启动所有事件源）."""
+        """启动应用（启动所有事件源）.
+
+        Raises:
+            SourceStartError: 一个或多个事件源启动失败
+                （抛出前已回滚成功启动的事件源）
+        """
         await self._manager.start()
 
     async def stop(self) -> None:
@@ -229,8 +288,23 @@ class BotApp:
         await self._manager.stop()
 
     async def close(self) -> None:
-        """关闭应用，释放所有资源."""
-        await self._manager.close()
+        """关闭应用，释放所有资源.
+
+        关闭顺序是固定的，且不能调换：
+
+        1. ``SourceManager.close()`` — 停止全部事件源并清空注册；
+           先停源，总线才不会在排空期间又收到新事件。
+        2. ``EventBus.close()`` — 排空正在执行的订阅回调（``close_timeout`` 超时后取消）；
+           先排空回调，回调里才不会用到下一步已经关掉的 API。
+        3. ``ApiRegistry.aclose_all()`` — 释放各 API 持有的连接与后台任务。
+
+        即使第 1 步因取消而抛出，后两步仍会在 ``finally`` 中完成。
+        """
+        try:
+            await self._manager.close()
+        finally:
+            await self.bus.close(timeout=self._close_timeout)
+            await self.api_ctx.aclose_all()
 
     # ============ 阻塞式入口 ============ #
 
@@ -240,18 +314,44 @@ class BotApp:
         这是最简使用方式，适合大多数场景。
         高级用户仍可使用 ``async with`` 或 ``await start/stop`` 进行精细控制。
 
+        ``SIGINT``（Ctrl+C）与 ``SIGTERM``（容器 ``docker stop`` / k8s 缩容）
+        都会触发**正常退出路径**：先跳出等待，再走完整的 :meth:`close`。
+        只依赖 ``KeyboardInterrupt`` 的话，容器里收到 SIGTERM 会直接被杀，
+        清理代码根本不会执行。不支持 ``add_signal_handler`` 的平台
+        （如 Windows 的 ProactorEventLoop）自动回退到 ``KeyboardInterrupt``。
+
         Args:
-            duration: 可选，运行时长（秒）。为 ``None`` 则持续运行直到 ``Ctrl+C``。
+            duration: 可选，运行时长（秒）。为 ``None`` 则持续运行直到收到信号。
         """
 
         async def _run() -> None:
-            async with self:
-                if duration is not None:
-                    await asyncio.sleep(duration)
-                    _log.info("BotApp 运行 %s 秒，自动停止", duration)
+            loop = asyncio.get_running_loop()
+            stop_event = asyncio.Event()
+            installed: list[signal.Signals] = []
+
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                try:
+                    loop.add_signal_handler(sig, stop_event.set)
+                except (NotImplementedError, RuntimeError, ValueError, AttributeError):
+                    _log.debug("当前平台不支持处理信号 %s，回退到默认行为", sig)
                 else:
-                    # 无限等待直到被取消
-                    await asyncio.Event().wait()
+                    installed.append(sig)
+
+            try:
+                async with self:
+                    if duration is not None:
+                        try:
+                            await asyncio.wait_for(stop_event.wait(), timeout=duration)
+                        except TimeoutError:
+                            _log.info("BotApp 运行 %s 秒，自动停止", duration)
+                        else:
+                            _log.info("BotApp 收到停止信号，正在关闭")
+                    else:
+                        await stop_event.wait()
+                        _log.info("BotApp 收到停止信号，正在关闭")
+            finally:
+                for sig in installed:
+                    loop.remove_signal_handler(sig)
 
         try:
             asyncio.run(_run())
