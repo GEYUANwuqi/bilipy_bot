@@ -351,12 +351,13 @@ class NapcatSource(BaseSource):
         Args:
             message: 原始消息字典
         """
-        napcat_type = NapcatType.get_specific_type(message)
         event: Optional[Event] = None
 
         try:
             # 使用 BaseDataModel 的自动分发构造
             napcat_event = NapcatData.from_dict(message)
+            # 事件状态由完成分发后的 Data 类型提供，避免维护第二套路由
+            napcat_type = napcat_event.event_type
 
             if napcat_type.matches(NapcatType.ALL):
                 event = Event(data=napcat_event, status=napcat_type)

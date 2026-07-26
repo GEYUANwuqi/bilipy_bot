@@ -30,10 +30,8 @@ def _group_message() -> dict[str, object]:
 
 class TestNapcatSourceDispatch:
     @pytest.mark.asyncio
-    async def test_status_comes_from_dispatched_data(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """生产分发不应再调用与 Data registry 平行的 raw 路由器."""
+    async def test_status_comes_from_dispatched_data(self) -> None:
+        """事件状态应来自完成 discriminator 分发后的 Data 类型."""
         source = NapcatSource(uuid=uuid4())
         ctx = AppContext(RuntimeConfig())
         source.bind(ctx)
@@ -47,17 +45,6 @@ class TestNapcatSourceDispatch:
             callback,
             NapcatType.GROUP_MESSAGE,
             NapcatType,
-        )
-
-        def legacy_router_must_not_run(
-            _cls: type[NapcatType], _message: dict[str, object]
-        ) -> NapcatType:
-            raise AssertionError("legacy raw router was called")
-
-        monkeypatch.setattr(
-            NapcatType,
-            "get_specific_type",
-            classmethod(legacy_router_must_not_run),
         )
 
         await source._process_messages(_group_message())

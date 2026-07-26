@@ -170,7 +170,6 @@ MyType.GROUP_MESSAGE.matches(MyType.ALL)  # True
 以下是一个完整的 Type 适配示例，参考 [napcat_type](../bilipy_bot/sources/napcat/types/napcat_type.py)：
 
 ```python
-from typing import Any
 from bilipy_bot.core.types import BaseType
 
 
@@ -206,23 +205,10 @@ class NapcatType(BaseType):
     GROUP_UPLOAD_NOTICE = "napcat.notice.group_upload"
     POKE_NOTIFY = "napcat.notice.poke"
     # ...
-
-    @classmethod
-    def get_specific_type(cls, message: dict[str, Any]) -> "NapcatType":
-        """根据完整消息字典返回最具体的 NapcatType."""
-        post_type = message.get("post_type", "")
-        if post_type == "message":
-            if message.get("message_type") == "group":
-                return NapcatType.GROUP_MESSAGE
-            elif message.get("message_type") == "private":
-                return NapcatType.PRIVATE_MESSAGE
-            return NapcatType.MESSAGE
-        if post_type == "notice":
-            # 按 notice_type 进一步分发...
-            ...
-        # ... 其他 post_type
-        return NapcatType.UNKNOWN
 ```
+
+NapCat 的运行时状态由完成 discriminator 分发后的 Data 类型携带，
+事件源不再对原始字典维护第二套类型路由。
 
 ------
 
