@@ -9,7 +9,7 @@
     "docs:clean": "node -e \"for (const path of ['docs/.vuepress/.cache','docs/.vuepress/.temp','docs/.vuepress/dist']) require('node:fs').rmSync(path,{recursive:true,force:true})\"",
     "docs:links": "node scripts/check-doc-links.mjs",
     "docs:lint": "markdownlint-cli2",
-    "docs:preview": "vite preview docs/.vuepress/dist"
+    "docs:preview": "vite preview docs/.vuepress"
   },
   "devDependencies": {
     "@iconify/json": "2.2.379",
