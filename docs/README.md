@@ -1,12 +1,12 @@
 ---
 pageLayout: home
 home: true
-title: Butter-Bot
+title: ButterBot
 config:
   - type: hero
     full: false
     hero:
-      name: Butter-Bot
+      name: ButterBot
       tagline: 异步、事件驱动的 Python 机器人框架
       text: 将外部数据输入抽象为事件源，通过类型安全的事件总线连接异步处理器。
       actions:
@@ -18,7 +18,7 @@ config:
           link: /api/
         - theme: alt
           text: GitHub
-          link: https://github.com/GEYUANwuqi/Butter-Bot
+          link: https://github.com/GEYUANwuqi/ButterBot
   - type: features
     features:
       - title: 明确的异步生命周期

@@ -96,4 +96,4 @@ result = await api.send_group_message(
 - 请求超时：确认连接仍在运行且服务器返回相同 `echo`。
 
 完整平台示例见
-[`examples/napcat_example.py`](https://github.com/GEYUANwuqi/Butter-Bot/blob/dev_main/examples/napcat_example.py)。
+[`examples/napcat_example.py`](https://github.com/GEYUANwuqi/ButterBot/blob/dev_main/examples/napcat_example.py)。

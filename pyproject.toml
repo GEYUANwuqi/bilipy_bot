@@ -21,9 +21,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.urls]
-Homepage = "https://github.com/GEYUANwuqi/Butter-Bot"
-Repository = "https://github.com/GEYUANwuqi/Butter-Bot"
-Issues = "https://github.com/GEYUANwuqi/Butter-Bot/issues"
+Homepage = "https://github.com/GEYUANwuqi/ButterBot"
+Repository = "https://github.com/GEYUANwuqi/ButterBot"
+Issues = "https://github.com/GEYUANwuqi/ButterBot/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["butterbot"]

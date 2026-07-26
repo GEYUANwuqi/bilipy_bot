@@ -32,7 +32,7 @@ stateDiagram-v2
 ## 最小完整实现
 
 仓库中的
-[`examples/minimal_source_example.py`](https://github.com/GEYUANwuqi/Butter-Bot/blob/dev_main/examples/minimal_source_example.py)
+[`examples/minimal_source_example.py`](https://github.com/GEYUANwuqi/ButterBot/blob/dev_main/examples/minimal_source_example.py)
 包含经过 smoke test 的 Source、Data、Type、订阅和关闭流程。
 
 关键任务模板：

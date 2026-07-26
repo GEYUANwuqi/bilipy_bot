@@ -6,12 +6,12 @@ title: 项目介绍
 
 ## 本页目标
 
-了解 Butter-Bot 的运行模型、适用场景与明确边界。
+了解 ButterBot 的运行模型、适用场景与明确边界。
 
 ## 它解决什么问题
 
 外部平台通常以不同方式提供数据：WebSocket 推送、轮询 API、SDK 回调等。
-Butter-Bot 将这些输入统一为 `BaseSource` 事件源，并把产生的数据包装为
+ButterBot 将这些输入统一为 `BaseSource` 事件源，并把产生的数据包装为
 `Event[Data]`。应用通过 `EventBus` 将事件交给已注册的异步处理器。
 
 ```mermaid

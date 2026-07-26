@@ -18,8 +18,8 @@ title: 贡献指南
 - npm 8 或更高。
 
 ```bash
-git clone https://github.com/GEYUANwuqi/Butter-Bot.git
-cd Butter-Bot
+git clone https://github.com/GEYUANwuqi/ButterBot.git
+cd ButterBot
 uv sync --locked --dev
 npm ci
 ```

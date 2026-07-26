@@ -6,7 +6,7 @@ title: 安装
 
 ## 本页目标
 
-准备可运行 Butter-Bot 的 Python 环境，并验证公共门面可以导入。
+准备可运行 ButterBot 的 Python 环境，并验证公共门面可以导入。
 
 ## 运行环境
 
@@ -29,8 +29,8 @@ uv add butterbot-python
 ## 从仓库开发
 
 ```bash
-git clone https://github.com/GEYUANwuqi/Butter-Bot.git
-cd Butter-Bot
+git clone https://github.com/GEYUANwuqi/ButterBot.git
+cd ButterBot
 uv sync --locked --dev
 ```
 
