@@ -5,6 +5,27 @@ on:
   pull_request:
 
 jobs:
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install documentation dependencies
+        run: npm ci
+
+      - name: Build and validate documentation
+        run: npm run docs:check
+
   test:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest

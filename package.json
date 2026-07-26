@@ -5,12 +5,16 @@
   "scripts": {
     "docs:dev": "vuepress dev docs",
     "docs:build": "vuepress build docs --clean-cache --clean-temp",
+    "docs:check": "npm run docs:build && npm run docs:lint && npm run docs:links",
     "docs:clean": "node -e \"for (const path of ['docs/.vuepress/.cache','docs/.vuepress/.temp','docs/.vuepress/dist']) require('node:fs').rmSync(path,{recursive:true,force:true})\"",
+    "docs:links": "node scripts/check-doc-links.mjs",
+    "docs:lint": "markdownlint-cli2",
     "docs:preview": "vite preview docs/.vuepress/dist"
   },
   "devDependencies": {
     "@iconify/json": "2.2.379",
     "@vuepress/bundler-vite": "2.0.0-rc.30",
+    "markdownlint-cli2": "0.23.1",
     "mermaid": "11.16.0",
     "typescript": "5.9.3",
     "vite": "8.1.5",
@@ -21,5 +25,10 @@
   "engines": {
     "node": "^20.19.0 || >=22.0.0",
     "npm": ">=8"
+  },
+  "overrides": {
+    "markdownlint-cli2": {
+      "js-yaml": "5.2.2"
+    }
   }
 }
