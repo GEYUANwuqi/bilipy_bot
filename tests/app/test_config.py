@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from butter_bot.app.config import RuntimeConfig, register_builder
+from butterbot.app.config import RuntimeConfig, register_builder
 
 
 class TestRuntimeConfig:
@@ -141,7 +141,7 @@ class TestRuntimeConfigFromYaml:
         finally:
             _restore_builders(original)
 
-    @patch("butter_bot.app.config.yaml.safe_load")
+    @patch("butterbot.app.config.yaml.safe_load")
     def test_from_yaml_parse_error(self, mock_load, tmp_path: Path):
         """YAML 解析错误应传递原始异常."""
         import yaml
@@ -158,14 +158,14 @@ class TestRuntimeConfigFromYaml:
 
 def _get_builders_copy() -> dict:
     """获取 _CONFIG_BUILDERS 当前状态的快照."""
-    from butter_bot.app.config import _CONFIG_BUILDERS
+    from butterbot.app.config import _CONFIG_BUILDERS
 
     return dict(_CONFIG_BUILDERS)
 
 
 def _restore_builders(original: dict) -> None:
     """恢复 _CONFIG_BUILDERS 到指定状态."""
-    from butter_bot.app.config import _CONFIG_BUILDERS
+    from butterbot.app.config import _CONFIG_BUILDERS
 
     _CONFIG_BUILDERS.clear()
     _CONFIG_BUILDERS.update(original)

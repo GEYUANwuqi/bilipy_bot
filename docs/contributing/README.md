@@ -31,7 +31,7 @@ npm ci
 
 ```bash
 uv run pytest
-uv run pytest --cov=butter_bot --cov-report=term-missing --cov-fail-under=70
+uv run pytest --cov=butterbot --cov-report=term-missing --cov-fail-under=70
 uv run ruff check .
 uv run ruff format --check .
 uv run pyright

@@ -1,8 +1,8 @@
 """Tests for AppContext construction and DI."""
 
-from butter_bot.app.config import RuntimeConfig
-from butter_bot.core.context import ApiRegistry, AppContext
-from butter_bot.core.event import EventBus
+from butterbot.app.config import RuntimeConfig
+from butterbot.core.context import ApiRegistry, AppContext
+from butterbot.core.event import EventBus
 
 
 class DictConfigProvider:

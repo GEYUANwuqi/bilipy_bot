@@ -4,7 +4,7 @@ from typing import ClassVar
 
 import pytest
 
-from butter_bot.core.data import AutoDispatchList, BaseDataModel
+from butterbot.core.data import AutoDispatchList, BaseDataModel
 
 
 class SampleRoot(BaseDataModel):

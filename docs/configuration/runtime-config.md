@@ -7,7 +7,7 @@ title: RuntimeConfig
 ## 构造与读取
 
 ```python
-from butter_bot.app import RuntimeConfig
+from butterbot.app import RuntimeConfig
 
 config = RuntimeConfig(
     service={"endpoint": "http://localhost"},

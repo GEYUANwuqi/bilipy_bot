@@ -2,7 +2,7 @@
 
 import pytest
 
-from butter_bot.core.exceptions import (
+from butterbot.core.exceptions import (
     ApiError,
     ButterError,
     ConfigError,

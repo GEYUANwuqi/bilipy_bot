@@ -9,7 +9,7 @@ title: 应用 API
 导入：
 
 ```python
-from butter_bot.app import BotApp
+from butterbot.app import BotApp
 ```
 
 签名：
@@ -104,7 +104,7 @@ async __aexit__(exc_type, exc_val, exc_tb) -> None
 导入：
 
 ```python
-from butter_bot.app import RuntimeConfig
+from butterbot.app import RuntimeConfig
 ```
 
 ```python
@@ -119,7 +119,7 @@ RuntimeConfig.from_yaml(path: str | Path = "config.yaml") -> RuntimeConfig
 ## `register_builder`
 
 ```python
-from butter_bot.app import register_builder
+from butterbot.app import register_builder
 
 register_builder(key: str, builder: Any) -> None
 ```
@@ -129,7 +129,7 @@ builder 接收对应 YAML 顶层值并返回运行时配置对象。重复键覆
 
 ## 门面中的其他导出
 
-`butter_bot.app` 还导出：
+`butterbot.app` 还导出：
 
 - `Event`
 - `BaseFilter`、`AndFilter`、`OrFilter`

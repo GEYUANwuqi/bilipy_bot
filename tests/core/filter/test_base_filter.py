@@ -1,9 +1,9 @@
 """Tests for BaseFilter, AndFilter, OrFilter."""
 
-from butter_bot.core.data import BaseDataMixin
-from butter_bot.core.event import Event
-from butter_bot.core.filter import AndFilter, BaseFilter, OrFilter
-from butter_bot.core.types import BaseType
+from butterbot.core.data import BaseDataMixin
+from butterbot.core.event import Event
+from butterbot.core.filter import AndFilter, BaseFilter, OrFilter
+from butterbot.core.types import BaseType
 
 
 class NullData(BaseDataMixin):

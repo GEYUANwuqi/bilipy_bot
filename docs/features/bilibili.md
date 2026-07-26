@@ -26,7 +26,7 @@ bilibili:
 ## 动态轮询
 
 ```python
-from butter_bot.sources.bilibili import BiliDynamicSource, DynamicType
+from butterbot.sources.bilibili import BiliDynamicSource, DynamicType
 
 source = app.add_source(
     BiliDynamicSource,
@@ -46,7 +46,7 @@ async def on_new_dynamic(event: Event[DynamicData]) -> None:
 ## 直播状态轮询
 
 ```python
-from butter_bot.sources.bilibili import BiliLiveSource, LiveType
+from butterbot.sources.bilibili import BiliLiveSource, LiveType
 
 source = app.add_source(
     BiliLiveSource,
@@ -72,7 +72,7 @@ source.set_poll_interval(60)
 ## 直播弹幕
 
 ```python
-from butter_bot.sources.bilibili import BiliDanmakuSource, DanmakuType
+from butterbot.sources.bilibili import BiliDanmakuSource, DanmakuType
 
 source = app.add_source(BiliDanmakuSource, watch_targets=[123456])
 

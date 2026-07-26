@@ -2,7 +2,7 @@
 
 import re
 
-from butter_bot.core.types import BaseType
+from butterbot.core.types import BaseType
 
 
 class SampleType(BaseType):

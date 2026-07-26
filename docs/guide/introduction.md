@@ -47,7 +47,7 @@ flowchart LR
 
 ## 设计边界
 
-`butter_bot.app` 是用户应用的主要导入门面；`butter_bot.core` 暴露扩展契约。
+`butterbot.app` 是用户应用的主要导入门面；`butterbot.core` 暴露扩展契约。
 集成实现可以依赖 core，但 core 不依赖 app 或具体平台。这个方向让扩展契约
 不与 YAML 加载方式或某个平台绑定。
 

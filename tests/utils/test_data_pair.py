@@ -1,6 +1,6 @@
 """Tests for DataPair utility."""
 
-from butter_bot.utils import DataPair
+from butterbot.utils import DataPair
 
 
 class TestDataPair:

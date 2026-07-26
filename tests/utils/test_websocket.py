@@ -9,7 +9,7 @@ import socket
 
 import pytest
 
-from butter_bot.utils.websocket import (
+from butterbot.utils.websocket import (
     AsyncWebSocketClient,
     ListenerClosedError,
     ListenerEvictedError,
@@ -351,7 +351,7 @@ class TestClientShutdown:
     @pytest.mark.asyncio
     async def test_send_before_running_raises(self):
         """未启动时发送应抛 ConnectionError."""
-        from butter_bot.utils.websocket import ConnectionError as WsConnectionError
+        from butterbot.utils.websocket import ConnectionError as WsConnectionError
 
         client = _client()
         with pytest.raises(WsConnectionError):

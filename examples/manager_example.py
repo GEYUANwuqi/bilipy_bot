@@ -7,15 +7,15 @@
 
 from logging import getLogger
 
-from butter_bot.app import BotApp, Event
-from butter_bot.sources.bilibili import (
+from butterbot.app import BotApp, Event
+from butterbot.sources.bilibili import (
     BiliDynamicSource,
     BiliLiveSource,
     DynamicType,
     LiveType,
 )
-from butter_bot.sources.bilibili.data import DynamicData, LiveRoomData
-from butter_bot.utils import setup_logging
+from butterbot.sources.bilibili.data import DynamicData, LiveRoomData
+from butterbot.utils import setup_logging
 
 setup_logging("DEBUG")
 _log = getLogger("BILIBILI")

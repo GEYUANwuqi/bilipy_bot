@@ -34,9 +34,9 @@ napcat:
 ## 最小接入
 
 ```python
-from butter_bot.app import BotApp
-from butter_bot.sources.napcat import NapcatSource, NapcatType
-from butter_bot.sources.napcat.events import NapcatGroupMessageEvent
+from butterbot.app import BotApp
+from butterbot.sources.napcat import NapcatSource, NapcatType
+from butterbot.sources.napcat.events import NapcatGroupMessageEvent
 
 app = BotApp()
 source = app.add_source(NapcatSource)
@@ -64,12 +64,12 @@ app.run()
 - `NOTICE`：群变更、撤回、戳一戳等通知。
 
 父级类型可匹配子类型。例如 `NapcatType.MESSAGE` 同时匹配群消息和私聊消息。
-`butter_bot.sources.napcat.events` 提供 `Event[具体 Data]` 的类型别名。
+`butterbot.sources.napcat.events` 提供 `Event[具体 Data]` 的类型别名。
 
 ## 调用 API
 
 ```python
-from butter_bot.sources.napcat import NapcatApi
+from butterbot.sources.napcat import NapcatApi
 
 api = app.get_api(NapcatApi, "napcat")
 result = await api.send_group_message(

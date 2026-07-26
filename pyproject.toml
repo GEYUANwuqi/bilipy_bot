@@ -1,5 +1,5 @@
 [project]
-name = "butter-bot"
+name = "butterbot-python"
 version = "3.0.2"
 description = "万物皆可 API / SDK 的机器人框架"
 readme = "README.md"
@@ -20,8 +20,13 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project.urls]
+Homepage = "https://github.com/GEYUANwuqi/Butter-Bot"
+Repository = "https://github.com/GEYUANwuqi/Butter-Bot"
+Issues = "https://github.com/GEYUANwuqi/Butter-Bot/issues"
+
 [tool.hatch.build.targets.wheel]
-packages = ["butter_bot"]
+packages = ["butterbot"]
 
 # 清华源
 [[tool.uv.index]]
@@ -74,4 +79,4 @@ pythonVersion = "3.12"
 typeCheckingMode = "basic"
 venvPath = "."
 venv = ".venv"
-include = ["butter_bot", "tests"]
+include = ["butterbot", "tests"]

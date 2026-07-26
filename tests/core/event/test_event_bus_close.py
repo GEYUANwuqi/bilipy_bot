@@ -5,9 +5,9 @@ from uuid import UUID
 
 import pytest
 
-from butter_bot.core.data import BaseDataMixin
-from butter_bot.core.event import Event, EventBus
-from butter_bot.core.types import BaseType
+from butterbot.core.data import BaseDataMixin
+from butterbot.core.event import Event, EventBus
+from butterbot.core.types import BaseType
 
 
 class BusType(BaseType):

@@ -48,7 +48,7 @@ Handler task 的异常由 EventBus 记录，不会回传给 `publish()`。需要
 ## 捕获建议
 
 ```python
-from butter_bot.app import ButterError, ConfigError
+from butterbot.app import ButterError, ConfigError
 
 try:
     app = BotApp()

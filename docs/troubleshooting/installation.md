@@ -4,29 +4,29 @@ title: 安装与导入问题
 
 # 安装与导入问题
 
-## `No module named butter_bot`
+## `No module named butterbot`
 
 可能原因：
 
 - 未在当前环境安装；
 - 命令没有通过 uv 环境运行；
-- 把包名 `butter-bot` 当成导入名。
+- 把包名 `butterbot-python` 当成导入名。
 
 排查：
 
 ```bash
-uv run python -c "import butter_bot; print(butter_bot.__version__)"
-uv tree | rg butter-bot
+uv run python -c "import butterbot; print(butterbot.__version__)"
+uv tree | rg butterbot-python
 ```
 
-修复：仓库内运行 `uv sync --locked --dev`；应用项目运行 `uv add butter-bot`。
+修复：仓库内运行 `uv sync --locked --dev`；应用项目运行 `uv add butterbot-python`。
 
-## 无法从 `butter_bot.core` 导入 `BotApp`
+## 无法从 `butterbot.core` 导入 `BotApp`
 
 这是旧文档路径。当前应用门面：
 
 ```python
-from butter_bot.app import BotApp, RuntimeConfig
+from butterbot.app import BotApp, RuntimeConfig
 ```
 
 ## Python 版本错误

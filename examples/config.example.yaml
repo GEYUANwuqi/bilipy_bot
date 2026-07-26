@@ -6,7 +6,7 @@
 #   1. 在仓库根目录运行: cp examples/config.example.yaml config.yaml
 #   2. 填入你的配置信息
 #   3. 在代码中使用:
-#      from butter_bot.app import RuntimeConfig
+#      from butterbot.app import RuntimeConfig
 #      config = RuntimeConfig.from_yaml()
 #
 

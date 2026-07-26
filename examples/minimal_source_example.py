@@ -3,10 +3,10 @@
 import asyncio
 from dataclasses import dataclass
 
-from butter_bot.app import BotApp, Event, RuntimeConfig
-from butter_bot.core.data import BaseDataMixin
-from butter_bot.core.source import BaseSource
-from butter_bot.core.types import BaseType
+from butterbot.app import BotApp, Event, RuntimeConfig
+from butterbot.core.data import BaseDataMixin
+from butterbot.core.source import BaseSource
+from butterbot.core.types import BaseType
 
 
 class TickType(BaseType):

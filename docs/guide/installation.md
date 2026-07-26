@@ -20,11 +20,11 @@ title: 安装
 在自己的 uv 项目中添加依赖：
 
 ```bash
-uv add butter-bot
+uv add butterbot-python
 ```
 
-如果当前目录还不是 uv 项目，先运行 `uv init`。包名使用连字符
-`butter-bot`，Python 导入名使用下划线 `butter_bot`。
+如果当前目录还不是 uv 项目，先运行 `uv init`。安装包名是
+`butterbot-python`，Python 导入名是 `butterbot`。
 
 ## 从仓库开发
 
@@ -40,7 +40,7 @@ uv sync --locked --dev
 ## 验证安装
 
 ```bash
-uv run python -c "from butter_bot.app import BotApp, RuntimeConfig; print(BotApp.__name__)"
+uv run python -c "from butterbot.app import BotApp, RuntimeConfig; print(BotApp.__name__)"
 ```
 
 预期输出：
@@ -52,7 +52,7 @@ BotApp
 也可以查看安装版本：
 
 ```bash
-uv run python -c "import butter_bot; print(butter_bot.__version__)"
+uv run python -c "import butterbot; print(butterbot.__version__)"
 ```
 
 ## 平台说明
@@ -79,8 +79,8 @@ uv sync --locked --dev --python 3.12
 
 ### 导入名写错
 
-安装名是 `butter-bot`，导入路径是 `butter_bot`。应用入口从
-`butter_bot.app` 导入，不要从 `butter_bot.core` 导入 `BotApp`。
+安装名是 `butterbot-python`，导入路径是 `butterbot`。应用入口从
+`butterbot.app` 导入，不要从 `butterbot.core` 导入 `BotApp`。
 
 ## 下一步
 

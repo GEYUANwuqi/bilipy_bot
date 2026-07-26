@@ -39,7 +39,7 @@ config:
 ## 最小安装
 
 ```bash
-uv add butter-bot
+uv add butterbot-python
 ```
 
 项目要求 Python 3.12 或更高版本。仓库开发环境使用 `uv` 和锁文件管理。
@@ -52,7 +52,7 @@ uv add butter-bot
 ```python
 import asyncio
 
-from butter_bot.app import BotApp, RuntimeConfig
+from butterbot.app import BotApp, RuntimeConfig
 
 
 async def main() -> None:

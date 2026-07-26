@@ -4,9 +4,9 @@ from uuid import UUID
 
 import pytest
 
-from butter_bot.core.event.subscriber import Subscriber, SubscriberGroup
-from butter_bot.core.exceptions import SubscriptionError
-from butter_bot.core.types import BaseType
+from butterbot.core.event.subscriber import Subscriber, SubscriberGroup
+from butterbot.core.exceptions import SubscriptionError
+from butterbot.core.types import BaseType
 
 
 class StubType(BaseType):

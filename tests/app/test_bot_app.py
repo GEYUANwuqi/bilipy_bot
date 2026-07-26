@@ -7,14 +7,14 @@ from uuid import UUID
 
 import pytest
 
-from butter_bot.app import BotApp
-from butter_bot.app.config import RuntimeConfig
-from butter_bot.core.api import BaseApi
-from butter_bot.core.context import ApiRegistry, AppContext
-from butter_bot.core.data import BaseDataMixin
-from butter_bot.core.event import Event, EventBus
-from butter_bot.core.source import BaseSource
-from butter_bot.core.types import BaseType
+from butterbot.app import BotApp
+from butterbot.app.config import RuntimeConfig
+from butterbot.core.api import BaseApi
+from butterbot.core.context import ApiRegistry, AppContext
+from butterbot.core.data import BaseDataMixin
+from butterbot.core.event import Event, EventBus
+from butterbot.core.source import BaseSource
+from butterbot.core.types import BaseType
 
 
 class MockType(BaseType):
@@ -72,7 +72,7 @@ class TestBotApp:
         """传入 config 构造应创建内部的 AppContext 和 SourceManager."""
         app = BotApp(config)
         assert isinstance(app.ctx, AppContext)
-        from butter_bot.app.source_manager import SourceManager
+        from butterbot.app.source_manager import SourceManager
 
         assert isinstance(app.manager, SourceManager)
 

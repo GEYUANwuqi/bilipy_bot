@@ -4,11 +4,11 @@ from uuid import uuid4
 
 import pytest
 
-from butter_bot.app import RuntimeConfig
-from butter_bot.core.context import AppContext
-from butter_bot.sources.napcat.data import NapcatGroupMessageData
-from butter_bot.sources.napcat.source import NapcatSource
-from butter_bot.sources.napcat.types import NapcatType
+from butterbot.app import RuntimeConfig
+from butterbot.core.context import AppContext
+from butterbot.sources.napcat.data import NapcatGroupMessageData
+from butterbot.sources.napcat.source import NapcatSource
+from butterbot.sources.napcat.types import NapcatType
 
 
 def _group_message() -> dict[str, object]:

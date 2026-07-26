@@ -5,12 +5,12 @@ from uuid import UUID
 
 import pytest
 
-from butter_bot.app.config import RuntimeConfig
-from butter_bot.app.source_manager import SourceManager
-from butter_bot.core.context import AppContext
-from butter_bot.core.exceptions import LifecycleError, SourceError, SourceStartError
-from butter_bot.core.source import BaseSource
-from butter_bot.core.types import BaseType
+from butterbot.app.config import RuntimeConfig
+from butterbot.app.source_manager import SourceManager
+from butterbot.core.context import AppContext
+from butterbot.core.exceptions import LifecycleError, SourceError, SourceStartError
+from butterbot.core.source import BaseSource
+from butterbot.core.types import BaseType
 
 
 class StubType(BaseType):

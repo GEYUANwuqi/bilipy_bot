@@ -9,7 +9,7 @@ title: 开发 Filter
 继承 `BaseFilter` 并同步实现 `check(event) -> bool`：
 
 ```python
-from butter_bot.app import BaseFilter, Event
+from butterbot.app import BaseFilter, Event
 
 
 class MinimumValueFilter(BaseFilter):

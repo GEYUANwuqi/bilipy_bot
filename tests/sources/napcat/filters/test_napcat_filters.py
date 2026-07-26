@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass, field
 
-from butter_bot.core.data import BaseDataMixin
-from butter_bot.core.event import Event
-from butter_bot.core.filter import BaseFilter
-from butter_bot.core.types import BaseType
-from butter_bot.sources.napcat.filters import (
+from butterbot.core.data import BaseDataMixin
+from butterbot.core.event import Event
+from butterbot.core.filter import BaseFilter
+from butterbot.core.types import BaseType
+from butterbot.sources.napcat.filters import (
     CommandFilter,
     GroupFilter,
     PrefixFilter,

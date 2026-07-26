@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from butter_bot.utils.logging_config import setup_logging
-from butter_bot.utils.terminal import Color
+from butterbot.utils.logging_config import setup_logging
+from butterbot.utils.terminal import Color
 
 
 def test_import_utils_has_no_logging_or_filesystem_side_effect(tmp_path: Path) -> None:
@@ -21,7 +21,7 @@ def test_import_utils_has_no_logging_or_filesystem_side_effect(tmp_path: Path) -
             "root = logging.getLogger()",
             "sentinel = logging.StreamHandler()",
             "root.handlers = [sentinel]",
-            "import butter_bot.utils",
+            "import butterbot.utils",
             "print(root.handlers == [sentinel])",
             "print(Path('logs').exists())",
         ]

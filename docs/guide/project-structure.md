@@ -9,7 +9,7 @@ title: 项目结构
 明确用户入口、扩展契约、内置适配与测试所在位置。
 
 ```text
-butter_bot/
+butterbot/
 ├── app/                 # BotApp、RuntimeConfig、SourceManager
 ├── core/
 │   ├── api/             # BaseApi
@@ -27,16 +27,16 @@ butter_bot/
 
 ## 应用开发者从哪里导入
 
-优先从 `butter_bot.app` 导入高层公共 API：
+优先从 `butterbot.app` 导入高层公共 API：
 
 ```python
-from butter_bot.app import BotApp, Event, RuntimeConfig
+from butterbot.app import BotApp, Event, RuntimeConfig
 ```
 
 内置适配从对应包导入：
 
 ```python
-from butter_bot.sources.napcat import NapcatSource, NapcatType
+from butterbot.sources.napcat import NapcatSource, NapcatType
 ```
 
 ## 扩展开发者从哪里导入
@@ -44,10 +44,10 @@ from butter_bot.sources.napcat import NapcatSource, NapcatType
 实现自定义扩展时，从具体 core 子模块导入契约：
 
 ```python
-from butter_bot.core.api import BaseApi
-from butter_bot.core.context import AppContext, ConfigProvider
-from butter_bot.core.source import BaseSource
-from butter_bot.core.types import BaseType
+from butterbot.core.api import BaseApi
+from butterbot.core.context import AppContext, ConfigProvider
+from butterbot.core.source import BaseSource
+from butterbot.core.types import BaseType
 ```
 
 不要依赖以下内容：
@@ -61,11 +61,11 @@ from butter_bot.core.types import BaseType
 
 ```mermaid
 flowchart TD
-  U[用户应用] --> APP[butter_bot.app]
-  APP --> CORE[butter_bot.core]
-  U --> SOURCES[butter_bot.sources]
+  U[用户应用] --> APP[butterbot.app]
+  APP --> CORE[butterbot.core]
+  U --> SOURCES[butterbot.sources]
   SOURCES --> CORE
-  SOURCES --> UTILS[butter_bot.utils]
+  SOURCES --> UTILS[butterbot.utils]
   CORE -. 不允许 .-> APP
   CORE -. 不允许 .-> SOURCES
 ```

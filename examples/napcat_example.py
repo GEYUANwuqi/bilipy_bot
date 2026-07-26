@@ -9,9 +9,9 @@
 import asyncio
 from logging import getLogger
 
-from butter_bot.app import BotApp
-from butter_bot.sources.napcat import NapcatApi, NapcatSource, NapcatType
-from butter_bot.sources.napcat.data import (
+from butterbot.app import BotApp
+from butterbot.sources.napcat import NapcatApi, NapcatSource, NapcatType
+from butterbot.sources.napcat.data import (
     NapcatFriendRequestData,
     NapcatGroupMessageData,
     NapcatGroupRequestData,
@@ -19,7 +19,7 @@ from butter_bot.sources.napcat.data import (
     NapcatLifecycleMetaData,
     NapcatPrivateMessageData,
 )
-from butter_bot.sources.napcat.events import (
+from butterbot.sources.napcat.events import (
     NapcatEvent,
     NapcatFriendRequestEvent,
     NapcatGroupMessageEvent,
@@ -29,8 +29,8 @@ from butter_bot.sources.napcat.events import (
     NapcatNoticeEvent,
     NapcatPrivateMessageEvent,
 )
-from butter_bot.sources.napcat.filters import CommandFilter
-from butter_bot.utils import setup_logging
+from butterbot.sources.napcat.filters import CommandFilter
+from butterbot.utils import setup_logging
 
 # 设置日志级别
 setup_logging("INFO")

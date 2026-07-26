@@ -2,10 +2,10 @@
 
 import pytest
 
-from butter_bot.app.config import RuntimeConfig
-from butter_bot.core.api import BaseApi
-from butter_bot.core.context import ApiRegistry
-from butter_bot.core.exceptions import ConfigError
+from butterbot.app.config import RuntimeConfig
+from butterbot.core.api import BaseApi
+from butterbot.core.context import ApiRegistry
+from butterbot.core.exceptions import ConfigError
 
 
 class MockApi(BaseApi):

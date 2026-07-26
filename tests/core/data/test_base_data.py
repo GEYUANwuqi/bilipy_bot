@@ -1,6 +1,6 @@
 """Tests for BaseDataMixin repr formatting."""
 
-from butter_bot.core.data import BaseDataMixin
+from butterbot.core.data import BaseDataMixin
 
 
 class SimpleData(BaseDataMixin):

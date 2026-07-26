@@ -33,9 +33,9 @@ Source 未绑定时访问 `self.ctx` 会抛出 `RuntimeError`。因此构造函�
 测试或高级集成可以注入 `AppContext`：
 
 ```python
-from butter_bot.app import BotApp, RuntimeConfig
-from butter_bot.core.context import AppContext
-from butter_bot.core.event import EventBus
+from butterbot.app import BotApp, RuntimeConfig
+from butterbot.core.context import AppContext
+from butterbot.core.event import EventBus
 
 config = RuntimeConfig(example={"enabled": True})
 ctx = AppContext(config, event_bus=EventBus())

@@ -4,7 +4,7 @@ title: 异常参考
 
 # 异常参考
 
-所有类型都可从 `butter_bot.app` 导入。
+所有类型都可从 `butterbot.app` 导入。
 
 ## 层级与触发点
 
