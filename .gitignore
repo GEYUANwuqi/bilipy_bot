@@ -36,3 +36,10 @@ output.txt
 get_txt.py
 .pyright/
 .mypy_cache/
+
+# === 用户凭证配置（切勿提交）===
+/config.yaml
+config.json
+
+# === Coverage ===
+.coverage
