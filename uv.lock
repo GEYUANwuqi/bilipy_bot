@@ -193,7 +193,7 @@ wheels = [
 [[package]]
 name = "bilipy-bot"
 version = "3.0.2"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "bilibili-api-python" },
