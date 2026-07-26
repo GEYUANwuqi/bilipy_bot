@@ -88,6 +88,24 @@ class TestBaseDataModel:
         assert a.extra == 1
         assert b.extra == 2
 
+    def test_indirect_subclass_registers_with_nearest_dispatch_root(self):
+        """中间共享基类不应阻断叶子类型向分发根注册."""
+
+        class IndirectRoot(BaseDataModel):
+            discriminator_field: ClassVar[str] = "kind"
+
+        class SharedFields(IndirectRoot):
+            name: str = ""
+
+        class IndirectLeaf(SharedFields):
+            discriminator_value: ClassVar[str] = "leaf"
+            value: int
+
+        item = IndirectRoot.from_dict({"kind": "leaf", "name": "shared", "value": 3})
+        assert isinstance(item, IndirectLeaf)
+        assert item.name == "shared"
+        assert item.value == 3
+
     def test_plain_dto_does_not_pollute_global_registry(self):
         """没有 discriminator_field 的普通 DTO 不应注册到全局基类."""
         marker = "plain-dto-must-not-be-global"
