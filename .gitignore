@@ -37,6 +37,12 @@ get_txt.py
 .pyright/
 .mypy_cache/
 
+# === VuePress ===
+node_modules/
+docs/.vuepress/.cache/
+docs/.vuepress/.temp/
+docs/.vuepress/dist/
+
 # === 用户凭证配置（切勿提交）===
 /config.yaml
 config.json

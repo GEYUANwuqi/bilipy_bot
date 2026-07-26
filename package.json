@@ -1,0 +1,25 @@
+{
+  "name": "bilipy-bot-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vuepress dev docs",
+    "docs:build": "vuepress build docs --clean-cache --clean-temp",
+    "docs:clean": "node -e \"for (const path of ['docs/.vuepress/.cache','docs/.vuepress/.temp','docs/.vuepress/dist']) require('node:fs').rmSync(path,{recursive:true,force:true})\"",
+    "docs:preview": "vite preview docs/.vuepress/dist"
+  },
+  "devDependencies": {
+    "@iconify/json": "2.2.379",
+    "@vuepress/bundler-vite": "2.0.0-rc.30",
+    "mermaid": "11.16.0",
+    "typescript": "5.9.3",
+    "vite": "8.1.5",
+    "vue": "3.5.39",
+    "vuepress": "2.0.0-rc.30",
+    "vuepress-theme-plume": "1.0.0-rc.204"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.0.0",
+    "npm": ">=8"
+  }
+}
