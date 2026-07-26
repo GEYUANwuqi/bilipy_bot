@@ -92,6 +92,12 @@ class NapcatClient:
         )
         self._task: asyncio.Task | None = None
         self._listener_id: ListenerId | None = None
+        self._pending_requests: dict[str, asyncio.Future[dict[str, Any]]] = {}
+
+    @property
+    def pending_requests(self) -> int:
+        """当前等待 echo 响应的请求数量."""
+        return len(self._pending_requests)
 
     def set_handler(self, handler: Callable[[dict[str, Any]], Awaitable[None]]):
         """设置消息处理函数
@@ -116,6 +122,12 @@ class NapcatClient:
 
     async def stop(self):
         """停止客户端（幂等，可被 on_stop 与 ApiRegistry.aclose_all 重复调用）"""
+        pending = list(self._pending_requests.values())
+        self._pending_requests.clear()
+        for future in pending:
+            if not future.done():
+                future.cancel()
+
         task = self._task
         self._task = None
         if task and not task.done():
@@ -140,41 +152,39 @@ class NapcatClient:
         Args:
             message: 请求内容，Dict
         """
-        _log.debug("Sent message: %s", message)
         echo = str(uuid4())
-        message["echo"] = echo
-        listener_id = None
+        payload = dict(message)
+        payload["echo"] = echo
+        future = asyncio.get_running_loop().create_future()
+        self._pending_requests[echo] = future
 
         try:
-            listener_id = await self.client.create_listener()
-            await self.client.send(message)
+            _log.debug("发送请求: action=%s, echo=%s", payload.get("action"), echo)
+            await self.client.send(payload)
             _log.debug("发送请求%s", echo)
-
-            while True:
-                #  等待响应，直到收到带有相同 echo 的消息
-                message, t = await self._get_message(listener_id)
-                match t:
-                    case MessageType.Text:
-                        try:
-                            assert isinstance(message, str)
-                            results: dict = json.loads(message)
-                        except json.JSONDecodeError as e:
-                            _log.error("解析错误: %s", e)
-                            return None
-                        if results.get("echo") == echo:
-                            return results
-                    case _:
-                        _log.debug("未知类型返回: %s, 内容: %s", t, message)
-                        return None
+            return await asyncio.wait_for(future, timeout=self.timeout)
         except asyncio.CancelledError:
             _log.debug("请求 %s 被取消", echo)
             raise
         finally:
-            _ = (
-                await self.client.remove_listener(listener_id)
-                if listener_id is not None
-                else None
-            )
+            registered = self._pending_requests.pop(echo, None)
+            if registered is not None and not registered.done():
+                registered.cancel()
+
+    def _resolve_response(self, data: dict[str, Any]) -> bool:
+        """按 echo 将响应投递给对应请求.
+
+        Returns:
+            找到仍在等待的请求并完成其 Future 时返回 ``True``。
+        """
+        echo = data.get("echo")
+        if echo is None:
+            return False
+        future = self._pending_requests.get(str(echo))
+        if future is None or future.done():
+            return False
+        future.set_result(data)
+        return True
 
     async def _get_message(
         self, listener_id: ListenerId | None = None
@@ -200,8 +210,12 @@ class NapcatClient:
                         # 解析 JSON 消息
                         try:
                             data: dict = json.loads(message)
-                            if data.get("echo", 0):
-                                # 跳过带有 echo 的消息，这些是请求的响应，不需要处理
+                            if data.get("echo") is not None:
+                                if not self._resolve_response(data):
+                                    _log.debug(
+                                        "收到无等待者的响应: echo=%s", data.get("echo")
+                                    )
+                                # 带 echo 的响应不进入事件 handler
                                 continue
                             _log.debug(data)
                             # noinspection PyCallingNonCallable
