@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from bilipy_bot.core.event import EventBus
 
 from .api_registry import ApiRegistry
-
-if TYPE_CHECKING:
-    from bilipy_bot.app.config import RuntimeConfig
+from .config_provider import ConfigProvider
 
 
 class AppContext:
@@ -24,7 +20,7 @@ class AppContext:
 
     def __init__(
         self,
-        config: "RuntimeConfig",
+        config: ConfigProvider,
         event_bus: EventBus | None = None,
         api_ctx: ApiRegistry | None = None,
     ):
@@ -40,7 +36,7 @@ class AppContext:
         self._bus = event_bus or EventBus()
 
     @property
-    def config(self) -> "RuntimeConfig":
+    def config(self) -> ConfigProvider:
         """获取运行时配置（只读）."""
         return self._config
 

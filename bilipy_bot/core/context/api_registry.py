@@ -3,13 +3,12 @@ from __future__ import annotations
 from collections import defaultdict
 from logging import getLogger
 from threading import RLock
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from bilipy_bot.core.api import BaseApi, BaseApiT
 from bilipy_bot.core.exceptions import ConfigError
 
-if TYPE_CHECKING:
-    from bilipy_bot.app.config import RuntimeConfig
+from .config_provider import ConfigProvider
 
 _log = getLogger(__name__)
 
@@ -17,10 +16,10 @@ _log = getLogger(__name__)
 class ApiRegistry:
     """API 注册器，负责管理 API 单例和配置."""
 
-    def __init__(self, config: "RuntimeConfig"):
+    def __init__(self, config: ConfigProvider):
         """初始化 ApiRegistry 实例.
         Args:
-            config (RuntimeConfig): 运行时 API 配置实例
+            config: 实现 :class:`ConfigProvider` 的运行时配置
         """
         self.config = config
         # 用可重入锁：API 的 create() 是同步方法，允许在内部再取用别的 API

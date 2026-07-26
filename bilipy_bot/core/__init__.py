@@ -1,5 +1,5 @@
 from .api import BaseApi, BaseApiT
-from .context import ApiRegistry, AppContext
+from .context import ApiRegistry, AppContext, ConfigProvider
 from .data import AutoDispatchList, BaseDataMixin, BaseDataModel, BaseDataT
 from .event import Event, EventBus
 from .exceptions import (
@@ -35,6 +35,7 @@ __all__ = [
     # 异常层级
     "BilipyError",
     "ConfigError",
+    "ConfigProvider",
     "Event",
     "EventBus",
     "LifecycleError",

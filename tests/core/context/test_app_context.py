@@ -5,6 +5,16 @@ from bilipy_bot.core.context import ApiRegistry, AppContext
 from bilipy_bot.core.event import EventBus
 
 
+class DictConfigProvider:
+    """最小配置提供者，不依赖 app.RuntimeConfig."""
+
+    def __init__(self, **values: object) -> None:
+        self._values = values
+
+    def get_config(self, key: str, default: object = None) -> object:
+        return self._values.get(key, default)
+
+
 class TestAppContext:
     """Test AppContext default construction and injection."""
 
@@ -55,3 +65,11 @@ class TestAppContext:
         ctx = AppContext(config, event_bus=bus, api_ctx=api_ctx)
         assert ctx.bus is bus
         assert ctx.api_ctx is api_ctx
+
+    def test_accepts_core_config_provider_without_runtime_config(self):
+        """core 上下文只依赖 get_config 契约，不应绑定 app.RuntimeConfig."""
+        config = DictConfigProvider(token="value")
+        ctx = AppContext(config)
+
+        assert ctx.config is config
+        assert ctx.api_ctx.require_config("token") == "value"
