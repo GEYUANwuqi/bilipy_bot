@@ -11,8 +11,9 @@ import logging
 import os
 import warnings
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 
-from .terminal import Color
+from .terminal import Color, set_console_mode
 
 # 尝试从 tqdm 导入进度条类，不强制依赖
 try:
@@ -250,6 +251,9 @@ LOG_LEVEL_TO_COLOR = {
     "CRITICAL": Color.MAGENTA,
 }
 
+_managed_handlers: list[tuple[logging.Logger, logging.Handler]] = []
+_redirect_logger_state: dict[logging.Logger, tuple[int, bool]] = {}
+
 
 # 定义动态格式化器，根据日志级别选择不同的格式
 class DynamicFormatter(logging.Formatter):
@@ -306,7 +310,7 @@ class DynamicFormatter(logging.Formatter):
             return self._default_formatter.format(record)
 
 
-def _get_valid_log_level(level_name: str, default: str):
+def _get_valid_log_level(level_name: str, default: str) -> int:
     """验证并获取有效的日志级别"""
     level = getattr(logging, level_name.upper(), None)
     if not isinstance(level, int):
@@ -317,8 +321,60 @@ def _get_valid_log_level(level_name: str, default: str):
     return level
 
 
-def setup_logging(console_level=None):
-    """设置日志系统，支持根据记录器名称重定向到不同文件"""
+def _resolve_log_file(log_dir: Path, file_name: str) -> Path:
+    """解析日志文件路径，并阻止文件逃逸出配置目录."""
+    if not file_name or Path(file_name).is_absolute():
+        raise ValueError("日志文件名必须是 LOG_FILE_PATH 下的非空相对路径")
+
+    resolved_dir = log_dir.resolve()
+    resolved_file = (resolved_dir / file_name).resolve()
+    try:
+        resolved_file.relative_to(resolved_dir)
+    except ValueError as exc:
+        raise ValueError("日志文件必须位于 LOG_FILE_PATH 配置目录内") from exc
+    if resolved_file == resolved_dir:
+        raise ValueError("日志文件名不能指向 LOG_FILE_PATH 目录本身")
+    return resolved_file
+
+
+def _load_redirect_rules() -> dict[str, str]:
+    """读取并校验日志重定向规则."""
+    redirect_rules_json = os.getenv("LOG_REDIRECT_RULES", "{}")
+    try:
+        raw_rules = json.loads(redirect_rules_json)
+    except json.JSONDecodeError:
+        warnings.warn("LOG_REDIRECT_RULES 不是有效的 JSON，将忽略重定向规则")
+        return {}
+
+    if not isinstance(raw_rules, dict):
+        warnings.warn("LOG_REDIRECT_RULES 必须是记录器名称到文件名的对象")
+        return {}
+
+    redirect_rules: dict[str, str] = {}
+    for logger_name, file_name in raw_rules.items():
+        if not isinstance(logger_name, str) or not logger_name:
+            raise ValueError("日志重定向规则中的记录器名称必须是非空字符串")
+        if not isinstance(file_name, str):
+            raise ValueError("日志重定向规则中的日志文件名必须是字符串")
+        redirect_rules[logger_name] = file_name
+    return redirect_rules
+
+
+def _clear_managed_handlers() -> None:
+    """移除并关闭上一次初始化创建的 handler."""
+    for logger, handler in _managed_handlers:
+        logger.removeHandler(handler)
+        handler.close()
+    _managed_handlers.clear()
+
+    for logger, (level, propagate) in _redirect_logger_state.items():
+        logger.setLevel(level)
+        logger.propagate = propagate
+    _redirect_logger_state.clear()
+
+
+def setup_logging(console_level: str | None = None) -> None:
+    """显式设置日志系统，支持根据记录器名称重定向到不同文件."""
     # 环境变量读取
     console_level = console_level or os.getenv("LOG_LEVEL", "INFO").upper()
     file_level = os.getenv("FILE_LOG_LEVEL", "DEBUG").upper()
@@ -334,85 +390,98 @@ def setup_logging(console_level=None):
     # 备份数量验证
     try:
         backup_count = int(os.getenv("BACKUP_COUNT", "7"))
+        if backup_count < 0:
+            raise ValueError
     except ValueError:
         backup_count = 7
-        warnings.warn("BACKUP_COUNT 为无效值,使用默认值 7")
-        os.environ["BACKUP_COUNT"] = "7"
+        warnings.warn("BACKUP_COUNT 必须是非负整数，将使用默认值 7")
 
-    # 创建日志目录
-    os.makedirs(log_dir, exist_ok=True)
-    root_file_path = os.path.join(log_dir, file_name)  # 直接使用固定名称
+    # 在修改现有日志配置前完成全部路径校验。
+    log_dir_path = Path(log_dir)
+    root_file_path = _resolve_log_file(log_dir_path, file_name)
+    redirect_rules = _load_redirect_rules()
+    redirect_paths = {
+        logger_name: _resolve_log_file(log_dir_path, redirect_file_name)
+        for logger_name, redirect_file_name in redirect_rules.items()
+    }
 
     # ===== 1. 配置根记录器 =====
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
 
-    # 控制台处理器 - 使用动态格式化器
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(console_log_level)
-    console_formatter = DynamicFormatter(
-        fmt_dict=LOG_MESSAGE_FORMATS["console"], datefmt="%H:%M:%S", use_color=True
-    )
-    console_handler.setFormatter(console_formatter)
-
-    # 根记录器的文件处理器 - 使用动态格式化器（无颜色）
-    root_file_handler = TimedRotatingFileHandler(
-        filename=root_file_path,
-        when="midnight",
-        interval=1,
-        backupCount=backup_count,
-        encoding="utf-8",
-        utc=True,  # 使用UTC时间避免时区问题
-    )
-    root_file_handler.setLevel(file_log_level)
+    # 先创建完整的新 handler 集合；失败时保留当前日志配置。
     file_formatter = DynamicFormatter(
         fmt_dict=LOG_MESSAGE_FORMATS["file"],
         datefmt="%Y-%m-%d %H:%M:%S",
         use_color=False,
     )
-    root_file_handler.setFormatter(file_formatter)
-
-    # 添加处理器到根记录器
-    root_logger.handlers = [console_handler, root_file_handler]
-
-    # ===== 2. 配置重定向记录器 =====
-    # 从环境变量读取重定向配置
-    redirect_rules_json = os.getenv("LOG_REDIRECT_RULES", "{}")
+    console_handler: logging.StreamHandler | None = None
+    root_file_handler: TimedRotatingFileHandler | None = None
+    redirect_handlers: dict[str, TimedRotatingFileHandler] = {}
     try:
-        redirect_rules = json.loads(redirect_rules_json)
-    except json.JSONDecodeError:
-        redirect_rules = {}
-        warnings.warn("Invalid LOG_REDIRECT_RULES format. Using default rules.")
+        for path in {root_file_path, *redirect_paths.values()}:
+            path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 为每个重定向规则创建记录器和处理器
-    for logger_name, filename in redirect_rules.items():
-        # 创建完整的文件路径
-        redirect_file_path = os.path.join(log_dir, filename)
+        set_console_mode()
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(console_log_level)
+        console_handler.setFormatter(
+            DynamicFormatter(
+                fmt_dict=LOG_MESSAGE_FORMATS["console"],
+                datefmt="%H:%M:%S",
+                use_color=True,
+            )
+        )
 
-        # 创建文件处理器
-        file_handler = TimedRotatingFileHandler(
-            filename=redirect_file_path,
+        root_file_handler = TimedRotatingFileHandler(
+            filename=root_file_path,
             when="midnight",
             interval=1,
             backupCount=backup_count,
             encoding="utf-8",
             utc=True,
         )
-        file_handler.setLevel(file_log_level)
-        # 为每个重定向记录器也使用动态格式化器
-        file_handler.setFormatter(file_formatter)
+        root_file_handler.setLevel(file_log_level)
+        root_file_handler.setFormatter(file_formatter)
 
-        # 创建记录器并添加处理器
+        for logger_name, redirect_file_path in redirect_paths.items():
+            file_handler = TimedRotatingFileHandler(
+                filename=redirect_file_path,
+                when="midnight",
+                interval=1,
+                backupCount=backup_count,
+                encoding="utf-8",
+                utc=True,
+            )
+            file_handler.setLevel(file_log_level)
+            file_handler.setFormatter(file_formatter)
+            redirect_handlers[logger_name] = file_handler
+    except Exception:
+        if console_handler is not None:
+            console_handler.close()
+        if root_file_handler is not None:
+            root_file_handler.close()
+        for file_handler in redirect_handlers.values():
+            file_handler.close()
+        raise
+
+    assert console_handler is not None
+    assert root_file_handler is not None
+
+    # 所有新 handler 创建成功后再替换上一次由本模块管理的配置。
+    _clear_managed_handlers()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.handlers = [console_handler, root_file_handler]
+    _managed_handlers.extend(
+        [(root_logger, console_handler), (root_logger, root_file_handler)]
+    )
+
+    for logger_name, file_handler in redirect_handlers.items():
         logger = logging.getLogger(logger_name)
+        _redirect_logger_state[logger] = (logger.level, logger.propagate)
         logger.setLevel(file_log_level)
         logger.addHandler(file_handler)
-
-        # 关键：禁止传播到根记录器，避免重复记录
         logger.propagate = False
-
-
-# 初始化日志配置
-setup_logging()
+        _managed_handlers.append((logger, file_handler))
 
 
 def get_log(name="Logger"):

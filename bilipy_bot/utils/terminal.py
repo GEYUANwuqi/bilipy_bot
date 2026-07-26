@@ -73,10 +73,22 @@ def set_console_mode(mode: int = 7) -> bool:
     return True
 
 
-set_console_mode()
+class _ColorMeta(type):
+    """让颜色开关同时作用于类属性访问."""
+
+    def __getattribute__(cls, name: str):
+        value = super().__getattribute__(name)
+        if (
+            name != "_COLOR"
+            and name.isupper()
+            and isinstance(value, str)
+            and not super().__getattribute__("_COLOR")
+        ):
+            return ""
+        return value
 
 
-class Color:
+class Color(metaclass=_ColorMeta):
     """
     提供终端颜色和样式配置功能
 
@@ -93,21 +105,6 @@ class Color:
     """
 
     _COLOR = is_ansi_supported()  # 终端是否支持 ANSI 颜色
-
-    def __getattribute__(self, name: str) -> str:
-        """
-        重写属性访问方法，根据 _COLOR 状态返回 ANSI 代码或空字符串
-
-        Args:
-            name (str): 要访问的属性名称
-
-        Returns:
-            str: 如果 _COLOR 为 True，返回对应的 ANSI 代码；否则返回空字符串
-        """
-        if self._COLOR:
-            return super().__getattribute__(name)
-        else:
-            return ""
 
     # 前景颜色
     BLACK = "\033[30m"
@@ -133,9 +130,9 @@ class Color:
     BG_BLACK = "\033[40m"
     """# 背景-黑"""
     BG_RED = "\033[41m"
-    """# 背景-红
+    """# 背景-红"""
     BG_GREEN = "\033[42m"
-    """  # 背景-绿'''
+    """# 背景-绿"""
     BG_YELLOW = "\033[43m"
     """# 背景-黄"""
     BG_BLUE = "\033[44m"
