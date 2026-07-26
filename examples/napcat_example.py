@@ -29,6 +29,7 @@ from bilipy_bot.sources.napcat.events import (
     NapcatNoticeEvent,
     NapcatPrivateMessageEvent,
 )
+from bilipy_bot.sources.napcat.filters import CommandFilter
 from bilipy_bot.utils import setup_logging
 
 # 设置日志级别
@@ -38,7 +39,8 @@ _log = getLogger("NAPCAT")
 
 # ============ 配置 ============ #
 #
-# 请先复制 config.example.yaml 为 config.yaml，填入你的配置:
+# 请先在仓库根目录运行以下命令，再填入你的配置:
+#   cp examples/config.example.yaml config.yaml
 #   napcat:
 #     url: "ws://localhost:3001"
 #     token: ""
@@ -80,29 +82,29 @@ async def handle_group_message(
         _log.info(f"[私聊消息] {data.sender.nickname} ({data.user_id}): {plain_text}")
 
 
-@app.subscribe(napcat_id, NapcatType.MESSAGE)
+@app.subscribe(
+    napcat_id,
+    NapcatType.MESSAGE,
+    event_filter=CommandFilter("/help", "/status"),
+)
 async def handle_command(
     event: NapcatGroupMessageEvent | NapcatPrivateMessageEvent,
 ):
-    """示例：简单的命令处理"""
+    """示例：使用精确命令过滤器处理命令."""
     data = event.data
     text = data.message.plain_text
+    command = text.split(maxsplit=1)[0]
+    _log.info(f"检测到命令: {command}")
 
-    # 检测命令
-    if text.startswith("/"):
-        command = text.split()[0]
-        _log.info(f"检测到命令: {command}")
-
-        if command == "/help":
-            _log.info("  → 执行帮助命令")
-            # 这里可以调用 API 发送回复
-            # await napcat_api.send_group_message(...)
-
-        elif command == "/status":
-            _log.info("  → 执行状态命令")
-            # 获取客户端指标
-            metrics = napcat_api.get_metrics()
-            _log.info(f"  → 客户端指标: {metrics}")
+    if command == "/help":
+        _log.info("  → 执行帮助命令")
+        # 这里可以调用 API 发送回复
+        # await napcat_api.send_group_message(...)
+    elif command == "/status":
+        _log.info("  → 执行状态命令")
+        # 获取客户端指标
+        metrics = napcat_api.get_metrics()
+        _log.info(f"  → 客户端指标: {metrics}")
 
 
 # ============ 订阅通知事件 ============ #

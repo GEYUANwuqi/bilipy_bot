@@ -3,7 +3,7 @@
 # ==============================
 #
 # 使用方法:
-#   1. 复制本文件为 config.yaml
+#   1. 在仓库根目录运行: cp examples/config.example.yaml config.yaml
 #   2. 填入你的配置信息
 #   3. 在代码中使用:
 #      from bilipy_bot.app import RuntimeConfig

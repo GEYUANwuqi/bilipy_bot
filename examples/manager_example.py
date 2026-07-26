@@ -23,7 +23,8 @@ _log = getLogger("BILIBILI")
 
 # ============ 配置 ============ #
 #
-# 请先复制 config.example.yaml 为 config.yaml，填入你的配置:
+# 请先在仓库根目录运行以下命令，再填入你的配置:
+#   cp examples/config.example.yaml config.yaml
 #   bilibili:
 #     sessdata: ""
 #     bili_jct: ""
