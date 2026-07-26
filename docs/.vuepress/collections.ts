@@ -6,7 +6,7 @@ export default defineCollections([
     dir: "guide",
     title: "使用指南",
     sidebar: [
-      "README",
+      { text: "使用指南", link: "/guide/" },
       "introduction",
       "installation",
       "quick-start",

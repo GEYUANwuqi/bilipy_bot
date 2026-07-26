@@ -12,7 +12,7 @@ config:
       actions:
         - theme: brand
           text: 快速开始
-          link: /guide/quick-start/
+          link: /guide/quick-start.html
         - theme: alt
           text: 查看 API
           link: /api/
@@ -47,7 +47,7 @@ uv add bilipy-bot
 ## 最小运行模型
 
 下面的结构展示了推荐入口。完整、可直接运行且不依赖外部服务的版本见
-[快速开始](/guide/quick-start/)。
+[快速开始](/guide/quick-start.html)。
 
 ```python
 import asyncio
@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
 ## 从哪里开始
 
-- 第一次使用：从[安装](/guide/installation/)和[快速开始](/guide/quick-start/)开始。
+- 第一次使用：从[安装](/guide/installation.html)和[快速开始](/guide/quick-start.html)开始。
 - 接入 NapCat 或 Bilibili：查看[功能指南](/features/)。
 - 开发自定义事件源：查看[扩展开发](/extensions/)。
 - 查询签名和异常：查看[API 参考](/api/)。
