@@ -181,7 +181,7 @@ class BiliDynamicSource(BaseSource):
             else:
                 data = new_data
 
-            event = Event(data=data, status=status)
+            event: Event[DynamicData] = Event(data=data, status=status)
             await self.ctx.bus.publish(self.uuid, event)
 
         except Exception as e:

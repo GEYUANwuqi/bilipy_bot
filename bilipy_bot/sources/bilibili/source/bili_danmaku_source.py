@@ -1,8 +1,9 @@
 import asyncio
 import threading
 from logging import DEBUG, INFO, getLogger
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
+from bilipy_bot.core.data import BaseDataMixin
 from bilipy_bot.core.event import Event
 from bilipy_bot.core.source import BaseSource
 
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from bilibili_api.live import LiveDanmaku
 
 _log = getLogger("BiliDanmakuSource")
+_EventDataT = TypeVar("_EventDataT", bound=BaseDataMixin)
 
 
 class BiliDanmakuSource(BaseSource):
@@ -155,7 +157,7 @@ class BiliDanmakuSource(BaseSource):
         for rid in list(self._threads.keys()):
             self.remove_room(rid)
 
-    def _publish_to_main(self, event: Event) -> None:
+    def _publish_to_main(self, event: Event[_EventDataT]) -> None:
         """将事件发布调度到主事件循环（线程安全）."""
         if self._main_loop is None:
             _log.error("主事件循环未初始化，无法发布事件")

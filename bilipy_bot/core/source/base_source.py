@@ -43,18 +43,23 @@ class BaseSource(ABC):
         if not hasattr(cls, "supported_types"):
             raise TypeError(f"{cls.__name__} must define supported_types")
 
-    def __init__(self, uuid: UUID | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        uuid: UUID | None = None,
+        *,
+        config_key: str | None = None,
+    ) -> None:
         """初始化事件源.
 
         Args:
             uuid: 可选，指定 UUID，默认自动生成
-            **kwargs: 可接受 ``config_key`` 参数，覆盖类级默认值
+            config_key: 可选，覆盖类级默认配置键
         """
         self.uuid: UUID = uuid or uuid4()
         self.running: bool = False
         self._ctx: "AppContext | None" = None
-        if "config_key" in kwargs:
-            self.config_key = kwargs.pop("config_key")
+        if config_key is not None:
+            self.config_key = config_key
 
     async def start(self) -> None:
         """启动事件源（模板方法）.

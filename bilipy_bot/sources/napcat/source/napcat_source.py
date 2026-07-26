@@ -34,7 +34,7 @@ class NapcatSource(BaseSource):
     async def _process_messages(self, message: dict[str, Any]) -> None:
         """处理接收到的消息."""
         napcat_type = NapcatType.get_specific_type(message)
-        event: Event | None = None
+        event: Event[NapcatData] | None = None
 
         try:
             # 使用 BaseDataModel 的自动分发构造

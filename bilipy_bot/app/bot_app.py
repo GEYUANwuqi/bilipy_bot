@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable, ParamSpec, overload
 from uuid import UUID
 
 from bilipy_bot.core.api import BaseApiT
-from bilipy_bot.core.context import AppContext
+from bilipy_bot.core.context import ApiRegistry, AppContext
 from bilipy_bot.core.event import Event, EventBus
 from bilipy_bot.core.source import BaseSource, BaseSourceT
 from bilipy_bot.core.types import BaseType
@@ -79,7 +79,7 @@ class BotApp:
         return self._ctx.bus
 
     @property
-    def api_ctx(self):
+    def api_ctx(self) -> ApiRegistry:
         return self._ctx.api_ctx
 
     @property
@@ -169,7 +169,11 @@ class BotApp:
         self, source: type[BaseSourceT], config_key: str | None = None
     ) -> BaseSourceT | None: ...
 
-    def get_source(self, source: Any, config_key: Any = None) -> Any:  # type: ignore[misc]
+    def get_source(
+        self,
+        source: type[BaseSource] | UUID,
+        config_key: str | None = None,
+    ) -> BaseSource | None:
         """获取事件源.
 
         支持三种查找方式：
@@ -178,6 +182,8 @@ class BotApp:
         - ``app.get_source(source_cls)`` — 按类型查找（单一实例时最常用）
         - ``app.get_source(source_cls, config_key)`` — 按类型 + 配置键查找（同源多实例时区分）
         """
+        if isinstance(source, UUID):
+            return self._manager.get_source(source)
         return self._manager.get_source(source, config_key)
 
     # ============ API 访问（委托 ApiRegistry）============ #

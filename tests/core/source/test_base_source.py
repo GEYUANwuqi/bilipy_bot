@@ -39,6 +39,11 @@ class StubSource(BaseSource):
 class TestBaseSourceLifecycle:
     """start/stop 模板方法对 running 的管理."""
 
+    def test_unknown_constructor_keyword_is_rejected(self):
+        """拼错构造参数不能被 **kwargs 静默吞掉."""
+        with pytest.raises(TypeError, match="unexpected_option"):
+            StubSource(unexpected_option=True)
+
     @pytest.mark.asyncio
     async def test_start_sets_running(self):
         """start 成功后 running 应为 True."""

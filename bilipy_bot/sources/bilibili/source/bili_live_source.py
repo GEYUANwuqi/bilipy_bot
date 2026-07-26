@@ -151,7 +151,7 @@ class BiliLiveSource(BaseSource):
 
             status = self._get_live_status(room_id)
 
-            event = Event(data=new_data, status=status)
+            event: Event[LiveRoomData] = Event(data=new_data, status=status)
             await self.ctx.bus.publish(self.uuid, event)
 
         except Exception as e:
