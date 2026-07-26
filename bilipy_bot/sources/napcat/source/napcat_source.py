@@ -33,12 +33,14 @@ class NapcatSource(BaseSource):
 
     async def _process_messages(self, message: dict[str, Any]) -> None:
         """处理接收到的消息."""
-        napcat_type = NapcatType.get_specific_type(message)
         event: Event[NapcatData] | None = None
 
         try:
             # 使用 BaseDataModel 的自动分发构造
             napcat_event = NapcatData.from_dict(message)
+            # 状态由已完成 discriminator 分发的 Data 类型提供。
+            # 这样生产路径不再同时维护一套 raw dict 分支路由。
+            napcat_type = napcat_event.event_type
 
             if napcat_type.matches(NapcatType.ALL):
                 event = Event(data=napcat_event, status=napcat_type)

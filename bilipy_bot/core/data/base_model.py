@@ -16,10 +16,12 @@ class MetaDataModel(ModelMetaclass):
     def __new__(mcls, name, bases, namespace, **kwargs):
         cls = super().__new__(mcls, name, bases, namespace, **kwargs)
 
-        # 找到最近的带 registry 的父类
+        # 只查找“自己声明了 discriminator_field 和 registry”的直接分发父类。
+        # ``hasattr`` 会把 BaseDataModel 继承下来的共享 registry 也算进去，
+        # 导致普通 DTO 只要声明 discriminator_value 就污染全局 registry。
         base_with_registry = None
         for base in bases:
-            if hasattr(base, "_registry"):
+            if "discriminator_field" in base.__dict__ and "_registry" in base.__dict__:
                 base_with_registry = base
                 break
 

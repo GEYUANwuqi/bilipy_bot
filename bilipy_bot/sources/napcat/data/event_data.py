@@ -8,6 +8,7 @@ from typing import ClassVar
 
 from bilipy_bot.core.data import BaseDataModel
 
+from ..types import NapcatType
 from .segment_data import NapcatMessage
 
 # ==================== 嵌套数据类（发送者信息） ====================
@@ -70,6 +71,7 @@ class NapcatData(BaseDataModel):
     """
 
     discriminator_field: ClassVar[str] = "post_type"
+    event_type: ClassVar[NapcatType] = NapcatType.UNKNOWN
     time: int
     self_id: int
     post_type: str
@@ -86,6 +88,7 @@ class NapcatMessageData(NapcatData):
 
     discriminator_value: ClassVar[str] = "message"
     discriminator_field: ClassVar[str] = "message_type"
+    event_type: ClassVar[NapcatType] = NapcatType.MESSAGE
     post_type: str = "message"
     message_type: str
     sub_type: str
@@ -100,6 +103,7 @@ class NapcatPrivateMessageData(NapcatMessageData):
     """私聊消息事件"""
 
     discriminator_value: ClassVar[str] = "private"
+    event_type: ClassVar[NapcatType] = NapcatType.PRIVATE_MESSAGE
     message_type: str = "private"
     sub_type: str = "friend"
     target_id: int | None = None  # 接收者QQ
@@ -111,6 +115,7 @@ class NapcatGroupMessageData(NapcatMessageData):
     """群消息事件"""
 
     discriminator_value: ClassVar[str] = "group"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_MESSAGE
     message_type: str = "group"
     sub_type: str = "normal"  # normal/anonymous/notice
     group_id: int
@@ -128,6 +133,7 @@ class NapcatMessageSentData(NapcatData):
 
     discriminator_value: ClassVar[str] = "message_sent"
     discriminator_field: ClassVar[str] = "message_type"
+    event_type: ClassVar[NapcatType] = NapcatType.SENT
     post_type: str = "message_sent"
     message_type: str
     sub_type: str
@@ -142,6 +148,7 @@ class NapcatPrivateMessageSentData(NapcatMessageSentData):
     """私聊消息发送事件"""
 
     discriminator_value: ClassVar[str] = "private"
+    event_type: ClassVar[NapcatType] = NapcatType.PRIVATE_SENT
     message_type: str = "private"
     sub_type: str = "friend"
     target_id: int | None = None
@@ -152,6 +159,7 @@ class NapcatGroupMessageSentData(NapcatMessageSentData):
     """群消息发送事件"""
 
     discriminator_value: ClassVar[str] = "group"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_SENT
     message_type: str = "group"
     sub_type: str = "normal"
     group_id: int
@@ -169,6 +177,7 @@ class NapcatNoticeData(NapcatData):
 
     discriminator_value: ClassVar[str] = "notice"
     discriminator_field: ClassVar[str] = "notice_type"
+    event_type: ClassVar[NapcatType] = NapcatType.NOTICE
     post_type: str = "notice"
     notice_type: str
 
@@ -177,6 +186,7 @@ class NapcatGroupUploadNoticeData(NapcatNoticeData):
     """群文件上传事件"""
 
     discriminator_value: ClassVar[str] = "group_upload"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_UPLOAD_NOTICE
     notice_type: str = "group_upload"
     group_id: int
     user_id: int
@@ -187,6 +197,7 @@ class NapcatGroupAdminNoticeData(NapcatNoticeData):
     """群管理员变动事件"""
 
     discriminator_value: ClassVar[str] = "group_admin"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_ADMIN_NOTICE
     notice_type: str = "group_admin"
     sub_type: str  # set/unset
     group_id: int
@@ -197,6 +208,7 @@ class NapcatGroupDecreaseNoticeData(NapcatNoticeData):
     """群成员减少事件"""
 
     discriminator_value: ClassVar[str] = "group_decrease"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_DECREASE_NOTICE
     notice_type: str = "group_decrease"
     sub_type: str  # leave/kick/kick_me
     group_id: int
@@ -208,6 +220,7 @@ class NapcatGroupIncreaseNoticeData(NapcatNoticeData):
     """群成员增加事件"""
 
     discriminator_value: ClassVar[str] = "group_increase"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_INCREASE_NOTICE
     notice_type: str = "group_increase"
     sub_type: str  # approve/invite
     group_id: int
@@ -219,6 +232,7 @@ class NapcatGroupBanNoticeData(NapcatNoticeData):
     """群禁言事件"""
 
     discriminator_value: ClassVar[str] = "group_ban"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_BAN_NOTICE
     notice_type: str = "group_ban"
     sub_type: str  # ban/lift_ban
     group_id: int
@@ -231,6 +245,7 @@ class NapcatFriendAddNoticeData(NapcatNoticeData):
     """好友添加事件"""
 
     discriminator_value: ClassVar[str] = "friend_add"
+    event_type: ClassVar[NapcatType] = NapcatType.FRIEND_ADD_NOTICE
     notice_type: str = "friend_add"
     user_id: int
 
@@ -239,6 +254,7 @@ class NapcatGroupRecallNoticeData(NapcatNoticeData):
     """群消息撤回事件"""
 
     discriminator_value: ClassVar[str] = "group_recall"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_RECALL_NOTICE
     notice_type: str = "group_recall"
     group_id: int
     user_id: int
@@ -250,6 +266,7 @@ class NapcatFriendRecallNoticeData(NapcatNoticeData):
     """好友消息撤回事件"""
 
     discriminator_value: ClassVar[str] = "friend_recall"
+    event_type: ClassVar[NapcatType] = NapcatType.FRIEND_RECALL_NOTICE
     notice_type: str = "friend_recall"
     user_id: int
     message_id: int
@@ -263,6 +280,7 @@ class NapcatNotifyData(NapcatNoticeData):
 
     discriminator_value: ClassVar[str] = "notify"
     discriminator_field: ClassVar[str] = "sub_type"
+    event_type: ClassVar[NapcatType] = NapcatType.NOTICE
     notice_type: str = "notify"
     sub_type: str
 
@@ -271,6 +289,7 @@ class NapcatPokeNotifyData(NapcatNotifyData):
     """戳一戳事件"""
 
     discriminator_value: ClassVar[str] = "poke"
+    event_type: ClassVar[NapcatType] = NapcatType.POKE_NOTIFY
     sub_type: str = "poke"
     group_id: int | None = None  # 私聊不存在
     user_id: int
@@ -281,6 +300,7 @@ class NapcatLuckyKingNotifyData(NapcatNotifyData):
     """运气王事件"""
 
     discriminator_value: ClassVar[str] = "lucky_king"
+    event_type: ClassVar[NapcatType] = NapcatType.LUCKY_KING_NOTIFY
     sub_type: str = "lucky_king"
     group_id: int
     user_id: int  # 红包发送者
@@ -291,6 +311,7 @@ class NapcatHonorNotifyData(NapcatNotifyData):
     """荣誉变更事件"""
 
     discriminator_value: ClassVar[str] = "honor"
+    event_type: ClassVar[NapcatType] = NapcatType.HONOR_NOTIFY
     sub_type: str = "honor"
     group_id: int
     honor_type: str  # talkative/performer/emotion
@@ -301,6 +322,7 @@ class NapcatGroupMsgEmojiLikeNoticeData(NapcatNoticeData):
     """群表情回应事件（NapCat/LLOneBot）"""
 
     discriminator_value: ClassVar[str] = "group_msg_emoji_like"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_EMOJI_LIKE_NOTICE
     notice_type: str = "group_msg_emoji_like"
     group_id: int
     user_id: int
@@ -312,6 +334,7 @@ class NapcatReactionNoticeData(NapcatNoticeData):
     """群表情回应事件（Lagrange）"""
 
     discriminator_value: ClassVar[str] = "reaction"
+    event_type: ClassVar[NapcatType] = NapcatType.REACTION_NOTICE
     notice_type: str = "reaction"
     sub_type: str  # add/remove
     group_id: int
@@ -325,6 +348,7 @@ class NapcatGroupEssenceNoticeData(NapcatNoticeData):
     """群精华消息事件"""
 
     discriminator_value: ClassVar[str] = "essence"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_ESSENCE_NOTICE
     notice_type: str = "essence"
     sub_type: str  # add/delete
     group_id: int
@@ -337,6 +361,7 @@ class NapcatGroupCardNoticeData(NapcatNoticeData):
     """群名片更新事件"""
 
     discriminator_value: ClassVar[str] = "group_card"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_CARD_NOTICE
     notice_type: str = "group_card"
     group_id: int
     user_id: int
@@ -355,6 +380,7 @@ class NapcatRequestData(NapcatData):
 
     discriminator_value: ClassVar[str] = "request"
     discriminator_field: ClassVar[str] = "request_type"
+    event_type: ClassVar[NapcatType] = NapcatType.REQUEST
     post_type: str = "request"
     request_type: str
     flag: str
@@ -366,6 +392,7 @@ class NapcatFriendRequestData(NapcatRequestData):
     """好友请求事件"""
 
     discriminator_value: ClassVar[str] = "friend"
+    event_type: ClassVar[NapcatType] = NapcatType.FRIEND_REQUEST
     request_type: str = "friend"
 
 
@@ -373,6 +400,7 @@ class NapcatGroupRequestData(NapcatRequestData):
     """群请求事件"""
 
     discriminator_value: ClassVar[str] = "group"
+    event_type: ClassVar[NapcatType] = NapcatType.GROUP_REQUEST
     request_type: str = "group"
     sub_type: str  # add/invite
     group_id: int
@@ -389,6 +417,7 @@ class NapcatMetaData(NapcatData):
 
     discriminator_value: ClassVar[str] = "meta_event"
     discriminator_field: ClassVar[str] = "meta_event_type"
+    event_type: ClassVar[NapcatType] = NapcatType.META
     post_type: str = "meta_event"
     meta_event_type: str
 
@@ -397,6 +426,7 @@ class NapcatLifecycleMetaData(NapcatMetaData):
     """生命周期元事件"""
 
     discriminator_value: ClassVar[str] = "lifecycle"
+    event_type: ClassVar[NapcatType] = NapcatType.LIFECYCLE_META
     meta_event_type: str = "lifecycle"
     sub_type: str  # enable/disable/connect
 
@@ -405,6 +435,7 @@ class NapcatHeartbeatMetaData(NapcatMetaData):
     """心跳元事件"""
 
     discriminator_value: ClassVar[str] = "heartbeat"
+    event_type: ClassVar[NapcatType] = NapcatType.HEARTBEAT_META
     meta_event_type: str = "heartbeat"
     status: HeartbeatStatus
     interval: int  # 心跳间隔，单位毫秒

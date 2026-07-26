@@ -86,6 +86,17 @@ class TestBaseDataModel:
         assert a.extra == 1
         assert b.extra == 2
 
+    def test_plain_dto_does_not_pollute_global_registry(self):
+        """没有 discriminator_field 的普通 DTO 不应注册到全局基类."""
+        marker = "plain-dto-must-not-be-global"
+
+        class PlainDTO(BaseDataModel):
+            discriminator_value: ClassVar[str] = marker
+            value: int
+
+        assert marker not in BaseDataModel._registry
+        assert PlainDTO.model_validate({"value": 1}).value == 1
+
 
 class TestAutoDispatchList:
     """Test AutoDispatchList automatic dispatch."""
