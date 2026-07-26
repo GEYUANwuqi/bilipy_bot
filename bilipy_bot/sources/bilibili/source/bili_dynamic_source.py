@@ -1,19 +1,19 @@
-import asyncio
 import traceback
 from logging import getLogger
+from uuid import UUID
 
 from bilipy_bot.core.event import Event
-from bilipy_bot.core.source import BaseSource
 from bilipy_bot.utils import DataPair
 
 from ..api import BilibiliApi
 from ..data import DynamicData
 from ..types import DynamicType
+from .base_polling_source import BasePollingSource
 
 _log = getLogger("BiliDynamicSource")
 
 
-class BiliDynamicSource(BaseSource):
+class BiliDynamicSource(BasePollingSource):
     """B站动态事件源.
 
     负责轮询B站动态并发布事件。
@@ -21,82 +21,30 @@ class BiliDynamicSource(BaseSource):
 
     supported_types = DynamicType
     config_key = "bilibili"
+    _log = _log
+    _source_name = "B站动态监控"
+    _target_name = "UID"
 
     def __init__(
         self,
         poll_interval: float | int = 60,
         watch_targets: list[int] | None = None,
-        **kwargs,
-    ):
+        *,
+        uuid: UUID | None = None,
+        config_key: str | None = None,
+    ) -> None:
         """初始化动态事件源.
         Args:
             poll_interval: 轮询间隔时间（秒）
             watch_targets: 监听用户列表
         """
-        super().__init__(**kwargs)
-        self.poll_interval: float | int = poll_interval
-        self._poll_num: int = 0
-        self._members_list: list[int] = []
+        super().__init__(
+            poll_interval,
+            watch_targets,
+            uuid=uuid,
+            config_key=config_key,
+        )
         self._dynamic_data: dict[int, DataPair[DynamicData]] = {}
-        self._task: asyncio.Task | None = None
-        if watch_targets is not None:
-            self.add_members(watch_targets)
-
-    async def on_start(self) -> None:
-        """启动动态监控."""
-        self._task = asyncio.create_task(self._monitor_loop())
-        _log.info("B站动态监控已启动")
-
-    async def on_stop(self) -> None:
-        """停止动态监控."""
-        if self._task and not self._task.done():
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        self._task = None
-        _log.info("B站动态监控已停止")
-
-    def add_members(self, keys: list[int]) -> None:
-        """添加监控成员.
-
-        Args:
-            keys: 监控成员UID列表
-        """
-        for uid in keys:
-            if uid not in self._members_list:
-                self._members_list.append(uid)
-                _log.debug("添加 UID '%s' 到监控列表", uid)
-            else:
-                _log.warning("UID '%s' 已存在于监控列表中", uid)
-
-    def remove_members(self, keys: list[int]) -> None:
-        """移除监控成员.
-
-        Args:
-            keys: 监控成员UID列表
-        """
-        for uid in keys:
-            if uid in self._members_list:
-                self._members_list.remove(uid)
-                _log.debug("从监控列表移除 UID '%s'", uid)
-            else:
-                _log.warning("UID '%s' 不存在于监控列表中", uid)
-
-    def set_poll_interval(self, interval: float | int) -> None:
-        """设置轮询间隔时间.
-
-        Args:
-            interval: 轮询间隔时间（秒）
-        """
-        if interval <= 0:
-            _log.error("非法参数，轮询间隔时间不可小于或等于0")
-            return
-        elif interval <= 30:
-            _log.warning("将轮询间隔时间设置为30s及以下，可能导致请求频率过高")
-        self.poll_interval = interval
-        _log.info("轮询间隔时间已设置为 %s 秒", self.poll_interval)
 
     @property
     def api(self) -> BilibiliApi:
@@ -106,12 +54,7 @@ class BiliDynamicSource(BaseSource):
     @property
     def members(self) -> list[int]:
         """获取监控成员列表."""
-        return list(self._members_list)
-
-    @property
-    def poll_num(self) -> int:
-        """获取已完成的轮询次数."""
-        return self._poll_num
+        return self.watch_targets
 
     async def _poll_data(self, uid: int) -> DynamicData | None:
         """获取并更新动态数据.
@@ -188,43 +131,5 @@ class BiliDynamicSource(BaseSource):
             _log.error("轮询 UID '%s' 动态数据时出错: %s", uid, e)
             _log.error(traceback.format_exc())
 
-    async def _monitor_loop(self) -> None:
-        """监控主循环."""
-        _log.info("动态监控循环已启动")
-
-        try:
-            while self.running:
-                monitored_uids = list(self._members_list)
-
-                if not monitored_uids:
-                    await asyncio.sleep(5)
-                    continue
-
-                for uid in monitored_uids:
-                    if not self.running:
-                        break
-
-                    try:
-                        await self._poll_dynamic(uid)
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as e:
-                        _log.error("轮询 UID '%s' 时出错: %s", uid, e)
-
-                self._poll_num += 1
-                _log.debug("完成第 %s 轮动态监控", self._poll_num)
-
-                if not self.running:
-                    break
-
-                # poll_interval 是「每轮」的间隔。原实现把 sleep 放在 per-uid
-                # 循环内，单个 uid 的实际刷新周期变成 N×interval——监控 10 个
-                # uid、interval=60 时，每个 uid 要 600s 才轮到一次。
-                await asyncio.sleep(self.poll_interval)
-
-        except asyncio.CancelledError:
-            _log.debug("监控循环被取消")
-        except Exception as e:
-            _log.error("监控循环异常: %s", e, exc_info=True)
-        finally:
-            _log.info("动态监控循环已停止")
+    async def _poll_target(self, target: int) -> None:
+        await self._poll_dynamic(target)

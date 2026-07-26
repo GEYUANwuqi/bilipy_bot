@@ -2,6 +2,7 @@ import asyncio
 import threading
 from logging import DEBUG, INFO, getLogger
 from typing import TYPE_CHECKING, TypeVar
+from uuid import UUID
 
 from bilipy_bot.core.data import BaseDataMixin
 from bilipy_bot.core.event import Event
@@ -28,14 +29,32 @@ class BiliDanmakuSource(BaseSource):
     supported_types = DanmakuType
     config_key = "bilibili"
 
-    def __init__(self, room_id: list[int], debug: bool = False, **kwargs):
+    def __init__(
+        self,
+        room_id: list[int] | None = None,
+        debug: bool = False,
+        *,
+        watch_targets: list[int] | None = None,
+        uuid: UUID | None = None,
+        config_key: str | None = None,
+    ) -> None:
         """初始化B站弹幕源
+
         Args:
-            room_id: 房间号列表
+            room_id: 房间号列表（兼容旧参数）
             debug: 是否开启调试
+            watch_targets: 房间号列表，与另外两个 Bilibili source 的命名一致
+            uuid: 可选事件源 UUID
+            config_key: 可选配置键
         """
-        super().__init__(**kwargs)
-        self.room_id: list[int] = room_id
+        if room_id is not None and watch_targets is not None:
+            raise TypeError("room_id 与 watch_targets 不能同时提供")
+        targets = room_id if room_id is not None else watch_targets
+        if targets is None:
+            raise TypeError("必须提供 room_id 或 watch_targets")
+
+        super().__init__(uuid=uuid, config_key=config_key)
+        self.room_id: list[int] = list(targets)
         self.danmaku_list: dict[int, LiveDanmaku] = {}
         self.debug = debug
         self._loops: dict[int, asyncio.AbstractEventLoop] = {}

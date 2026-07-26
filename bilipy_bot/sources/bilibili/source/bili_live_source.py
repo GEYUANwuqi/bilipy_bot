@@ -1,19 +1,19 @@
-import asyncio
 import traceback
 from logging import getLogger
+from uuid import UUID
 
 from bilipy_bot.core.event import Event
-from bilipy_bot.core.source import BaseSource
 from bilipy_bot.utils import DataPair
 
 from ..api import BilibiliApi
 from ..data import LiveRoomData
 from ..types import LiveType
+from .base_polling_source import BasePollingSource
 
 _log = getLogger("BiliLiveSource")
 
 
-class BiliLiveSource(BaseSource):
+class BiliLiveSource(BasePollingSource):
     """B站直播事件源.
 
     负责轮询B站直播状态并发布事件。
@@ -21,82 +21,30 @@ class BiliLiveSource(BaseSource):
 
     supported_types = LiveType
     config_key = "bilibili"
+    _log = _log
+    _source_name = "B站直播监控"
+    _target_name = "房间"
 
     def __init__(
         self,
         poll_interval: float | int = 20,
         watch_targets: list[int] | None = None,
-        **kwargs,
-    ):
+        *,
+        uuid: UUID | None = None,
+        config_key: str | None = None,
+    ) -> None:
         """初始化直播事件源.
         Args:
             poll_interval: 轮询间隔时间（秒）
             watch_targets: 监听用户列表
         """
-        super().__init__(**kwargs)
-        self.poll_interval: float | int = poll_interval
-        self._poll_num: int = 0
-        self._room_list: list[int] = []
+        super().__init__(
+            poll_interval,
+            watch_targets,
+            uuid=uuid,
+            config_key=config_key,
+        )
         self._live_data: dict[int, DataPair[LiveRoomData]] = {}
-        self._task: asyncio.Task | None = None
-        if watch_targets is not None:
-            self.add_members(watch_targets)
-
-    async def on_start(self) -> None:
-        """启动直播监控."""
-        self._task = asyncio.create_task(self._monitor_loop())
-        _log.info("B站直播监控已启动")
-
-    async def on_stop(self) -> None:
-        """停止直播监控."""
-        if self._task and not self._task.done():
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        self._task = None
-        _log.info("B站直播监控已停止")
-
-    def add_members(self, keys: list[int]) -> None:
-        """添加监控房间.
-
-        Args:
-            keys: 监控房间ID列表
-        """
-        for room_id in keys:
-            if room_id not in self._room_list:
-                self._room_list.append(room_id)
-                _log.debug("添加房间 '%s' 到监控列表", room_id)
-            else:
-                _log.warning("房间 '%s' 已存在于监控列表中", room_id)
-
-    def remove_members(self, keys: list[int]) -> None:
-        """移除监控房间.
-
-        Args:
-            keys: 监控房间ID列表
-        """
-        for room_id in keys:
-            if room_id in self._room_list:
-                self._room_list.remove(room_id)
-                _log.debug("从监控列表移除房间 '%s'", room_id)
-            else:
-                _log.warning("房间 '%s' 不存在于监控列表中", room_id)
-
-    def set_poll_interval(self, interval: float | int) -> None:
-        """设置轮询间隔时间.
-
-        Args:
-            interval: 轮询间隔时间（秒）
-        """
-        if interval <= 0:
-            _log.error("非法参数，轮询间隔时间不可小于或等于0")
-            return
-        elif interval <= 30:
-            _log.warning("将轮询间隔时间设置为30s及以下，可能导致请求频率过高")
-        self.poll_interval = interval
-        _log.info("轮询间隔时间已设置为 %s 秒", self.poll_interval)
 
     @property
     def api(self) -> BilibiliApi:
@@ -106,12 +54,7 @@ class BiliLiveSource(BaseSource):
     @property
     def rooms(self) -> list[int]:
         """获取监控房间列表."""
-        return list(self._room_list)
-
-    @property
-    def poll_num(self) -> int:
-        """获取已完成的轮询次数."""
-        return self._poll_num
+        return self.watch_targets
 
     async def _poll_data(self, room_id: int) -> LiveRoomData | None:
         """获取并更新直播数据.
@@ -190,43 +133,5 @@ class BiliLiveSource(BaseSource):
         else:
             return LiveType.OFFLINE
 
-    async def _monitor_loop(self) -> None:
-        """监控主循环."""
-        _log.info("直播监控循环已启动")
-
-        try:
-            while self.running:
-                monitored_rooms = list(self._room_list)
-
-                if not monitored_rooms:
-                    await asyncio.sleep(5)
-                    continue
-
-                for room_id in monitored_rooms:
-                    if not self.running:
-                        break
-
-                    try:
-                        await self._poll_live(room_id)
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as e:
-                        _log.error("轮询房间 '%s' 时出错: %s", room_id, e)
-
-                self._poll_num += 1
-                _log.debug("完成第 %s 轮直播监控", self._poll_num)
-
-                if not self.running:
-                    break
-
-                # poll_interval 是「每轮」的间隔。原实现把 sleep 放在 per-room
-                # 循环内，单个房间的实际刷新周期变成 N×interval——开播/下播这类
-                # 事件会被延迟整整 N 倍。
-                await asyncio.sleep(self.poll_interval)
-
-        except asyncio.CancelledError:
-            _log.debug("监控循环被取消")
-        except Exception as e:
-            _log.error("监控循环异常: %s", e, exc_info=True)
-        finally:
-            _log.info("直播监控循环已停止")
+    async def _poll_target(self, target: int) -> None:
+        await self._poll_live(target)
