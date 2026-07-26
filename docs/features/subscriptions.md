@@ -55,7 +55,7 @@ NapCat 提供以下同步过滤器：
 | `PrefixFilter` | 前缀 | 文本以任一前缀开头 |
 
 ```python
-from bilipy_bot.sources.napcat.filters import CommandFilter, GroupFilter
+from butter_bot.sources.napcat.filters import CommandFilter, GroupFilter
 
 admin_help = GroupFilter(123456) & CommandFilter("/help")
 

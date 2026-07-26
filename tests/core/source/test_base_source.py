@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from bilipy_bot.core.source import BaseSource
-from bilipy_bot.core.types import BaseType
+from butter_bot.core.source import BaseSource
+from butter_bot.core.types import BaseType
 
 
 class StubType(BaseType):

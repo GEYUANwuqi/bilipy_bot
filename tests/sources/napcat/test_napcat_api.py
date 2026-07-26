@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import pytest
 
-from bilipy_bot.sources.napcat.api.napcat_api import NapcatClient
+from butter_bot.sources.napcat.api.napcat_api import NapcatClient
 
 
 class SendOnlyTransport:

@@ -7,10 +7,10 @@
 
 from logging import getLogger
 
-from bilipy_bot.app import BotApp, Event
-from bilipy_bot.sources.bilibili import BiliDanmakuSource, DanmakuType
-from bilipy_bot.sources.bilibili.data import LiveRoomData
-from bilipy_bot.utils import setup_logging
+from butter_bot.app import BotApp, Event
+from butter_bot.sources.bilibili import BiliDanmakuSource, DanmakuType
+from butter_bot.sources.bilibili.data import LiveRoomData
+from butter_bot.utils import setup_logging
 
 setup_logging("DEBUG")
 _log = getLogger("BILIBILI")

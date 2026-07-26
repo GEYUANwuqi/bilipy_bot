@@ -5,12 +5,12 @@ from uuid import UUID
 
 import pytest
 
-from bilipy_bot.app.config import RuntimeConfig
-from bilipy_bot.app.source_manager import SourceManager
-from bilipy_bot.core.context import AppContext
-from bilipy_bot.core.exceptions import LifecycleError, SourceError, SourceStartError
-from bilipy_bot.core.source import BaseSource
-from bilipy_bot.core.types import BaseType
+from butter_bot.app.config import RuntimeConfig
+from butter_bot.app.source_manager import SourceManager
+from butter_bot.core.context import AppContext
+from butter_bot.core.exceptions import LifecycleError, SourceError, SourceStartError
+from butter_bot.core.source import BaseSource
+from butter_bot.core.types import BaseType
 
 
 class StubType(BaseType):

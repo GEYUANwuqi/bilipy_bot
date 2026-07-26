@@ -2,9 +2,9 @@
 
 import dataclasses
 
-from bilipy_bot.core.data import BaseDataMixin
-from bilipy_bot.core.event import Event
-from bilipy_bot.core.types import BaseType
+from butter_bot.core.data import BaseDataMixin
+from butter_bot.core.event import Event
+from butter_bot.core.types import BaseType
 
 
 class EmptyData(BaseDataMixin):

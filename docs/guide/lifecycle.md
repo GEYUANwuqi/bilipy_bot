@@ -15,7 +15,7 @@ title: 生命周期
 ```python
 import asyncio
 
-from bilipy_bot.app import BotApp, RuntimeConfig
+from butter_bot.app import BotApp, RuntimeConfig
 
 
 async def main() -> None:
@@ -34,7 +34,7 @@ if __name__ == "__main__":
 ### 简单脚本：`app.run()`
 
 ```python
-from bilipy_bot.app import BotApp
+from butter_bot.app import BotApp
 
 app = BotApp()  # 默认读取当前目录的 config.yaml
 app.run()

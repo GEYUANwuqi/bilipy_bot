@@ -9,7 +9,7 @@ title: Data 与 Type
 事件状态枚举继承 `BaseType`，值必须能按第一个 `.` 分成 scope 和 state：
 
 ```python
-from bilipy_bot.core.types import BaseType
+from butter_bot.core.types import BaseType
 
 
 class FeedType(BaseType):

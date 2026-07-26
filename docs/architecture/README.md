@@ -34,9 +34,9 @@ flowchart TB
 
 ## 公共与内部边界
 
-- 用户门面：`bilipy_bot.app.__all__`；
+- 用户门面：`butter_bot.app.__all__`；
 - 扩展契约：core 各子包 `__all__`；
-- 内置适配：`bilipy_bot.sources.napcat/bilibili.__all__`；
+- 内置适配：`butter_bot.sources.napcat/bilibili.__all__`；
 - 内部实现：下划线符号、DTO 解析 helper、`BasePollingSource` 私有轮询方法、
   WebSocket 内部状态。
 

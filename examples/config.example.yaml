@@ -1,12 +1,12 @@
 # ==============================
-# bilipy_bot 配置文件示例
+# Butter-Bot 配置文件示例
 # ==============================
 #
 # 使用方法:
 #   1. 在仓库根目录运行: cp examples/config.example.yaml config.yaml
 #   2. 填入你的配置信息
 #   3. 在代码中使用:
-#      from bilipy_bot.app import RuntimeConfig
+#      from butter_bot.app import RuntimeConfig
 #      config = RuntimeConfig.from_yaml()
 #
 

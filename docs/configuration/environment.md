@@ -18,8 +18,8 @@ export NAPCAT_TOKEN="..."
 ```python
 import os
 
-from bilipy_bot.app import RuntimeConfig
-from bilipy_bot.sources.napcat import NapcatConfig
+from butter_bot.app import RuntimeConfig
+from butter_bot.sources.napcat import NapcatConfig
 
 config = RuntimeConfig(
     napcat=NapcatConfig(
@@ -33,7 +33,7 @@ config = RuntimeConfig(
 
 ## 日志工具使用的环境变量
 
-`bilipy_bot.utils.setup_logging()` 独立读取：
+`butter_bot.utils.setup_logging()` 独立读取：
 
 | 环境变量 | 默认值 | 作用 |
 | --- | --- | --- |

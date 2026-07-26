@@ -8,7 +8,7 @@ export default defineNavbarConfig([
   { text: "示例", link: "/examples/" },
   {
     text: "GitHub",
-    link: "https://github.com/GEYUANwuqi/bilipy_bot",
+    link: "https://github.com/GEYUANwuqi/Butter-Bot",
     icon: "mdi:github",
   },
 ])

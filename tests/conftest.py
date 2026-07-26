@@ -1,10 +1,10 @@
-"""Shared pytest fixtures for bilipy_bot framework tests."""
+"""Shared pytest fixtures for butter_bot framework tests."""
 
 from uuid import UUID
 
 import pytest
 
-from bilipy_bot.app.config import RuntimeConfig
+from butter_bot.app.config import RuntimeConfig
 
 
 @pytest.fixture

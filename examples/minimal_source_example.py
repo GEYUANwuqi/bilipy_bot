@@ -3,10 +3,10 @@
 import asyncio
 from dataclasses import dataclass
 
-from bilipy_bot.app import BotApp, Event, RuntimeConfig
-from bilipy_bot.core.data import BaseDataMixin
-from bilipy_bot.core.source import BaseSource
-from bilipy_bot.core.types import BaseType
+from butter_bot.app import BotApp, Event, RuntimeConfig
+from butter_bot.core.data import BaseDataMixin
+from butter_bot.core.source import BaseSource
+from butter_bot.core.types import BaseType
 
 
 class TickType(BaseType):

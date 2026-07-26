@@ -84,7 +84,7 @@ jobs:
       - name: Test with coverage gate
         run: >
           uv run pytest
-          --cov=bilipy_bot
+          --cov=butter_bot
           --cov-report=term-missing
           --cov-fail-under=70
 

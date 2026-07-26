@@ -53,5 +53,5 @@ def test_napcat_command_example_uses_command_filter() -> None:
         encoding="utf-8"
     )
 
-    assert "from bilipy_bot.sources.napcat.filters import CommandFilter" in source
+    assert "from butter_bot.sources.napcat.filters import CommandFilter" in source
     assert 'event_filter=CommandFilter("/help", "/status")' in source

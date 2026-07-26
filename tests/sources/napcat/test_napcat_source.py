@@ -4,11 +4,11 @@ from uuid import uuid4
 
 import pytest
 
-from bilipy_bot.app import RuntimeConfig
-from bilipy_bot.core.context import AppContext
-from bilipy_bot.sources.napcat.data import NapcatGroupMessageData
-from bilipy_bot.sources.napcat.source import NapcatSource
-from bilipy_bot.sources.napcat.types import NapcatType
+from butter_bot.app import RuntimeConfig
+from butter_bot.core.context import AppContext
+from butter_bot.sources.napcat.data import NapcatGroupMessageData
+from butter_bot.sources.napcat.source import NapcatSource
+from butter_bot.sources.napcat.types import NapcatType
 
 
 def _group_message() -> dict[str, object]:

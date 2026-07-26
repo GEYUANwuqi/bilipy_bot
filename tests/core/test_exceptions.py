@@ -2,9 +2,9 @@
 
 import pytest
 
-from bilipy_bot.core.exceptions import (
+from butter_bot.core.exceptions import (
     ApiError,
-    BilipyError,
+    ButterError,
     ConfigError,
     LifecycleError,
     SourceError,
@@ -14,7 +14,7 @@ from bilipy_bot.core.exceptions import (
 
 
 class TestExceptionHierarchy:
-    """所有框架异常都应能被单一的 BilipyError 兜住."""
+    """所有框架异常都应能被单一的 ButterError 兜住."""
 
     @pytest.mark.parametrize(
         "exc_cls",
@@ -26,14 +26,14 @@ class TestExceptionHierarchy:
             SubscriptionError,
         ],
     )
-    def test_inherits_bilipy_error(self, exc_cls):
-        """每个具体异常都应是 BilipyError 的子类."""
-        assert issubclass(exc_cls, BilipyError)
+    def test_inherits_butter_error(self, exc_cls):
+        """每个具体异常都应是 ButterError 的子类."""
+        assert issubclass(exc_cls, ButterError)
 
     def test_source_start_error_is_source_error(self):
         """SourceStartError 应归属 SourceError 分支."""
         assert issubclass(SourceStartError, SourceError)
-        assert issubclass(SourceStartError, BilipyError)
+        assert issubclass(SourceStartError, ButterError)
 
     def test_config_error_is_value_error(self):
         """ConfigError 同时继承 ValueError，兼容原有 except ValueError 的调用方."""
@@ -47,9 +47,9 @@ class TestExceptionHierarchy:
         """SubscriptionError 同时继承 ValueError（订阅规则是个非法取值）."""
         assert issubclass(SubscriptionError, ValueError)
 
-    def test_catchable_as_bilipy_error(self):
-        """具体异常应能被 except BilipyError 捕获."""
-        with pytest.raises(BilipyError):
+    def test_catchable_as_butter_error(self):
+        """具体异常应能被 except ButterError 捕获."""
+        with pytest.raises(ButterError):
             raise ConfigError("boom")
 
 

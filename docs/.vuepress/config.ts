@@ -4,13 +4,13 @@ import { plumeTheme } from "vuepress-theme-plume"
 
 export default defineUserConfig({
   lang: "zh-CN",
-  title: "bilipy_bot",
+  title: "Butter-Bot",
   description: "面向异步事件源与处理器的 Python 机器人框架",
   base: "/",
   pagePatterns: ["**/*.md", "!review/**"],
   head: [
     ["meta", { name: "theme-color", content: "#3c7f72" }],
-    ["meta", { name: "application-name", content: "bilipy_bot 文档" }],
+    ["meta", { name: "application-name", content: "Butter-Bot 文档" }],
   ],
   bundler: viteBundler(),
   theme: plumeTheme({

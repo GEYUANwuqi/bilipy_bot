@@ -9,7 +9,7 @@ title: 项目结构
 明确用户入口、扩展契约、内置适配与测试所在位置。
 
 ```text
-bilipy_bot/
+butter_bot/
 ├── app/                 # BotApp、RuntimeConfig、SourceManager
 ├── core/
 │   ├── api/             # BaseApi
@@ -27,16 +27,16 @@ bilipy_bot/
 
 ## 应用开发者从哪里导入
 
-优先从 `bilipy_bot.app` 导入高层公共 API：
+优先从 `butter_bot.app` 导入高层公共 API：
 
 ```python
-from bilipy_bot.app import BotApp, Event, RuntimeConfig
+from butter_bot.app import BotApp, Event, RuntimeConfig
 ```
 
 内置适配从对应包导入：
 
 ```python
-from bilipy_bot.sources.napcat import NapcatSource, NapcatType
+from butter_bot.sources.napcat import NapcatSource, NapcatType
 ```
 
 ## 扩展开发者从哪里导入
@@ -44,10 +44,10 @@ from bilipy_bot.sources.napcat import NapcatSource, NapcatType
 实现自定义扩展时，从具体 core 子模块导入契约：
 
 ```python
-from bilipy_bot.core.api import BaseApi
-from bilipy_bot.core.context import AppContext, ConfigProvider
-from bilipy_bot.core.source import BaseSource
-from bilipy_bot.core.types import BaseType
+from butter_bot.core.api import BaseApi
+from butter_bot.core.context import AppContext, ConfigProvider
+from butter_bot.core.source import BaseSource
+from butter_bot.core.types import BaseType
 ```
 
 不要依赖以下内容：
@@ -61,11 +61,11 @@ from bilipy_bot.core.types import BaseType
 
 ```mermaid
 flowchart TD
-  U[用户应用] --> APP[bilipy_bot.app]
-  APP --> CORE[bilipy_bot.core]
-  U --> SOURCES[bilipy_bot.sources]
+  U[用户应用] --> APP[butter_bot.app]
+  APP --> CORE[butter_bot.core]
+  U --> SOURCES[butter_bot.sources]
   SOURCES --> CORE
-  SOURCES --> UTILS[bilipy_bot.utils]
+  SOURCES --> UTILS[butter_bot.utils]
   CORE -. 不允许 .-> APP
   CORE -. 不允许 .-> SOURCES
 ```

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from bilipy_bot.utils.logging_config import setup_logging
-from bilipy_bot.utils.terminal import Color
+from butter_bot.utils.logging_config import setup_logging
+from butter_bot.utils.terminal import Color
 
 
 def test_import_utils_has_no_logging_or_filesystem_side_effect(tmp_path: Path) -> None:
@@ -21,7 +21,7 @@ def test_import_utils_has_no_logging_or_filesystem_side_effect(tmp_path: Path) -
             "root = logging.getLogger()",
             "sentinel = logging.StreamHandler()",
             "root.handlers = [sentinel]",
-            "import bilipy_bot.utils",
+            "import butter_bot.utils",
             "print(root.handlers == [sentinel])",
             "print(Path('logs').exists())",
         ]
@@ -42,7 +42,7 @@ def test_setup_logging_is_idempotent(
 ) -> None:
     """重复初始化不应累积重定向 handler 或泄漏旧文件描述符."""
     root = logging.getLogger()
-    redirected = logging.getLogger("bilipy-test-redirect")
+    redirected = logging.getLogger("butter-test-redirect")
     original_root_handlers = list(root.handlers)
     original_root_level = root.level
     original_redirect_handlers = list(redirected.handlers)
@@ -52,7 +52,7 @@ def test_setup_logging_is_idempotent(
     monkeypatch.setenv("LOG_FILE_PATH", str(tmp_path))
     monkeypatch.setenv(
         "LOG_REDIRECT_RULES",
-        json.dumps({"bilipy-test-redirect": "redirect.log"}),
+        json.dumps({"butter-test-redirect": "redirect.log"}),
     )
 
     try:
@@ -85,7 +85,7 @@ def test_setup_logging_is_idempotent(
         ("LOG_FILE_NAME", "../outside.log"),
         (
             "LOG_REDIRECT_RULES",
-            json.dumps({"bilipy-test-escape": "../outside.log"}),
+            json.dumps({"butter-test-escape": "../outside.log"}),
         ),
     ],
 )

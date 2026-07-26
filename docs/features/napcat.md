@@ -34,9 +34,9 @@ napcat:
 ## 最小接入
 
 ```python
-from bilipy_bot.app import BotApp
-from bilipy_bot.sources.napcat import NapcatSource, NapcatType
-from bilipy_bot.sources.napcat.events import NapcatGroupMessageEvent
+from butter_bot.app import BotApp
+from butter_bot.sources.napcat import NapcatSource, NapcatType
+from butter_bot.sources.napcat.events import NapcatGroupMessageEvent
 
 app = BotApp()
 source = app.add_source(NapcatSource)
@@ -64,12 +64,12 @@ app.run()
 - `NOTICE`：群变更、撤回、戳一戳等通知。
 
 父级类型可匹配子类型。例如 `NapcatType.MESSAGE` 同时匹配群消息和私聊消息。
-`bilipy_bot.sources.napcat.events` 提供 `Event[具体 Data]` 的类型别名。
+`butter_bot.sources.napcat.events` 提供 `Event[具体 Data]` 的类型别名。
 
 ## 调用 API
 
 ```python
-from bilipy_bot.sources.napcat import NapcatApi
+from butter_bot.sources.napcat import NapcatApi
 
 api = app.get_api(NapcatApi, "napcat")
 result = await api.send_group_message(
@@ -96,4 +96,4 @@ result = await api.send_group_message(
 - 请求超时：确认连接仍在运行且服务器返回相同 `echo`。
 
 完整平台示例见
-[`examples/napcat_example.py`](https://github.com/GEYUANwuqi/bilipy_bot/blob/dev_main/examples/napcat_example.py)。
+[`examples/napcat_example.py`](https://github.com/GEYUANwuqi/Butter-Bot/blob/dev_main/examples/napcat_example.py)。

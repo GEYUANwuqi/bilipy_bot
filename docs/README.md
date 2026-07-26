@@ -1,12 +1,12 @@
 ---
 pageLayout: home
 home: true
-title: bilipy_bot
+title: Butter-Bot
 config:
   - type: hero
     full: false
     hero:
-      name: bilipy_bot
+      name: Butter-Bot
       tagline: 异步、事件驱动的 Python 机器人框架
       text: 将外部数据输入抽象为事件源，通过类型安全的事件总线连接异步处理器。
       actions:
@@ -18,7 +18,7 @@ config:
           link: /api/
         - theme: alt
           text: GitHub
-          link: https://github.com/GEYUANwuqi/bilipy_bot
+          link: https://github.com/GEYUANwuqi/Butter-Bot
   - type: features
     features:
       - title: 明确的异步生命周期
@@ -39,7 +39,7 @@ config:
 ## 最小安装
 
 ```bash
-uv add bilipy-bot
+uv add butter-bot
 ```
 
 项目要求 Python 3.12 或更高版本。仓库开发环境使用 `uv` 和锁文件管理。
@@ -52,7 +52,7 @@ uv add bilipy-bot
 ```python
 import asyncio
 
-from bilipy_bot.app import BotApp, RuntimeConfig
+from butter_bot.app import BotApp, RuntimeConfig
 
 
 async def main() -> None:

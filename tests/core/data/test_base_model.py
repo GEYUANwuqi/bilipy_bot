@@ -4,7 +4,7 @@ from typing import ClassVar
 
 import pytest
 
-from bilipy_bot.core.data import AutoDispatchList, BaseDataModel
+from butter_bot.core.data import AutoDispatchList, BaseDataModel
 
 
 class SampleRoot(BaseDataModel):

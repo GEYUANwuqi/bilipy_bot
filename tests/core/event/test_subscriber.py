@@ -4,9 +4,9 @@ from uuid import UUID
 
 import pytest
 
-from bilipy_bot.core.event.subscriber import Subscriber, SubscriberGroup
-from bilipy_bot.core.exceptions import SubscriptionError
-from bilipy_bot.core.types import BaseType
+from butter_bot.core.event.subscriber import Subscriber, SubscriberGroup
+from butter_bot.core.exceptions import SubscriptionError
+from butter_bot.core.types import BaseType
 
 
 class StubType(BaseType):

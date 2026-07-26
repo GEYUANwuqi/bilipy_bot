@@ -2,7 +2,7 @@
 
 import re
 
-from bilipy_bot.core.types import BaseType
+from butter_bot.core.types import BaseType
 
 
 class SampleType(BaseType):

@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Production code lives in `bilipy_bot/`. `core/` contains framework contracts,
+Production code lives in `butter_bot/`. `core/` contains framework contracts,
 events, data models, and lifecycle primitives; `app/` provides `BotApp`,
 configuration, and source management; `sources/bilibili/` and
 `sources/napcat/` contain integrations; `utils/` contains logging and WebSocket
@@ -18,7 +18,7 @@ contracts, but core must not import application or source implementations.
 - `uv sync --locked --dev` installs the locked runtime and development
   environment.
 - `uv run pytest` runs the complete test suite.
-- `uv run pytest --cov=bilipy_bot --cov-report=term-missing --cov-fail-under=70`
+- `uv run pytest --cov=butter_bot --cov-report=term-missing --cov-fail-under=70`
   enforces the CI coverage floor.
 - `uv run ruff check .` checks imports and lint rules.
 - `uv run ruff format --check .` verifies formatting; omit `--check` to format.

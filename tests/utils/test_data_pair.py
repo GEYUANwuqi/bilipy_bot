@@ -1,6 +1,6 @@
 """Tests for DataPair utility."""
 
-from bilipy_bot.utils import DataPair
+from butter_bot.utils import DataPair
 
 
 class TestDataPair:

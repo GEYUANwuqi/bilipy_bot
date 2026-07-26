@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass, field
 
-from bilipy_bot.core.data import BaseDataMixin
-from bilipy_bot.core.event import Event
-from bilipy_bot.core.filter import BaseFilter
-from bilipy_bot.core.types import BaseType
-from bilipy_bot.sources.napcat.filters import (
+from butter_bot.core.data import BaseDataMixin
+from butter_bot.core.event import Event
+from butter_bot.core.filter import BaseFilter
+from butter_bot.core.types import BaseType
+from butter_bot.sources.napcat.filters import (
     CommandFilter,
     GroupFilter,
     PrefixFilter,

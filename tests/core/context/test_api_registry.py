@@ -2,10 +2,10 @@
 
 import pytest
 
-from bilipy_bot.app.config import RuntimeConfig
-from bilipy_bot.core.api import BaseApi
-from bilipy_bot.core.context import ApiRegistry
-from bilipy_bot.core.exceptions import ConfigError
+from butter_bot.app.config import RuntimeConfig
+from butter_bot.core.api import BaseApi
+from butter_bot.core.context import ApiRegistry
+from butter_bot.core.exceptions import ConfigError
 
 
 class MockApi(BaseApi):

@@ -7,7 +7,7 @@ title: Bilibili 示例
 ## 动态与直播状态
 
 源码：
-[`examples/manager_example.py`](https://github.com/GEYUANwuqi/bilipy_bot/blob/dev_main/examples/manager_example.py)
+[`examples/manager_example.py`](https://github.com/GEYUANwuqi/Butter-Bot/blob/dev_main/examples/manager_example.py)
 
 ```bash
 cp examples/config.example.yaml config.yaml
@@ -20,7 +20,7 @@ uv run examples/manager_example.py
 ## 直播弹幕
 
 源码：
-[`examples/live_danmaku_example.py`](https://github.com/GEYUANwuqi/bilipy_bot/blob/dev_main/examples/live_danmaku_example.py)
+[`examples/live_danmaku_example.py`](https://github.com/GEYUANwuqi/Butter-Bot/blob/dev_main/examples/live_danmaku_example.py)
 
 ```bash
 uv run examples/live_danmaku_example.py

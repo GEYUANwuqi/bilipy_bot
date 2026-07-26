@@ -5,10 +5,10 @@ from uuid import UUID
 
 import pytest
 
-from bilipy_bot.core.data import BaseDataMixin
-from bilipy_bot.core.event import Event, EventBus
-from bilipy_bot.core.filter import BaseFilter
-from bilipy_bot.core.types import BaseType
+from butter_bot.core.data import BaseDataMixin
+from butter_bot.core.event import Event, EventBus
+from butter_bot.core.filter import BaseFilter
+from butter_bot.core.types import BaseType
 
 
 class BusType(BaseType):

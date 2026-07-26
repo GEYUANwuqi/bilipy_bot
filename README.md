@@ -1,4 +1,4 @@
-# bilipy_bot
+# Butter-Bot
 
 一个基于 Python 3.12+ 和 asyncio 的事件驱动机器人框架。项目把外部输入抽象为
 Source，把数据与状态包装为 Event，再由 EventBus 分发给异步 Handler。

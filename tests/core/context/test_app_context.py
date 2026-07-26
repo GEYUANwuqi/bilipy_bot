@@ -1,8 +1,8 @@
 """Tests for AppContext construction and DI."""
 
-from bilipy_bot.app.config import RuntimeConfig
-from bilipy_bot.core.context import ApiRegistry, AppContext
-from bilipy_bot.core.event import EventBus
+from butter_bot.app.config import RuntimeConfig
+from butter_bot.core.context import ApiRegistry, AppContext
+from butter_bot.core.event import EventBus
 
 
 class DictConfigProvider:

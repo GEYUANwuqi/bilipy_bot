@@ -7,7 +7,7 @@ title: YAML 配置
 ## 加载
 
 ```python
-from bilipy_bot.app import RuntimeConfig
+from butter_bot.app import RuntimeConfig
 
 config = RuntimeConfig.from_yaml("config.yaml")
 ```
@@ -59,7 +59,7 @@ custom:
 ```python
 from dataclasses import dataclass
 
-from bilipy_bot.app import RuntimeConfig, register_builder
+from butter_bot.app import RuntimeConfig, register_builder
 
 
 @dataclass

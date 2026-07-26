@@ -5,7 +5,7 @@ title: NapCat 示例
 # NapCat 示例
 
 源码：
-[`examples/napcat_example.py`](https://github.com/GEYUANwuqi/bilipy_bot/blob/dev_main/examples/napcat_example.py)
+[`examples/napcat_example.py`](https://github.com/GEYUANwuqi/Butter-Bot/blob/dev_main/examples/napcat_example.py)
 
 ## 准备
 

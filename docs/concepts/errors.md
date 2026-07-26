@@ -6,10 +6,10 @@ title: 错误传播与边界
 
 ## 异常层级
 
-框架主动定义的异常都继承 `BilipyError`：
+框架主动定义的异常都继承 `ButterError`：
 
 ```text
-BilipyError
+ButterError
 ├── ConfigError (同时继承 ValueError)
 ├── LifecycleError (同时继承 RuntimeError)
 ├── SourceError
@@ -48,14 +48,14 @@ Handler task 的异常由 EventBus 记录，不会回传给 `publish()`。需要
 ## 捕获建议
 
 ```python
-from bilipy_bot.app import BilipyError, ConfigError
+from butter_bot.app import ButterError, ConfigError
 
 try:
     app = BotApp()
     app.run()
 except ConfigError as exc:
     print(f"配置错误：{exc}")
-except BilipyError as exc:
+except ButterError as exc:
     print(f"框架错误：{exc}")
 ```
 

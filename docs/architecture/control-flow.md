@@ -53,7 +53,7 @@ sequenceDiagram
 
 | 状态 | 能力 | 证据 |
 | --- | --- | --- |
-| 已实现且可用 | 应用入口与上下文管理器 | `bilipy_bot/app/bot_app.py::BotApp` |
+| 已实现且可用 | 应用入口与上下文管理器 | `butter_bot/app/bot_app.py::BotApp` |
 | 已实现且可用 | Source 生命周期与启动回滚 | `core/source/base_source.py::BaseSource`、`app/source_manager.py::SourceManager` |
 | 已实现且可用 | 事件订阅、过滤、回调排空 | `core/event/event_bus.py::EventBus` |
 | 已实现且可用 | API 单例和异步释放 | `core/context/api_registry.py::ApiRegistry` |

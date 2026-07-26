@@ -6,7 +6,7 @@ import navbar from "./navbar.js"
 export default defineThemeConfig({
   navbar,
   collections,
-  docsRepo: "https://github.com/GEYUANwuqi/bilipy_bot",
+  docsRepo: "https://github.com/GEYUANwuqi/Butter-Bot",
   docsBranch: "dev_main",
   docsDir: "docs",
   footer: {
@@ -17,7 +17,7 @@ export default defineThemeConfig({
   social: [
     {
       icon: "github",
-      link: "https://github.com/GEYUANwuqi/bilipy_bot",
+      link: "https://github.com/GEYUANwuqi/Butter-Bot",
     },
   ],
 })

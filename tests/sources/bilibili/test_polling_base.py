@@ -2,10 +2,10 @@
 
 import pytest
 
-from bilipy_bot.sources.bilibili.source.base_polling_source import BasePollingSource
-from bilipy_bot.sources.bilibili.source.bili_danmaku_source import BiliDanmakuSource
-from bilipy_bot.sources.bilibili.source.bili_dynamic_source import BiliDynamicSource
-from bilipy_bot.sources.bilibili.source.bili_live_source import BiliLiveSource
+from butter_bot.sources.bilibili.source.base_polling_source import BasePollingSource
+from butter_bot.sources.bilibili.source.bili_danmaku_source import BiliDanmakuSource
+from butter_bot.sources.bilibili.source.bili_dynamic_source import BiliDynamicSource
+from butter_bot.sources.bilibili.source.bili_live_source import BiliLiveSource
 
 
 class TestSharedPollingSource:

@@ -55,7 +55,7 @@ cp examples/config.example.yaml config.yaml
 这是 EventBus 的设计：Handler 在独立 task 中执行，异常记录到日志。启用日志：
 
 ```python
-from bilipy_bot.utils import setup_logging
+from butter_bot.utils import setup_logging
 
 setup_logging("DEBUG")
 ```

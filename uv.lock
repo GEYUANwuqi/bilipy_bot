@@ -191,7 +191,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bilipy-bot"
+name = "butter-bot"
 version = "3.0.2"
 source = { editable = "." }
 dependencies = [

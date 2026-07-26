@@ -18,8 +18,8 @@ title: 贡献指南
 - npm 8 或更高。
 
 ```bash
-git clone https://github.com/GEYUANwuqi/bilipy_bot.git
-cd bilipy_bot
+git clone https://github.com/GEYUANwuqi/Butter-Bot.git
+cd Butter-Bot
 uv sync --locked --dev
 npm ci
 ```
@@ -31,7 +31,7 @@ npm ci
 
 ```bash
 uv run pytest
-uv run pytest --cov=bilipy_bot --cov-report=term-missing --cov-fail-under=70
+uv run pytest --cov=butter_bot --cov-report=term-missing --cov-fail-under=70
 uv run ruff check .
 uv run ruff format --check .
 uv run pyright

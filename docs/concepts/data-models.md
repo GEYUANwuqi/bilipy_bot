@@ -11,7 +11,7 @@ title: 数据模型
 ```python
 from dataclasses import dataclass
 
-from bilipy_bot.core.data import BaseDataMixin
+from butter_bot.core.data import BaseDataMixin
 
 
 @dataclass
@@ -26,7 +26,7 @@ class Temperature(BaseDataMixin):
 - `extra="ignore"`：忽略额外字段。
 
 ```python
-from bilipy_bot.core.data import BaseDataModel
+from butter_bot.core.data import BaseDataModel
 
 
 class UserPayload(BaseDataModel):
@@ -45,7 +45,7 @@ payload = UserPayload.model_validate({"user_id": "42", "nickname": "Ada"})
 ```python
 from typing import ClassVar
 
-from bilipy_bot.core.data import BaseDataModel
+from butter_bot.core.data import BaseDataModel
 
 
 class Payload(BaseDataModel):

@@ -6,7 +6,7 @@ title: 核心扩展 API
 
 ## `Event[T]`
 
-导入：`from bilipy_bot.core.event import Event`
+导入：`from butter_bot.core.event import Event`
 
 ```python
 @dataclass
@@ -20,7 +20,7 @@ class Event(Generic[BaseDataT]):
 
 ## `EventBus`
 
-导入：`from bilipy_bot.core.event import EventBus`
+导入：`from butter_bot.core.event import EventBus`
 
 ```python
 EventBus()
@@ -39,12 +39,12 @@ async close(timeout: float = 5.0) -> None
 `publish()` 在总线关闭后记录警告并丢弃事件。Handler 异常记录到日志，不从
 `publish()` 抛出。`close()` 幂等，会取消超时 Handler。
 
-`Subscriber` 与 `SubscriberGroup` 从 `bilipy_bot.core.event` 导出，主要用于总线
+`Subscriber` 与 `SubscriberGroup` 从 `butter_bot.core.event` 导出，主要用于总线
 实现和精细测试；应用订阅优先使用 `BotApp`。
 
 ## `BaseSource`
 
-导入：`from bilipy_bot.core.source import BaseSource`
+导入：`from butter_bot.core.source import BaseSource`
 
 ```python
 BaseSource(uuid: UUID | None = None, *, config_key: str | None = None)
@@ -61,7 +61,7 @@ bind(ctx: AppContext) -> None
 
 ## `BaseApi`
 
-导入：`from bilipy_bot.core.api import BaseApi`
+导入：`from butter_bot.core.api import BaseApi`
 
 ```python
 class BaseApi(ABC):
@@ -136,7 +136,7 @@ class BaseFilter(ABC):
 
 ## Data
 
-`bilipy_bot.core.data` 公开：
+`butter_bot.core.data` 公开：
 
 - `BaseDataMixin`
 - `BaseDataModel`

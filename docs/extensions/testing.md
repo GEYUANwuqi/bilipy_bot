@@ -22,8 +22,8 @@ async def test_source_stops_its_task() -> None:
 使用不访问网络的替身上下文：
 
 ```python
-from bilipy_bot.app import RuntimeConfig
-from bilipy_bot.core.context import AppContext
+from butter_bot.app import RuntimeConfig
+from butter_bot.core.context import AppContext
 
 source = MySource()
 source.bind(AppContext(RuntimeConfig(my_service=FakeConfig())))

@@ -18,9 +18,9 @@ title: 事件、状态与处理器
 ```python
 from dataclasses import dataclass
 
-from bilipy_bot.app import Event
-from bilipy_bot.core.data import BaseDataMixin
-from bilipy_bot.core.types import BaseType
+from butter_bot.app import Event
+from butter_bot.core.data import BaseDataMixin
+from butter_bot.core.types import BaseType
 
 
 class JobType(BaseType):

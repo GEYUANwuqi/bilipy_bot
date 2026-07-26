@@ -7,7 +7,7 @@ title: 内置事件源 API
 ## NapCat 顶层导出
 
 ```python
-from bilipy_bot.sources.napcat import (
+from butter_bot.sources.napcat import (
     NapcatApi,
     NapcatConfig,
     NapcatSource,
@@ -57,24 +57,24 @@ async send_group_message(group_id: int, message: list[dict]) -> dict | None
 
 公开枚举成员包括 `ALL`、`UNKNOWN`、`META`、`MESSAGE`、`SENT`、`REQUEST`、
 `NOTICE` 及其具体子状态。以源码
-`bilipy_bot/sources/napcat/types/napcat_type.py` 为完整清单。
+`butter_bot/sources/napcat/types/napcat_type.py` 为完整清单。
 
 ### 事件类型别名
 
-`bilipy_bot.sources.napcat.events` 提供 `NapcatEvent`、
+`butter_bot.sources.napcat.events` 提供 `NapcatEvent`、
 `NapcatGroupMessageEvent`、`NapcatNoticeEvent` 等 `TypeAlias`。它们在运行时
 仍是参数化 `Event`，主要用于类型注解。
 
 ### Data 与 Filter
 
-`bilipy_bot.sources.napcat.data.__all__` 导出 OneBot 事件模型和消息段模型；
-`bilipy_bot.sources.napcat.filters` 导出 `GroupFilter`、`UserFilter`、
+`butter_bot.sources.napcat.data.__all__` 导出 OneBot 事件模型和消息段模型；
+`butter_bot.sources.napcat.filters` 导出 `GroupFilter`、`UserFilter`、
 `SenderRoleFilter`、`TextFilter`、`CommandFilter`、`PrefixFilter`。
 
 ## Bilibili 顶层导出
 
 ```python
-from bilipy_bot.sources.bilibili import (
+from butter_bot.sources.bilibili import (
     BiliDanmakuSource,
     BiliDynamicSource,
     BiliLiveSource,
@@ -135,6 +135,6 @@ get_live_danmaku(room_id: int) -> LiveDanmaku
 
 ### Data
 
-`bilipy_bot.sources.bilibili.data` 导出动态、直播间、弹幕、礼物、上舰和视频分段
+`butter_bot.sources.bilibili.data` 导出动态、直播间、弹幕、礼物、上舰和视频分段
 领域对象。DTO 包位于 `data.dto`，面向适配器解析，不作为普通 Handler 的首选
 导入路径。

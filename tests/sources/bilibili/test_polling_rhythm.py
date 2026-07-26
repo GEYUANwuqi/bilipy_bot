@@ -12,8 +12,8 @@ import asyncio
 
 import pytest
 
-from bilipy_bot.sources.bilibili.source.bili_dynamic_source import BiliDynamicSource
-from bilipy_bot.sources.bilibili.source.bili_live_source import BiliLiveSource
+from butter_bot.sources.bilibili.source.bili_dynamic_source import BiliDynamicSource
+from butter_bot.sources.bilibili.source.bili_live_source import BiliLiveSource
 
 _REAL_SLEEP = asyncio.sleep
 """打桩前先抓住真正的 asyncio.sleep.
