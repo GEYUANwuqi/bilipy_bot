@@ -1,6 +1,6 @@
 [project]
 name = "butterbot-python"
-version = "3.0.2"
+version = "3.1.0.dev1"
 description = "万物皆可 API / SDK 的机器人框架"
 readme = "README.md"
 authors = [{ name = "GEYUANwuqi", email = "wuqichan@outlook.com" }]
@@ -43,8 +43,6 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.15.20",
 ]
-
-
 
 [tool.ruff]
 line-length = 88

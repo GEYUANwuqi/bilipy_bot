@@ -40,26 +40,6 @@ jobs:
 
           git fetch origin main dev_main --prune
 
-          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            CHANNEL="stable"
-            REQUIRED_BRANCH="main"
-            PRERELEASE="false"
-          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$ ]]; then
-            CHANNEL="dev"
-            REQUIRED_BRANCH="dev_main"
-            PRERELEASE="true"
-          else
-            echo "Invalid tag: $TAG"
-            echo "Expected stable tag: v3.0.5"
-            echo "Expected dev tag: v3.0.5-dev.1"
-            exit 1
-          fi
-
-          if ! git branch -r --contains "$GITHUB_SHA" | grep -q "origin/${REQUIRED_BRANCH}$"; then
-            echo "Tag $TAG is not on required branch: $REQUIRED_BRANCH"
-            exit 1
-          fi
-
           PROJECT_VERSION="$(python -c \
             'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
           PROJECT_NAME="$(python -c \
@@ -70,9 +50,28 @@ jobs:
           fi
 
           TAG_VERSION="${TAG#v}"
-          BASE_VERSION="${TAG_VERSION%%-dev.*}"
-          if [[ "$BASE_VERSION" != "$PROJECT_VERSION" ]]; then
-            echo "Tag version $BASE_VERSION does not match project version $PROJECT_VERSION"
+          if [[ "$TAG_VERSION" != "$PROJECT_VERSION" ]]; then
+            echo "Tag version $TAG_VERSION does not match project version $PROJECT_VERSION"
+            exit 1
+          fi
+
+          if [[ "$PROJECT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            CHANNEL="stable"
+            REQUIRED_BRANCH="main"
+            PRERELEASE="false"
+          elif [[ "$PROJECT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+$ ]]; then
+            CHANNEL="dev"
+            REQUIRED_BRANCH="dev_main"
+            PRERELEASE="true"
+          else
+            echo "Invalid project version: $PROJECT_VERSION"
+            echo "Expected stable tag: v3.0.5"
+            echo "Expected dev tag: v3.0.5.dev1"
+            exit 1
+          fi
+
+          if ! git branch -r --contains "$GITHUB_SHA" | grep -q "origin/${REQUIRED_BRANCH}$"; then
+            echo "Tag $TAG is not on required branch: $REQUIRED_BRANCH"
             exit 1
           fi
 
@@ -100,7 +99,6 @@ jobs:
         run: uv build
 
       - name: Publish to PyPI
-        if: steps.meta.outputs.channel == 'stable'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
