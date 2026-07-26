@@ -1,4 +1,4 @@
-"""NapcatSource dispatch integration tests."""
+"""NapcatSource 分发集成测试."""
 
 from uuid import uuid4
 

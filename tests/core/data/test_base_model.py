@@ -7,17 +7,17 @@ import pytest
 from bilipy_bot.core.data import AutoDispatchList, BaseDataModel
 
 
-class TestRoot(BaseDataModel):
+class SampleRoot(BaseDataModel):
     discriminator_field: ClassVar[str] = "kind"
     name: str = ""
 
 
-class TestCat(TestRoot):
+class SampleCat(SampleRoot):
     discriminator_value: ClassVar[str] = "cat"
     whiskers: int = 0
 
 
-class TestDog(TestRoot):
+class SampleDog(SampleRoot):
     discriminator_value: ClassVar[str] = "dog"
     tail_length: float = 0.0
 
@@ -27,25 +27,25 @@ class TestBaseDataModel:
 
     def test_from_dict_dispatches_correctly(self):
         """from_dict 应分发到正确的子类."""
-        cat = TestRoot.from_dict({"kind": "cat", "name": "Kitty", "whiskers": 3})
-        assert isinstance(cat, TestCat)
+        cat = SampleRoot.from_dict({"kind": "cat", "name": "Kitty", "whiskers": 3})
+        assert isinstance(cat, SampleCat)
         assert cat.name == "Kitty"
         assert cat.whiskers == 3
 
-        dog = TestRoot.from_dict({"kind": "dog", "name": "Buddy", "tail_length": 5.5})
-        assert isinstance(dog, TestDog)
+        dog = SampleRoot.from_dict({"kind": "dog", "name": "Buddy", "tail_length": 5.5})
+        assert isinstance(dog, SampleDog)
         assert dog.name == "Buddy"
         assert dog.tail_length == 5.5
 
     def test_from_dict_missing_field_raises(self):
         """缺少 discriminator_field 应抛出 ValueError."""
         with pytest.raises(ValueError, match="Missing discriminator"):
-            TestRoot.from_dict({"name": "Unknown"})
+            SampleRoot.from_dict({"name": "Unknown"})
 
     def test_from_dict_unknown_value_raises(self):
         """未知的 discriminator_value 应抛出 ValueError."""
         with pytest.raises(ValueError, match="Unknown type"):
-            TestRoot.from_dict({"kind": "bird", "name": "Tweety"})
+            SampleRoot.from_dict({"kind": "bird", "name": "Tweety"})
 
     def test_from_dict_no_discriminator(self):
         """没有 discriminator_field 的模型应直接校验."""
@@ -59,14 +59,16 @@ class TestBaseDataModel:
 
     def test_from_type_raw_true(self):
         """from_type(raw=True) 应使用 model_validate."""
-        cat = TestRoot.from_type({"kind": "cat", "name": "Miao", "whiskers": 5}, "cat")
-        assert isinstance(cat, TestCat)
+        cat = SampleRoot.from_type(
+            {"kind": "cat", "name": "Miao", "whiskers": 5}, "cat"
+        )
+        assert isinstance(cat, SampleCat)
         assert cat.whiskers == 5
 
     def test_from_type_unknown_raises(self):
         """from_type 未知类型应抛出 ValueError."""
         with pytest.raises(ValueError):
-            TestRoot.from_type({"kind": "fish"}, "fish")
+            SampleRoot.from_type({"kind": "fish"}, "fish")
 
     def test_multiple_discriminator_values(self):
         """一个子类支持多个 discriminator_value."""
