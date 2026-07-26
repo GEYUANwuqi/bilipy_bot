@@ -169,6 +169,10 @@ f = PrefixFilter("/")           # 匹配任何 / 开头的消息
 | `CommandFilter(*commands)` | 精确匹配完整命令 | `CommandFilter("/help")` |
 | `PrefixFilter(*prefixes)` | 按消息前缀匹配 | `PrefixFilter("/")` |
 
+> **缺字段语义（fail-closed）**：事件不包含过滤目标字段时默认**拦截**。
+> 如 `GroupFilter` 会拦截私聊/元事件（无 `group_id`），
+> `TextFilter`/`CommandFilter`/`PrefixFilter` 会拦截非消息事件（无 `message`）。
+
 > 详细用法见 [FILTER.md](../../docs/FILTER.md)
 
 ------

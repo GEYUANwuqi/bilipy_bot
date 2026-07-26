@@ -57,6 +57,12 @@ async def handler(event):
 > - `CommandFilter("/help")` 匹配 `"/help"` 和 `"/help args"`，**不**匹配 `"/helpme"`
 > - `PrefixFilter("/")` 匹配所有以 `/` 开头的消息（`"/help"`、`"/status"` 等）
 
+> **缺字段语义（fail-closed）**：所有预置过滤器遵循"安全拦截"原则——
+> 事件数据不包含过滤目标字段时**默认拦截**，只放行明确匹配的事件。
+> 例如 `GroupFilter(123)` 会拦截私聊消息和元事件（它们没有 `group_id`），
+> `TextFilter("hi")` 会拦截所有非消息事件（它们没有 `message`）。
+> 如需"群聊按群号过滤、私聊放行"这类组合语义，请用 `|` 显式组合过滤器。
+
 ---
 
 ## 编写自定义过滤器

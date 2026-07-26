@@ -2,7 +2,9 @@
 
 from dataclasses import dataclass, field
 
+from bilipy_bot.core.data import BaseDataMixin
 from bilipy_bot.core.event import Event
+from bilipy_bot.core.filter import BaseFilter
 from bilipy_bot.core.types import BaseType
 from bilipy_bot.sources.napcat.filters import (
     CommandFilter,
@@ -34,7 +36,7 @@ class MockMessage:
 
 
 @dataclass
-class MockGroupMessageData:
+class MockGroupMessageData(BaseDataMixin):
     """模拟群聊消息事件数据."""
 
     group_id: int = 0
@@ -44,7 +46,7 @@ class MockGroupMessageData:
 
 
 @dataclass
-class MockPrivateMessageData:
+class MockPrivateMessageData(BaseDataMixin):
     """模拟私聊消息事件数据."""
 
     user_id: int = 0
@@ -52,7 +54,7 @@ class MockPrivateMessageData:
 
 
 @dataclass
-class MockNoticeData:
+class MockNoticeData(BaseDataMixin):
     """模拟通知事件数据（有 group_id/user_id，无 message/sender.role）."""
 
     group_id: int = 0
@@ -61,7 +63,7 @@ class MockNoticeData:
 
 
 @dataclass
-class MockMetaData:
+class MockMetaData(BaseDataMixin):
     """模拟元事件数据（无 group_id/user_id/message/sender）."""
 
     sub_type: str = ""
@@ -130,15 +132,15 @@ class TestGroupFilter:
         f = GroupFilter(200)
         assert not f.check(_make_group_msg(group_id=100))
 
-    def test_non_group_event_passes(self):
-        """无 group_id 的事件（如私聊）应放行."""
+    def test_non_group_event_blocked(self):
+        """无 group_id 的事件（如元事件）应被拦截（fail-closed）."""
         f = GroupFilter(100)
-        assert f.check(_make_meta())
+        assert not f.check(_make_meta())
 
-    def test_private_message_passes(self):
-        """私聊消息无 group_id，应放行."""
+    def test_private_message_blocked(self):
+        """私聊消息无 group_id，应被拦截（fail-closed）."""
         f = GroupFilter(100)
-        assert f.check(_make_private_msg())
+        assert not f.check(_make_private_msg())
 
 
 # ==================== UserFilter 测试 ====================
@@ -160,10 +162,10 @@ class TestUserFilter:
         f = UserFilter(20001)
         assert not f.check(_make_group_msg(user_id=10001))
 
-    def test_no_user_id_event_passes(self):
-        """无 user_id 的事件（如元事件）应放行."""
+    def test_no_user_id_event_blocked(self):
+        """无 user_id 的事件（如元事件）应被拦截（fail-closed）."""
         f = UserFilter(10001)
-        assert f.check(_make_meta())
+        assert not f.check(_make_meta())
 
 
 # ==================== SenderRoleFilter 测试 ====================
@@ -191,15 +193,15 @@ class TestSenderRoleFilter:
         assert f.check(_make_group_msg(role="admin"))
         assert not f.check(_make_group_msg(role="member"))
 
-    def test_non_group_event_passes(self):
-        """非群聊事件（无 group_id）应放行."""
+    def test_non_group_event_blocked(self):
+        """非群聊事件（无 group_id）应被拦截（fail-closed）."""
         f = SenderRoleFilter("owner")
-        assert f.check(_make_meta())
+        assert not f.check(_make_meta())
 
-    def test_private_message_passes(self):
-        """私聊消息（有 sender 但无 role）应放行."""
+    def test_private_message_blocked(self):
+        """私聊消息（无 group_id/role）应被拦截（fail-closed）."""
         f = SenderRoleFilter("owner")
-        assert f.check(_make_private_msg())
+        assert not f.check(_make_private_msg())
 
 
 # ==================== TextFilter 测试 ====================
@@ -232,10 +234,10 @@ class TestTextFilter:
         assert f.check(_make_group_msg(text="I like banana"))
         assert not f.check(_make_group_msg(text="I like cherry"))
 
-    def test_non_message_event_passes(self):
-        """非消息事件（无 message 字段）应放行."""
+    def test_non_message_event_blocked(self):
+        """非消息事件（无 message 字段）应被拦截（fail-closed）."""
         f = TextFilter("hello")
-        assert f.check(_make_notice())
+        assert not f.check(_make_notice())
 
     def test_private_message_found(self):
         """私聊消息同样支持文本过滤."""
@@ -269,10 +271,10 @@ class TestCommandFilter:
         assert f.check(_make_group_msg(text="/help"))
         assert not f.check(_make_group_msg(text="/ban"))
 
-    def test_non_message_event_passes(self):
-        """非消息事件应放行."""
+    def test_non_message_event_blocked(self):
+        """非消息事件应被拦截（fail-closed）."""
         f = CommandFilter("/help")
-        assert f.check(_make_notice())
+        assert not f.check(_make_notice())
 
     def test_empty_text(self):
         """空文本不应通过."""
@@ -301,10 +303,10 @@ class TestPrefixFilter:
         assert f.check(_make_group_msg(text="/status"))
         assert not f.check(_make_group_msg(text=".help"))
 
-    def test_non_message_event_passes(self):
-        """非消息事件应放行."""
+    def test_non_message_event_blocked(self):
+        """非消息事件应被拦截（fail-closed）."""
         f = PrefixFilter("/")
-        assert f.check(_make_notice())
+        assert not f.check(_make_notice())
 
     def test_prefix_vs_command_distinction(self):
         """确认 PrefixFilter 与 CommandFilter 的语义差异."""
@@ -322,21 +324,19 @@ class TestPrefixFilter:
 class TestCombinedFilters:
     def test_and_filter_short_circuit(self):
         """AndFilter: 第一个 filter 返回 False 时，第二个不被调用."""
-        call_count = 0
+        calls: list[str] = []
 
-        class TrackingFilter(GroupFilter):
+        class TrackingFilter(BaseFilter):
+            def __init__(self):
+                self.filters = []
+
             def check(self, event):
-                nonlocal call_count
-                call_count += 1
-                return True  # 但 GroupFilter 本身会返回 False
+                calls.append(event.id)
+                return True
 
-        f = GroupFilter(999) & TrackingFilter(1)  # GroupFilter 先拦截
-        event = _make_group_msg(group_id=100)
-        assert not f.check(event)
-        # call_count 应为 0（GroupFilter 短路后 TrackingFilter 不被调用）
-        # 注意：不能这样断言，因为 call_count 可能在别的 filter 中使用
-        # 修改策略：用 BlockFilter 验证
-        pass
+        f = GroupFilter(999) & TrackingFilter()  # GroupFilter 先拦截
+        assert not f.check(_make_group_msg(group_id=100))
+        assert calls == []
 
     def test_and_filter_both_pass(self):
         """AndFilter: 全部通过时返回 True."""
