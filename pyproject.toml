@@ -31,11 +31,6 @@ Issues = "https://github.com/GEYUANwuqi/ButterBot/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["butterbot"]
 
-# 清华源
-[[tool.uv.index]]
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
-
 # 开发依赖
 [dependency-groups]
 dev = [
