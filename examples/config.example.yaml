@@ -10,20 +10,36 @@
 #      config = RuntimeConfig.from_yaml()
 #
 
-# ---------- B站 配置 ----------
-# bilibili_api.Credential 参数，不填则为未登录状态
-bilibili:
-  sessdata: ""
-  bili_jct: ""
-  buvid3: ""
-  # dedeuserid: ""
-  # ac_time_value: ""
+# ---------- 当前配置使用的环境变量默认值 ----------
+# 当前进程中的同名环境变量优先；这里的值只参与配置加载，不会写入 os.environ。
+environment:
+  BILI_SESSDATA: ""
+  BILI_JCT: ""
+  BILI_BUVID3: ""
+  NAPCAT_URL: "ws://localhost:3001"
+  NAPCAT_TOKEN: ""
 
-# ---------- NapCat QQ 配置 ----------
-# NapcatConfig 参数
-napcat:
-  url: "ws://localhost:3001"
-  token: ""
-  # heartbeat: 30.0
-  # reconnect_attempts: 5
-  # receive_timeout: 60.0
+# ---------- 命名 Source 配置 ----------
+# 自定义键（bili_account/qq_account）是运行时 config_key。
+# source_name 选择内置配置 builder，不会自动创建 Source 实例。
+sources:
+  # bilibili_api.Credential 参数，不填则为未登录状态
+  bili_account:
+    source_name: bilibili
+    sessdata: "${BILI_SESSDATA}"
+    bili_jct: "${BILI_JCT}"
+    buvid3: "${BILI_BUVID3}"
+    # dedeuserid: ""
+    # ac_time_value: ""
+
+  # NapcatConfig 参数
+  qq_account:
+    source_name: napcat
+    url: "${NAPCAT_URL}"
+    token: "${NAPCAT_TOKEN}"
+    # heartbeat: 30.0
+    # reconnect_attempts: 5
+    # receive_timeout: 60.0
+
+# 也可以直接用分层环境变量覆盖字段，例如:
+# BUTTERBOT__SOURCES__QQ_ACCOUNT__TOKEN=secret

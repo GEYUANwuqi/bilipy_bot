@@ -21,15 +21,18 @@ cp examples/config.example.yaml config.yaml
 ## 配置
 
 ```yaml
-napcat:
-  url: "ws://localhost:3001"
-  token: ""
-  heartbeat: 30.0
-  reconnect_attempts: 5
-  receive_timeout: 60.0
+sources:
+  qq_account:
+    source_name: napcat
+    url: "${NAPCAT_URL:-ws://localhost:3001}"
+    token: "${NAPCAT_TOKEN:-}"
+    heartbeat: 30.0
+    reconnect_attempts: 5
+    receive_timeout: 60.0
 ```
 
-`url` 必填；其余字段使用 `NapcatConfig` 默认值。不要把真实 Token 提交到仓库。
+`url` 必填；其余字段使用 `NapcatConfig` 默认值。`${NAME:-default}` 从当前环境
+读取变量并在缺失时使用默认值。不要把真实 Token 提交到仓库。
 
 ## 最小接入
 
@@ -39,7 +42,7 @@ from butterbot.sources.napcat import NapcatSource, NapcatType
 from butterbot.sources.napcat.events import NapcatGroupMessageEvent
 
 app = BotApp()
-source = app.add_source(NapcatSource)
+source = app.add_source(NapcatSource, config_key="qq_account")
 
 
 @app.subscribe(source.uuid, NapcatType.GROUP_MESSAGE)
@@ -71,7 +74,7 @@ app.run()
 ```python
 from butterbot.sources.napcat import NapcatApi
 
-api = app.get_api(NapcatApi, "napcat")
+api = app.get_api(NapcatApi, "qq_account")
 result = await api.send_group_message(
     group_id=123456,
     message=[{"type": "text", "data": {"text": "hello"}}],
@@ -90,7 +93,8 @@ result = await api.send_group_message(
 
 ## 常见问题
 
-- `ConfigError: 缺少配置键 'napcat'`：检查 YAML 顶层键和启动工作目录；
+- `ConfigError: 缺少配置键 'qq_account'`：检查 `sources` 实例键、Source 的
+  `config_key` 和启动工作目录；
 - 连接失败：先独立确认 NapCat 地址、端口和认证配置；
 - Handler 不触发：使用具体 `NapcatType`，并确认过滤器未拦截；
 - 请求超时：确认连接仍在运行且服务器返回相同 `echo`。

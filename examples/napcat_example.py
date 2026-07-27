@@ -41,9 +41,11 @@ _log = getLogger("NAPCAT")
 #
 # 请先在仓库根目录运行以下命令，再填入你的配置:
 #   cp examples/config.example.yaml config.yaml
-#   napcat:
-#     url: "ws://localhost:3001"
-#     token: ""
+#   sources:
+#     qq_account:
+#       source_name: napcat
+#       url: "ws://localhost:3001"
+#       token: ""
 #
 # BotApp 会自动读取 config.yaml，无需手动创建 RuntimeConfig。
 
@@ -54,12 +56,13 @@ app = BotApp()
 # 注册 NapCat 事件源
 app.add_source(
     source_cls=NapcatSource,
+    config_key="qq_account",
 )
 # 通过类型获取事件源的 UUID（单一实例时无需传 config_key）
 napcat_source = app.get_source(NapcatSource)
 assert napcat_source is not None
 napcat_id = napcat_source.uuid
-napcat_api = app.get_api(NapcatApi, "napcat")
+napcat_api = app.get_api(NapcatApi, "qq_account")
 
 # ============ 订阅群消息事件 ============ #
 

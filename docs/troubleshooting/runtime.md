@@ -19,10 +19,19 @@ cp examples/config.example.yaml config.yaml
 
 确认：
 
-1. YAML 顶层键与 Source 的 `config_key` 一致；
-2. `napcat` 正确构建为 `NapcatConfig`；
-3. 多实例自定义键已经注册 builder 或手工构造；
+1. `sources` 下的自定义实例键与 Source 的 `config_key` 一致；
+2. `source_name: napcat` 正确构建为 `NapcatConfig`；
+3. 自定义 `source_name` 已经注册 builder；
 4. 值不是 `null`。
+
+顶层 `napcat:`、`bilibili:` 等 Source 配置不再支持；加载错误中的迁移提示会指向
+`sources.<config_key>.source_name`。
+
+## `环境变量未设置且没有默认值`
+
+`${NAME}` 要求当前进程环境或 YAML 的 `environment` 中存在 `NAME`。本地可声明
+默认值，或使用 `${NAME:-default}`。若使用
+`BUTTERBOT__SOURCES__实例键__字段` 直接覆盖，路径各段按小写配置键处理。
 
 ## `SubscriptionError`
 

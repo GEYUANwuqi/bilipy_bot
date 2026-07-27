@@ -117,7 +117,12 @@ from butterbot.app import RuntimeConfig
 ```python
 RuntimeConfig(**configs: Any)
 get_config(key: str, default: Any = None) -> Any
-RuntimeConfig.from_yaml(path: str | Path = "config.yaml") -> RuntimeConfig
+RuntimeConfig.from_yaml(
+    path: str | Path = "config.yaml",
+    *,
+    environ: Mapping[str, str] | None = None,
+    env_prefix: str = "BUTTERBOT__",
+) -> RuntimeConfig
 ```
 
 `from_yaml()` 的错误见[异常参考](./exceptions.md)和
@@ -131,8 +136,9 @@ from butterbot.app import register_builder
 register_builder(key: str, builder: Any) -> None
 ```
 
-builder 接收对应 YAML 顶层值并返回运行时配置对象。重复键覆盖已有 builder；
-注册表为进程全局状态。
+builder 接收配置值并返回运行时配置对象。新格式由
+`sources.<config_key>.source_name` 选择 builder。builder 名称不能直接作为 YAML
+顶层键；重复注册会覆盖已有 builder，注册表为进程全局状态。
 
 ## 门面中的其他导出
 

@@ -25,10 +25,12 @@ _log = getLogger("BILIBILI")
 #
 # 请先在仓库根目录运行以下命令，再填入你的配置:
 #   cp examples/config.example.yaml config.yaml
-#   bilibili:
-#     sessdata: ""
-#     bili_jct: ""
-#     buvid3: ""
+#   sources:
+#     bili_account:
+#       source_name: bilibili
+#       sessdata: ""
+#       bili_jct: ""
+#       buvid3: ""
 #
 # BotApp 会自动读取 config.yaml，无需手动创建 RuntimeConfig。
 
@@ -38,9 +40,17 @@ app = BotApp()
 # ============ 创建事件源 ============ #
 # 注册事件源，无需保存返回值
 app.add_source(
-    source_cls=BiliDynamicSource, watch_targets=[1802011210], poll_interval=100
+    source_cls=BiliDynamicSource,
+    watch_targets=[1802011210],
+    poll_interval=100,
+    config_key="bili_account",
 )
-app.add_source(source_cls=BiliLiveSource, watch_targets=[22758221], poll_interval=100)
+app.add_source(
+    source_cls=BiliLiveSource,
+    watch_targets=[22758221],
+    poll_interval=100,
+    config_key="bili_account",
+)
 # 通过类型获取事件源的 UUID（单一实例时无需传 config_key）
 dynamic_source = app.get_source(BiliDynamicSource)
 assert dynamic_source is not None

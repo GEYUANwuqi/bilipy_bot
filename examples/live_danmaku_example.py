@@ -20,17 +20,23 @@ _log = getLogger("BILIBILI")
 #
 # 请先在仓库根目录运行以下命令，再填入你的配置:
 #   cp examples/config.example.yaml config.yaml
-#   bilibili:
-#     sessdata: ""
-#     bili_jct: ""
-#     buvid3: ""
+#   sources:
+#     bili_account:
+#       source_name: bilibili
+#       sessdata: ""
+#       bili_jct: ""
+#       buvid3: ""
 #
 # BotApp 会自动读取 config.yaml，无需手动创建 RuntimeConfig。
 
 # 创建 BotApp（自动加载 config.yaml）
 app = BotApp()
 
-app.add_source(source_cls=BiliDanmakuSource, room_id=[26498147, 22758221])
+app.add_source(
+    source_cls=BiliDanmakuSource,
+    room_id=[26498147, 22758221],
+    config_key="bili_account",
+)
 source = app.get_source(BiliDanmakuSource)
 assert source is not None
 danmaku_id = source.uuid

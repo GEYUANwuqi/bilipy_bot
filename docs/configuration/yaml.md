@@ -13,27 +13,62 @@ config = RuntimeConfig.from_yaml("config.yaml")
 ```
 
 省略路径时读取当前工作目录的 `config.yaml`。`BotApp()` 没有收到 `config`
-参数时会自动执行这一加载。
+参数时会自动执行这一加载。加载顺序为：
 
-## 文件要求
+1. 使用 `yaml.safe_load()` 读取文件；
+2. 合并 YAML `environment` 和当前进程环境；
+3. 递归解析字符串中的环境变量引用；
+4. 应用 `BUTTERBOT__` 分层环境变量覆盖；
+5. 按 `source_name` 调用 builder。
 
-YAML 顶层必须是映射：
+## 命名 Source 配置
+
+推荐把 Source 配置放在 `sources` 下：
 
 ```yaml
-napcat:
-  url: "ws://localhost:3001"
-  token: ""
+sources:
+  bili_account:
+    source_name: bilibili
+    sessdata: ""
+    bili_jct: ""
+    buvid3: ""
 
-custom:
-  enabled: true
+  qq_account:
+    source_name: napcat
+    url: "ws://localhost:3001"
+    token: ""
 ```
 
-处理规则：
+`bili_account` 和 `qq_account` 是用户定义的实例键，会直接成为运行时
+`config_key`。`source_name` 是配置类型或平台名，用来选择 builder；它不会传给
+builder，也不会自动创建 Source。
 
-1. 使用 `yaml.safe_load()`；
-2. 顶层不是 `dict` 时抛 `ConfigError`；
-3. 已注册键调用对应 builder；
-4. 未注册键保留 YAML 解析后的原始值。
+```python
+from butterbot.app import BotApp
+from butterbot.sources.napcat import NapcatSource
+
+app = BotApp()
+source = app.add_source(NapcatSource, config_key="qq_account")
+```
+
+同一 `source_name` 可以构建多个命名配置，适合多账号或多端点：
+
+```yaml
+sources:
+  qq_primary:
+    source_name: napcat
+    url: "ws://localhost:3001"
+  qq_backup:
+    source_name: napcat
+    url: "ws://localhost:3002"
+```
+
+`sources` 必须是映射；每个实例也必须是映射，并包含非空字符串
+`source_name`。实例键不能和 YAML 的其他顶层配置键重名。
+
+普通应用配置仍可放在顶层并保留 YAML 解析后的原始值。但已注册的 builder 名称
+不能作为顶层键；例如顶层 `napcat:` 或 `bilibili:` 会直接抛 `ConfigError`，
+必须移入 `sources` 并显式填写 `source_name`。
 
 ## 内置 builder
 
@@ -51,7 +86,8 @@ custom:
 
 ### `bilibili`
 
-把映射作为关键字参数传给 `bilibili_api.Credential`。可用字段由当前锁定的
+把移除 `source_name` 后的映射作为关键字参数传给
+`bilibili_api.Credential`。可用字段由当前锁定的
 `bilibili-api-python` 决定，仓库模板列出 `sessdata`、`bili_jct` 和 `buvid3`。
 
 ## 注册自定义 builder
@@ -76,6 +112,16 @@ register_builder("feed", build_feed)
 config = RuntimeConfig.from_yaml("config.yaml")
 ```
 
+对应 YAML：
+
+```yaml
+sources:
+  primary_feed:
+    source_name: feed
+    endpoint: "https://example.com/feed"
+    interval: 60
+```
+
 builder 是进程级注册表；测试修改后应恢复原状态，避免用例之间泄漏。builder
 抛出的普通异常会包装为 `ConfigError` 并保留 cause。
 
@@ -85,16 +131,19 @@ builder 是进程级注册表；测试修改后应恢复原状态，避免用例
 | --- | --- |
 | 文件不存在 | `FileNotFoundError` |
 | YAML 语法错误 | `yaml.YAMLError` |
-| 顶层不是映射 | `ConfigError` |
+| 顶层、`sources` 或实例结构错误 | `ConfigError` |
+| `source_name` 缺失或没有注册 | `ConfigError` |
+| 环境变量缺失、引用循环或覆盖路径冲突 | `ConfigError` |
 | builder 构建失败 | `ConfigError` |
 
 ## 安全
 
-复制模板后只在本地填写 Token：
+复制模板后只在本地填写默认值：
 
 ```bash
 cp examples/config.example.yaml config.yaml
 ```
 
-不要把实际配置粘贴到日志、Issue 或文档。仓库忽略根目录 `/config.yaml`，但其他
-位置的同名文件不一定被忽略，提交前仍需检查 `git status`。
+生产环境优先使用环境变量注入 Secret。不要把实际配置粘贴到日志、Issue 或文档。
+仓库忽略根目录 `/config.yaml`，但其他位置的同名文件不一定被忽略，提交前仍需检查
+`git status`。

@@ -10,17 +10,19 @@ title: Bilibili
 
 ## 配置
 
-YAML 的 `bilibili` 顶层对象会构建为 `bilibili_api.Credential`：
+`source_name: bilibili` 会把实例配置构建为 `bilibili_api.Credential`：
 
 ```yaml
-bilibili:
-  sessdata: ""
-  bili_jct: ""
-  buvid3: ""
+sources:
+  bili_account:
+    source_name: bilibili
+    sessdata: "${BILI_SESSDATA:-}"
+    bili_jct: "${BILI_JCT:-}"
+    buvid3: "${BILI_BUVID3:-}"
 ```
 
 是否必须提供有效登录凭证取决于上游接口。`BiliDanmakuSource` 启动时要求
-`bilibili` 配置键存在；部分 `BilibiliApi` 方法可接收空凭证，而
+`config_key` 对应的配置存在；部分 `BilibiliApi` 方法可接收空凭证，而
 `get_new_dynamic_list()` 明确要求凭证。
 
 ## 动态轮询
@@ -32,6 +34,7 @@ source = app.add_source(
     BiliDynamicSource,
     watch_targets=[123456],
     poll_interval=60,
+    config_key="bili_account",
 )
 
 
@@ -52,6 +55,7 @@ source = app.add_source(
     BiliLiveSource,
     watch_targets=[123456],
     poll_interval=20,
+    config_key="bili_account",
 )
 ```
 
@@ -74,7 +78,11 @@ source.set_poll_interval(60)
 ```python
 from butterbot.sources.bilibili import BiliDanmakuSource, DanmakuType
 
-source = app.add_source(BiliDanmakuSource, watch_targets=[123456])
+source = app.add_source(
+    BiliDanmakuSource,
+    watch_targets=[123456],
+    config_key="bili_account",
+)
 
 
 @app.subscribe(source.uuid, DanmakuType.DANMAKU)
