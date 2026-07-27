@@ -144,6 +144,33 @@ class TestEventBusCloseTimeout:
         await asyncio.wait_for(done.wait(), timeout=2.0)
         assert bus.closed
 
+    @pytest.mark.asyncio
+    async def test_cancelled_close_can_be_retried(self, fixed_uuid: UUID):
+        """关闭过程被取消后，再次 close 仍应完成回调清理."""
+        bus = EventBus()
+        started = asyncio.Event()
+
+        async def hanging_callback(event: Event) -> None:
+            started.set()
+            await asyncio.Event().wait()
+
+        bus.add_subscriber(fixed_uuid, hanging_callback, BusType.EVENT, BusType)
+        await bus.publish(fixed_uuid, _event())
+        await started.wait()
+
+        closing = asyncio.create_task(bus.close(timeout=30.0))
+        await asyncio.sleep(0)
+        closing.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await closing
+
+        await bus.close(timeout=0.01)
+
+        assert bus.closed
+        assert bus.pending_callbacks == 0
+        assert bus._background_tasks == set()
+
 
 class TestEventBusPublishAfterClose:
     """关闭后的总线不应再派发事件."""

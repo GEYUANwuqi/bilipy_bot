@@ -131,19 +131,28 @@ class SourceManager:
             _log.warning("事件源 %s 不存在", source_id)
             return None
 
+        cancelled: asyncio.CancelledError | None = None
         try:
             await source.stop()
+        except asyncio.CancelledError as exc:
+            cancelled = exc
+            _log.warning(
+                "移除前停止 %s 时被取消，继续退订并摘除",
+                source.__class__.__name__,
+            )
         except Exception:
             _log.exception("移除前停止 %s 失败", source.__class__.__name__)
-
-        removed_callbacks = self._ctx.bus.remove_subscribers(source_id)
-        self._sources.pop(source_id, None)
+        finally:
+            removed_callbacks = self._ctx.bus.remove_subscribers(source_id)
+            self._sources.pop(source_id, None)
         _log.info(
             "移除事件源: %s (uuid=%s)，同时清理 %s 个订阅回调",
             source.__class__.__name__,
             source_id,
             removed_callbacks,
         )
+        if cancelled is not None:
+            raise cancelled
         return source
 
     @overload
@@ -263,7 +272,8 @@ class SourceManager:
         3. 启动每个 source
 
         任一事件源启动失败时不留半启动状态：已成功启动的会被回滚（stop），
-        然后把全部失败聚合成 :class:`SourceStartError` 上抛，``running`` 保持 ``False``。
+        然后把全部失败聚合成 :class:`SourceStartError` 上抛，``running`` 保持
+        ``False``。启动被取消时同样回滚，再传播 ``CancelledError``。
 
         Raises:
             LifecycleError: SourceManager 已关闭
@@ -286,9 +296,17 @@ class SourceManager:
         # 启动所有 source
         started: list[BaseSource] = []
         failures: dict[str, BaseException] = {}
+        cancelled: asyncio.CancelledError | None = None
         for source in self._sources.values():
             try:
                 await source.start()
+            except asyncio.CancelledError as exc:
+                cancelled = exc
+                _log.warning(
+                    "启动 %s 时被取消，开始回滚已启动事件源",
+                    source.__class__.__name__,
+                )
+                break
             except Exception as e:
                 _log.exception("启动 %s 失败", source.__class__.__name__)
                 failures["%s(uuid=%s)" % (source.__class__.__name__, source.uuid)] = e
@@ -296,12 +314,24 @@ class SourceManager:
                 started.append(source)
                 _log.debug("启动 %s", source.__class__.__name__)
 
-        if failures:
-            for source in started:
+        if failures or cancelled is not None:
+            rollback_cancelled: asyncio.CancelledError | None = None
+            for source in reversed(started):
                 try:
                     await source.stop()
+                except asyncio.CancelledError as exc:
+                    rollback_cancelled = exc
+                    _log.warning(
+                        "回滚 %s 时被取消，继续清理其余事件源",
+                        source.__class__.__name__,
+                    )
                 except Exception:
                     _log.exception("回滚 %s 时出错", source.__class__.__name__)
+
+            if cancelled is not None:
+                raise cancelled
+            if rollback_cancelled is not None:
+                raise rollback_cancelled
             raise SourceStartError(failures)
 
         self._running = True

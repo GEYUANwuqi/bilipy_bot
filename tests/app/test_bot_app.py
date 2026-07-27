@@ -102,6 +102,17 @@ class TestBotApp:
         """bus 属性应返回 EventBus."""
         assert isinstance(app.bus, EventBus)
 
+    def test_max_pending_callbacks_configures_default_bus(self, config):
+        """BotApp 应把可选回调容量传给自动创建的 EventBus."""
+        app = BotApp(config, max_pending_callbacks=3)
+        assert app.bus.max_pending_callbacks == 3
+
+    def test_injected_ctx_rejects_max_pending_callbacks(self, config):
+        """注入 ctx 时不能再配置由 ctx 持有的 EventBus."""
+        ctx = AppContext(config)
+        with pytest.raises(ValueError, match="max_pending_callbacks"):
+            BotApp(config, ctx=ctx, max_pending_callbacks=3)
+
     def test_manager_property(self, app):
         """manager 属性应返回 SourceManager."""
         assert app.manager is not None
@@ -312,6 +323,35 @@ class TestBotAppCloseOrder:
             await app.close()
 
         assert app.bus.closed
+        assert closed == ["api"]
+
+    @pytest.mark.asyncio
+    async def test_close_releases_apis_even_if_bus_close_cancelled(self, config):
+        """总线关闭被取消时，API 仍应被释放."""
+        closed: list[str] = []
+
+        class CancellingBus(EventBus):
+            async def close(self, timeout: float = 5.0) -> None:
+                raise asyncio.CancelledError()
+
+        class ClosableApi(BaseApi):
+            def __init__(self):
+                pass
+
+            @classmethod
+            def create(cls, ctx, config_key):
+                return cls()
+
+            async def aclose(self) -> None:
+                closed.append("api")
+
+        ctx = AppContext(config, event_bus=CancellingBus())
+        app = BotApp(config, ctx=ctx)
+        app.get_api(ClosableApi, "test")
+
+        with pytest.raises(asyncio.CancelledError):
+            await app.close()
+
         assert closed == ["api"]
 
 

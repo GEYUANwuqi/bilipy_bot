@@ -65,8 +65,11 @@ async def on_ready(event: Event[MyData]) -> None:
 
 ## 发布不是等待 Handler 完成
 
-`await EventBus.publish(...)` 负责创建 Handler task，但不会等待这些 Handler
+`await EventBus.publish(...)` 负责创建 Handler task，但默认不会等待这些 Handler
 执行完。EventBus 持有强引用，并在 `close()` 时统一排空。
+
+若 EventBus 配置了 `max_pending_callbacks`，`publish()` 在容量耗尽时会等待已有
+Handler 完成。它仍不等待本次新建 Handler 的业务结果；等待只表示获得调度容量。
 
 如果业务流程需要等待某个处理结果，应使用显式的 `asyncio.Event`、Queue 或
 Future 建立同步关系，不要误以为 `publish()` 返回就代表 Handler 已完成。

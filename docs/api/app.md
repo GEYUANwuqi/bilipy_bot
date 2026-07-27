@@ -20,11 +20,16 @@ BotApp(
     ctx: AppContext | None = None,
     *,
     close_timeout: float = 5.0,
+    max_pending_callbacks: int | None = None,
 )
 ```
 
 `config=None` 时调用 `RuntimeConfig.from_yaml("config.yaml")`，可能抛
 `FileNotFoundError`、`yaml.YAMLError` 或 `ConfigError`。
+
+`max_pending_callbacks` 为 `None` 时保持无限并发的兼容行为；设置正整数后，
+EventBus 达到该数量的 in-flight Handler task 时会让 `publish()` 等待容量。
+注入自定义 `ctx` 时 EventBus 已由该上下文持有，不能同时设置此参数。
 
 ### 属性
 
@@ -96,8 +101,10 @@ async __aenter__() -> BotApp
 async __aexit__(exc_type, exc_val, exc_tb) -> None
 ```
 
-`start()` 可能抛 `SourceStartError`。`close()` 为终态清理；`run()` 是拥有
-事件循环的同步入口，内部使用 `asyncio.run()`。
+`start()` 可能抛 `SourceStartError`。启动被取消时会回滚此前已启动的 Source，
+完成后传播 `CancelledError`。`close()` 为终态清理，并按 Source、EventBus、API
+顺序尽力释放全部资源；`run()` 是拥有事件循环的同步入口，内部使用
+`asyncio.run()`。
 
 ## `RuntimeConfig`
 

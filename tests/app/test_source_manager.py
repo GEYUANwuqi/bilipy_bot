@@ -28,7 +28,7 @@ class StubSource(BaseSource):
         self.started = False
         self.stopped = False
         self.stop_calls = 0
-        self.start_exception: Exception | None = None
+        self.start_exception: BaseException | None = None
         self.stop_exception: BaseException | None = None
 
     async def on_start(self):
@@ -321,6 +321,21 @@ class TestSourceManagerStartFailure:
 
         assert not source.running
 
+    @pytest.mark.asyncio
+    async def test_start_cancellation_rolls_back_started_sources(self, manager):
+        """后续 Source 启动被取消时，已启动 Source 也必须回滚."""
+        good = manager.add_source(StubSource)
+        cancelled = manager.add_source(StubSource)
+        cancelled.start_exception = asyncio.CancelledError()
+
+        with pytest.raises(asyncio.CancelledError):
+            await manager.start()
+
+        assert good.stopped
+        assert not good.running
+        assert not cancelled.running
+        assert not manager.running
+
 
 class TestSourceManagerStopResilience:
     """停止流程必须尽力清理完所有事件源（ASYNC-005）."""
@@ -492,6 +507,35 @@ class TestSourceManagerDynamicSources:
         removed = await manager.remove_source(source.uuid)
         assert removed is source
         assert source.uuid not in manager.sources
+
+    @pytest.mark.asyncio
+    async def test_remove_source_cancellation_still_purges_registration(self, manager):
+        """停止被取消时也必须完成退订和摘除，再传播取消."""
+        source = manager.add_source(StubSource)
+        await manager.start()
+
+        async def callback(event):
+            pass
+
+        manager.ctx.bus.add_subscriber(
+            source.uuid,
+            callback,
+            StubType.EVENT,
+            StubType,
+        )
+        source.stop_exception = asyncio.CancelledError()
+
+        with pytest.raises(asyncio.CancelledError):
+            await manager.remove_source(source.uuid)
+
+        assert source.uuid not in manager.sources
+        assert (
+            manager.ctx.bus._subscriber_group.get_callbacks(
+                source.uuid,
+                StubType.EVENT,
+            )
+            == ()
+        )
 
     @pytest.mark.asyncio
     async def test_add_source_after_close_raises_lifecycle_error(self, manager):

@@ -72,6 +72,9 @@ Source。任一 Source 启动失败时：
 - 抛出 `SourceStartError`，其 `failures` 保存原始异常；
 - manager 不进入运行状态。
 
+启动协程被取消时也会停止此前已成功启动的 Source，再传播
+`asyncio.CancelledError`，不会留下半启动 manager。
+
 ## 停止与关闭的区别
 
 `await app.stop()` 只停止已注册 Source，保留 Source、订阅、EventBus 与 API
@@ -101,8 +104,9 @@ Handler 若捕获 `asyncio.CancelledError`，完成必要清理后应重新抛�
 
 `BaseSource.start()` 捕获 `BaseException` 来保证启动取消时回滚状态，然后原样
 传播。`SourceManager.stop()` 会继续清理其余 Source，最后重新抛出观察到的
-`CancelledError`。`BotApp.close()` 使用 `finally`，即使 manager 清理被取消，
-仍会关闭 EventBus 和 API。
+`CancelledError`。动态移除 Source 时，即使停止被取消，也会完成退订和摘除。
+`BotApp.close()` 使用嵌套 `finally`，manager 或 EventBus 清理被取消时仍会继续
+关闭后续资源；`ApiRegistry` 也会继续处理其余 API，最后再传播取消。
 
 ## 常见误用
 

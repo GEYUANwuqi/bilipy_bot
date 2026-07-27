@@ -1,5 +1,7 @@
 """Tests for ApiRegistry singleton management."""
 
+import asyncio
+
 import pytest
 
 from butterbot.app.config import RuntimeConfig
@@ -196,6 +198,43 @@ class TestApiRegistryAcloseAll:
 
         await registry.aclose_all()  # 不应抛出
         assert good.close_calls == 1
+
+    @pytest.mark.asyncio
+    async def test_aclose_all_continues_after_cancellation(self):
+        """单个 API 关闭被取消时，仍应关闭其余实例后再传播取消."""
+        closed: list[str] = []
+
+        class CancellingApi(BaseApi):
+            def __init__(self):
+                pass
+
+            @classmethod
+            def create(cls, ctx, config_key):
+                return cls()
+
+            async def aclose(self) -> None:
+                closed.append("cancelled")
+                raise asyncio.CancelledError()
+
+        class FollowingApi(BaseApi):
+            def __init__(self):
+                pass
+
+            @classmethod
+            def create(cls, ctx, config_key):
+                return cls()
+
+            async def aclose(self) -> None:
+                closed.append("following")
+
+        registry = ApiRegistry(RuntimeConfig())
+        registry.get_api(CancellingApi, "first")
+        registry.get_api(FollowingApi, "second")
+
+        with pytest.raises(asyncio.CancelledError):
+            await registry.aclose_all()
+
+        assert closed == ["cancelled", "following"]
 
     @pytest.mark.asyncio
     async def test_aclose_all_is_idempotent(self):

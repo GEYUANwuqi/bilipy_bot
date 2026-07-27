@@ -555,3 +555,95 @@ class TestEventBusWithFilter:
         callbacks = bus._subscriber_group.get_callbacks(fixed_uuid, BusType.EVENT_A)
         assert len(callbacks) == 1
         assert callbacks[0].__name__ == "my_handler"
+
+
+class TestEventBusCapacity:
+    """可选容量应限制 in-flight task，并对发布者施加背压."""
+
+    def test_invalid_capacity_raises(self):
+        """容量必须是正整数或 None."""
+        for value in (0, -1, True):
+            with pytest.raises(ValueError, match="max_pending_callbacks"):
+                EventBus(max_pending_callbacks=value)
+
+    @pytest.mark.asyncio
+    async def test_capacity_backpressures_publish(self, fixed_uuid: UUID):
+        """容量耗尽时后续 publish 应等待，而不是继续创建 task."""
+        bus = EventBus(max_pending_callbacks=1)
+        first_started = asyncio.Event()
+        second_started = asyncio.Event()
+        release_first = asyncio.Event()
+        active = 0
+        max_active = 0
+        calls = 0
+
+        async def callback(event):
+            nonlocal active, calls, max_active
+            calls += 1
+            active += 1
+            max_active = max(max_active, active)
+            try:
+                if calls == 1:
+                    first_started.set()
+                    await release_first.wait()
+                else:
+                    second_started.set()
+            finally:
+                active -= 1
+
+        bus.add_subscriber(
+            fixed_uuid,
+            callback,
+            BusType.EVENT_A,
+            supported_types=BusType,
+        )
+
+        event = Event(data=MockData(), status=BusType.EVENT_A)
+        await bus.publish(fixed_uuid, event)
+        await first_started.wait()
+
+        second_publish = asyncio.create_task(bus.publish(fixed_uuid, event))
+        await asyncio.sleep(0)
+
+        assert not second_publish.done()
+        assert bus.pending_callbacks == 1
+
+        release_first.set()
+        await second_publish
+        await second_started.wait()
+        await bus.close()
+
+        assert max_active == 1
+        assert bus.pending_callbacks == 0
+
+    @pytest.mark.asyncio
+    async def test_close_drops_publish_waiting_for_capacity(self, fixed_uuid: UUID):
+        """关闭时等待容量的 publish 不应在获得容量后创建新回调."""
+        bus = EventBus(max_pending_callbacks=1)
+        started = asyncio.Event()
+        calls = 0
+
+        async def callback(event):
+            nonlocal calls
+            calls += 1
+            started.set()
+            await asyncio.Event().wait()
+
+        bus.add_subscriber(
+            fixed_uuid,
+            callback,
+            BusType.EVENT_A,
+            supported_types=BusType,
+        )
+
+        event = Event(data=MockData(), status=BusType.EVENT_A)
+        await bus.publish(fixed_uuid, event)
+        await started.wait()
+        waiting_publish = asyncio.create_task(bus.publish(fixed_uuid, event))
+        await asyncio.sleep(0)
+
+        await bus.close(timeout=0.01)
+        await waiting_publish
+
+        assert calls == 1
+        assert bus.pending_callbacks == 0

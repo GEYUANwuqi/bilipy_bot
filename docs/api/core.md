@@ -23,7 +23,7 @@ class Event(Generic[BaseDataT]):
 导入：`from butterbot.core.event import EventBus`
 
 ```python
-EventBus()
+EventBus(*, max_pending_callbacks: int | None = None)
 add_subscriber(uuid, callback, status, supported_types=None, *, event_filter=None)
 subscribe(uuid, status, supported_types=None, *, event_filter=None) -> Callable
 remove_subscribers(uuid: UUID) -> int
@@ -35,9 +35,12 @@ async close(timeout: float = 5.0) -> None
 
 - `closed: bool`
 - `pending_callbacks: int`
+- `max_pending_callbacks: int | None`
 
 `publish()` 在总线关闭后记录警告并丢弃事件。Handler 异常记录到日志，不从
-`publish()` 抛出。`close()` 幂等，会取消超时 Handler。
+`publish()` 抛出。配置容量后，`publish()` 可能等待可用名额；默认 `None` 保持
+无限制行为。`close()` 幂等，会取消超时 Handler；关闭过程自身被取消时仍会尝试
+回收已纳入关闭的回调，未完成清理时可再次调用。
 
 `Subscriber` 与 `SubscriberGroup` 从 `butterbot.core.event` 导出，主要用于总线
 实现和精细测试；应用订阅优先使用 `BotApp`。
@@ -107,7 +110,9 @@ async aclose_all() -> None
 clear() -> None
 ```
 
-`get` 是 `get_api` 别名。`clear()` 只清缓存，不关闭资源。
+`get` 是 `get_api` 别名。`clear()` 只清缓存，不关闭资源。`aclose_all()` 遇到
+单个 API 的普通异常或取消时继续关闭其余实例，并在清理完成后传播观察到的
+`CancelledError`。
 
 ## Type
 

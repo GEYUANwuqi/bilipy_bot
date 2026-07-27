@@ -43,6 +43,7 @@ class BotApp:
         ctx: AppContext | None = None,
         *,
         close_timeout: float = 5.0,
+        max_pending_callbacks: int | None = None,
     ) -> None:
         """初始化 BotApp.
 
@@ -50,15 +51,21 @@ class BotApp:
             config: 运行时配置，可选，默认从 ``config.yaml`` 自动加载
             ctx:    可选，注入自定义 AppContext，默认自动创建
             close_timeout: 关闭时等待 in-flight 回调完成的秒数，超时后强制取消
+            max_pending_callbacks: 自动创建 EventBus 时可选的回调 task 上限；
+                达到上限后 publish 等待容量。注入 ``ctx`` 时该参数必须为 ``None``
 
         Raises:
             FileNotFoundError: 自动加载时 ``config.yaml`` 不存在
         """
         self._config = config or RuntimeConfig.from_yaml()
 
+        if ctx is not None and max_pending_callbacks is not None:
+            raise ValueError("注入 ctx 时不能同时设置 max_pending_callbacks")
+
         # 统一注入对象，传递给各 Source
         self._ctx = ctx or AppContext(
             config=self._config,
+            event_bus=EventBus(max_pending_callbacks=max_pending_callbacks),
         )
 
         # 事件源生命周期管理器
@@ -304,13 +311,15 @@ class BotApp:
            先排空回调，回调里才不会用到下一步已经关掉的 API。
         3. ``ApiRegistry.aclose_all()`` — 释放各 API 持有的连接与后台任务。
 
-        即使第 1 步因取消而抛出，后两步仍会在 ``finally`` 中完成。
+        任一步因取消而抛出时，后续步骤仍会通过嵌套 ``finally`` 获得清理机会。
         """
         try:
             await self._manager.close()
         finally:
-            await self.bus.close(timeout=self._close_timeout)
-            await self.api_ctx.aclose_all()
+            try:
+                await self.bus.close(timeout=self._close_timeout)
+            finally:
+                await self.api_ctx.aclose_all()
 
     # ============ 阻塞式入口 ============ #
 

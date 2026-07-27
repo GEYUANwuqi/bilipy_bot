@@ -49,12 +49,39 @@ class MySource(BaseSource):
 同一事件匹配多个 Handler 时，每个 Handler 都作为独立 task 调度，没有顺序
 完成保证。异常不会从 `publish()` 传播，而由 done callback 记录日志。
 
+默认 `EventBus()` 不限制 in-flight task，以保持既有行为。对突发流量需要明确
+资源上限时，可通过 BotApp 配置：
+
+```python
+app = BotApp(
+    RuntimeConfig(),
+    max_pending_callbacks=100,
+)
+```
+
+达到容量后，`publish()` 会等待已有 Handler 完成并释放名额，不会静默丢弃事件。
+容量限制的是整个 EventBus 的 callback task 数；它不是每个 Handler 的独立队列。
+因此 Source 应允许 `publish()` 产生背压，不要把它包装成无界 `create_task()`。
+
+可使用仓库基线脚本比较 unlimited 和有限容量：
+
+```bash
+uv run python scripts/benchmark_event_bus.py --events 10000
+uv run python scripts/benchmark_event_bus.py --events 10000 --capacity 100
+```
+
+该脚本是合成负载，不代表生产吞吐或推荐默认容量。
+
 关闭时：
 
 1. 总线拒绝后续发布；
 2. 等待当前所有回调至 `close_timeout`；
 3. 取消超时回调；
 4. `gather(..., return_exceptions=True)` 等待取消完成。
+
+如果 `close()` 自身在排空期间被取消，总线仍停止接收并尝试取消已纳入关闭的
+Handler，然后传播 `CancelledError`。清理被再次取消而未完成时，可以再次调用
+`close()`。
 
 ## Timeout 与 cancellation
 
@@ -72,6 +99,7 @@ NapCat 请求使用 `asyncio.wait_for()`；超时表现为内置 `TimeoutError`�
 - 在 `on_stop()` 只调用 `task.cancel()` 而不 `await task`；
 - Handler 吞掉 `CancelledError` 后继续无限循环；
 - 依赖多个 Handler 的完成顺序；
+- 启用容量后仍用无界 task 包装 `publish()`，从而绕过背压；
 - 使用固定 `sleep()` 代替 Event/Future 做测试同步。
 
 ## 相关页面

@@ -20,14 +20,34 @@ _log = getLogger(__name__)
 class EventBus:
     """事件总线，管理事件的订阅和发布."""
 
-    def __init__(self):
-        """初始化事件总线."""
+    def __init__(self, *, max_pending_callbacks: int | None = None):
+        """初始化事件总线.
+
+        Args:
+            max_pending_callbacks: 可选的 in-flight 回调上限。达到上限时
+                :meth:`publish` 等待容量；``None`` 保持无限制的兼容行为。
+        """
+        if max_pending_callbacks is not None and (
+            isinstance(max_pending_callbacks, bool)
+            or not isinstance(max_pending_callbacks, int)
+            or max_pending_callbacks <= 0
+        ):
+            raise ValueError("max_pending_callbacks 必须是正整数或 None")
+
         # 使用订阅组管理订阅者
         self._subscriber_group = SubscriberGroup()
         # 持有 create_task 返回的 Task 强引用，防止 GC 回收未完成的任务
         self._background_tasks: set[asyncio.Task] = set()
+        self._max_pending_callbacks = max_pending_callbacks
+        self._callback_capacity = (
+            asyncio.Semaphore(max_pending_callbacks)
+            if max_pending_callbacks is not None
+            else None
+        )
         # 已关闭的总线不再接受 publish
         self._closed = False
+        # 与 _closed 分离：停止接收不代表 in-flight 回调已经清理完成。
+        self._close_complete = False
 
     @property
     def closed(self) -> bool:
@@ -38,6 +58,11 @@ class EventBus:
     def pending_callbacks(self) -> int:
         """当前尚未完成的回调数量."""
         return sum(1 for task in self._background_tasks if not task.done())
+
+    @property
+    def max_pending_callbacks(self) -> int | None:
+        """允许同时存在的回调 task 上限；``None`` 表示无限制."""
+        return self._max_pending_callbacks
 
     def _wrap_callback(
         self,
@@ -172,11 +197,13 @@ class EventBus:
         且用户回调可能执行到一半被掐断。
 
         该方法幂等；从回调内部调用时会跳过调用者自身的 task，不会自我等待。
+        关闭过程自身被取消时仍会尝试回收本次纳入关闭的回调，再传播取消；
+        若清理被再次取消而未完成，后续调用可继续清理。
 
         Args:
             timeout: 等待回调完成的秒数，超时后强制取消
         """
-        if self._closed:
+        if self._close_complete:
             return
         self._closed = True
 
@@ -187,23 +214,54 @@ class EventBus:
             if not task.done() and task is not current
         ]
         if not pending:
-            self._background_tasks.clear()
+            self._background_tasks.difference_update(
+                task for task in tuple(self._background_tasks) if task.done()
+            )
+            self._close_complete = True
             _log.debug("EventBus 已关闭（无待完成回调）")
             return
 
         _log.info(
             "EventBus 正在等待 %s 个回调完成（超时 %.1fs）", len(pending), timeout
         )
-        _, not_done = await asyncio.wait(pending, timeout=timeout)
+        cancelled: asyncio.CancelledError | None = None
+        try:
+            _, not_done = await asyncio.wait(pending, timeout=timeout)
+        except asyncio.CancelledError as exc:
+            # close 自身被取消时仍要回收已纳入本次关闭的回调。否则 _closed
+            # 已经阻止后续发布，但 pending task 会永久失去可靠的清理入口。
+            cancelled = exc
+            not_done = {task for task in pending if not task.done()}
 
         if not_done:
-            _log.warning("%s 个回调在 %.1fs 内未完成，强制取消", len(not_done), timeout)
+            if cancelled is None:
+                _log.warning(
+                    "%s 个回调在 %.1fs 内未完成，强制取消",
+                    len(not_done),
+                    timeout,
+                )
+            else:
+                _log.warning(
+                    "EventBus 关闭被取消，强制取消 %s 个待完成回调",
+                    len(not_done),
+                )
             for task in not_done:
                 task.cancel()
-            await asyncio.gather(*not_done, return_exceptions=True)
+            try:
+                await asyncio.gather(*not_done, return_exceptions=True)
+            except asyncio.CancelledError as exc:
+                # 调用者再次取消时保留可重试状态，不能把未完成任务从集合中清掉。
+                cancelled = cancelled or exc
 
-        self._background_tasks.clear()
-        _log.info("EventBus 已关闭")
+        self._background_tasks.difference_update(
+            task for task in tuple(self._background_tasks) if task.done()
+        )
+        if all(task.done() for task in pending):
+            self._close_complete = True
+            _log.info("EventBus 已关闭")
+
+        if cancelled is not None:
+            raise cancelled
 
     def _task_done_callback(
         self,
@@ -221,6 +279,8 @@ class EventBus:
             status_value: 事件状态值
         """
         self._background_tasks.discard(task)
+        if self._callback_capacity is not None:
+            self._callback_capacity.release()
 
         try:
             exc = task.exception()
@@ -239,7 +299,9 @@ class EventBus:
     async def publish(self, uuid: UUID, event: Event) -> None:
         """发布事件.
 
-        发布指定发布器的事件，触发所有匹配的订阅者回调。
+        发布指定发布器的事件，触发所有匹配的订阅者回调。配置
+        ``max_pending_callbacks`` 后，容量耗尽时会等待已有回调完成；
+        默认 ``None`` 不施加限制。
 
         总线已关闭时事件被丢弃（记录警告），避免在关闭排空过程中又派生新回调。
 
@@ -259,9 +321,21 @@ class EventBus:
         callbacks = self._subscriber_group.get_callbacks(uuid, event.status)
 
         for callback in callbacks:
+            capacity = self._callback_capacity
+            if capacity is not None:
+                await capacity.acquire()
+                if self._closed:
+                    capacity.release()
+                    return
+
             callback_name = getattr(callback, "__name__", "<lambda>")
             # 异步执行回调，保留强引用防止 GC 回收
-            task = asyncio.create_task(callback(event))
+            try:
+                task = asyncio.create_task(callback(event))
+            except BaseException:
+                if capacity is not None:
+                    capacity.release()
+                raise
             self._background_tasks.add(task)
             task.add_done_callback(
                 lambda t, u=uuid, cn=callback_name, sv=event.status.value: (

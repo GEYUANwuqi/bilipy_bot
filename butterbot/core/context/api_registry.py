@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from logging import getLogger
 from threading import RLock
@@ -78,7 +79,8 @@ class ApiRegistry:
         """关闭并清空所有缓存的 API 单例.
 
         依次 ``await`` 每个实例的 :meth:`BaseApi.aclose`，单个实例关闭失败
-        只记录日志、不影响其余实例，最后统一清空缓存。
+        不影响其余实例。普通异常只记录；取消会在其余实例处理完后传播。
+        缓存在关闭前统一清空，使重复调用不会重复关闭同一实例。
         """
         with self._lock:
             instances = [
@@ -86,16 +88,26 @@ class ApiRegistry:
             ]
             self._instances.clear()
 
+        cancelled: asyncio.CancelledError | None = None
         for inst in instances:
             if not isinstance(inst, BaseApi):
                 continue
             try:
                 await inst.aclose()
+            except asyncio.CancelledError as exc:
+                cancelled = exc
+                _log.warning(
+                    "关闭 API %s 时被取消，继续关闭其余实例",
+                    type(inst).__name__,
+                )
             except Exception:
                 _log.exception("关闭 API %s 时出错", type(inst).__name__)
 
         if instances:
             _log.debug("已关闭 %s 个 API 实例", len(instances))
+
+        if cancelled is not None:
+            raise cancelled
 
     def clear(self) -> None:
         """清空所有缓存的 API 单例实例，主要用于测试隔离.
