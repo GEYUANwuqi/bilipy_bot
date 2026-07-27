@@ -1,55 +1,11 @@
 from typing import ClassVar, Generic, Self, TypeVar
 
 from pydantic import BaseModel, ConfigDict, RootModel, model_validator
-from pydantic._internal._model_construction import ModelMetaclass
 
 from .base_data import BaseDataMixin
 
 
-class MetaDataModel(ModelMetaclass):
-    """pydantic数据模型元类，支持单层和多层继承的 discriminator 注册机制.
-    1. 根类定义 discriminator_field，子类定义 discriminator_value，自动注册到 registry
-    2. 支持属性嵌套
-    3. 完全自动注册和分发
-    """
-
-    def __new__(mcls, name, bases, namespace, **kwargs):
-        cls = super().__new__(mcls, name, bases, namespace, **kwargs)
-
-        # 沿每个直接父类的 MRO 查找最近的分发根。这样既支持
-        # “分发根 → 共享字段基类 → 叶子类型”的间接注册，也不会把
-        # BaseDataModel 的全局 registry 误当作普通 DTO 的分发目标。
-        base_with_registry = None
-        for base in bases:
-            for ancestor in base.__mro__:
-                if (
-                    "discriminator_field" in ancestor.__dict__
-                    and "_registry" in ancestor.__dict__
-                ):
-                    base_with_registry = ancestor
-                    break
-            if base_with_registry is not None:
-                break
-
-        discriminator_value = namespace.get("discriminator_value")
-        discriminator_field = namespace.get("discriminator_field")
-
-        # 如果子类有 discriminator_value，注册到父类的 registry
-        if base_with_registry and discriminator_value is not None:
-            if isinstance(discriminator_value, (list, tuple, set)):
-                for value in discriminator_value:
-                    base_with_registry._registry[value] = cls
-            else:
-                base_with_registry._registry[discriminator_value] = cls
-
-        # 如果当前类定义了 discriminator_field，初始化自己的 registry（用于二级分发）
-        if discriminator_field is not None:
-            cls._registry = {}
-
-        return cls
-
-
-class BaseDataModel(BaseModel, BaseDataMixin, metaclass=MetaDataModel):
+class BaseDataModel(BaseModel, BaseDataMixin):
     """
     基于BaseDataMixin实现的领域模型基类
     1. 使用pydantic进行数据校验
@@ -69,6 +25,38 @@ class BaseDataModel(BaseModel, BaseDataMixin, metaclass=MetaDataModel):
     # 作为分发依据的"值"，子类可选定义，若定义则认为是可直接构造模型，否则则认为是属性嵌套的分发模型
 
     _registry: ClassVar[dict] = {}
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs) -> None:
+        """在 Pydantic 完成基础模型初始化后注册 discriminator."""
+        super().__pydantic_init_subclass__(**kwargs)
+
+        # 沿直接父类的 MRO 查找最近的分发根，支持共享字段中间类，
+        # 同时避免普通 DTO 注册到 BaseDataModel 的全局 registry。
+        base_with_registry = None
+        for base in cls.__bases__:
+            for ancestor in base.__mro__:
+                if (
+                    "discriminator_field" in ancestor.__dict__
+                    and "_registry" in ancestor.__dict__
+                ):
+                    base_with_registry = ancestor
+                    break
+            if base_with_registry is not None:
+                break
+
+        discriminator_value = cls.__dict__.get("discriminator_value")
+        discriminator_field = cls.__dict__.get("discriminator_field")
+
+        if base_with_registry is not None and discriminator_value is not None:
+            if isinstance(discriminator_value, (list, tuple, set)):
+                for value in discriminator_value:
+                    base_with_registry._registry[value] = cls
+            else:
+                base_with_registry._registry[discriminator_value] = cls
+
+        if discriminator_field is not None:
+            cls._registry = {}
 
     @classmethod
     def from_raw(cls, raw: dict) -> Self:

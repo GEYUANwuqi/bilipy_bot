@@ -106,6 +106,33 @@ class TestBaseDataModel:
         assert item.name == "shared"
         assert item.value == 3
 
+    def test_nested_dispatch_roots_keep_independent_registries(self):
+        """同时作为叶子和二级分发根的模型应注册到正确层级."""
+
+        class NestedRoot(BaseDataModel):
+            discriminator_field: ClassVar[str] = "kind"
+
+        class NestedGroup(NestedRoot):
+            discriminator_value: ClassVar[str] = "group"
+            discriminator_field: ClassVar[str] = "subtype"
+
+        class NestedLeaf(NestedGroup):
+            discriminator_value: ClassVar[str] = "leaf"
+            value: int
+
+        item = NestedRoot.from_dict(
+            {
+                "kind": "group",
+                "subtype": "leaf",
+                "value": 7,
+            }
+        )
+
+        assert NestedRoot._registry == {"group": NestedGroup}
+        assert NestedGroup._registry == {"leaf": NestedLeaf}
+        assert isinstance(item, NestedLeaf)
+        assert item.value == 7
+
     def test_plain_dto_does_not_pollute_global_registry(self):
         """没有 discriminator_field 的普通 DTO 不应注册到全局基类."""
         marker = "plain-dto-must-not-be-global"
