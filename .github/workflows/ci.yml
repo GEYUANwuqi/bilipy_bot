@@ -77,3 +77,14 @@ jobs:
       - name: Build distributions
         if: matrix.python-version == '3.12'
         run: uv build
+
+      - name: Smoke test wheel
+        if: matrix.python-version == '3.12'
+        shell: bash
+        run: |
+          uv venv .smoke-venv --python "${{ matrix.python-version }}"
+          uv pip install --python .smoke-venv/bin/python dist/*.whl
+          smoke_dir="$(mktemp -d)"
+          cd "$smoke_dir"
+          "$GITHUB_WORKSPACE/.smoke-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/smoke_wheel.py"

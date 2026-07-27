@@ -98,6 +98,16 @@ jobs:
       - name: Build distributions
         run: uv build
 
+      - name: Smoke test wheel
+        shell: bash
+        run: |
+          uv venv .smoke-venv --python "3.12"
+          uv pip install --python .smoke-venv/bin/python dist/*.whl
+          smoke_dir="$(mktemp -d)"
+          cd "$smoke_dir"
+          "$GITHUB_WORKSPACE/.smoke-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/smoke_wheel.py"
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
