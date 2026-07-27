@@ -61,8 +61,9 @@ sequenceDiagram
 | 已实现且可用 | Bilibili 三类 Source | `sources/bilibili/source/` |
 | 已实现但原文档不足 | cancellation/timeout/任务所有权 | `tests/core/event/test_event_bus_close.py` 等 |
 | 有文档但实现已变化 | 旧 core 导入路径 | 原 `docs/SOURCE.md` 与 source README |
-| 部分实现 | 配置扩展 | `RuntimeConfig` + builder；无环境变量映射 |
-| 尚未实现 | 通用 Plugin/Middleware/Router/Session/CLI | 包导出与 `pyproject.toml` 均无对应入口 |
+| 已实现且可用 | 命名 Source 配置与环境变量合并 | `app/config.py::RuntimeConfig.from_yaml` |
+| 已实现且可用 | 本地单进程 CLI | `butterbot/cli/`、`pyproject.toml::project.scripts` |
+| 尚未实现 | 通用 Plugin/Middleware/Router/Session | 包内无对应稳定契约 |
 | 无法确认 | 正式文档域名、Logo、部署平台 | 仓库无相关配置或资产 |
 
 ## 架构约束

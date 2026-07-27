@@ -11,6 +11,7 @@ title: 项目结构
 ```text
 butterbot/
 ├── app/                 # BotApp、RuntimeConfig、SourceManager
+├── cli/                 # 应用加载、配置检查与本地进程管理
 ├── core/
 │   ├── api/             # BaseApi
 │   ├── context/         # AppContext、ApiRegistry、ConfigProvider

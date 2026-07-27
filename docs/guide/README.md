@@ -14,6 +14,7 @@ title: 使用指南
 3. [快速开始](./quick-start.md)：运行不依赖外部服务的闭环示例。
 4. [项目结构](./project-structure.md)：理解公共门面与内部模块。
 5. [生命周期](./lifecycle.md)：选择 `run()`、`async with` 或手动控制。
+6. [命令行](./cli.md)：检查配置并管理本地应用进程。
 
 ::: tip 已有异步应用
 如果调用方已经拥有事件循环，直接阅读[生命周期](./lifecycle.md)，不要在协程中

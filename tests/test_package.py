@@ -4,6 +4,8 @@
 顶层包可导入、版本号可读、公开门面与内置事件源的导入路径有效。
 """
 
+from importlib.metadata import entry_points
+
 import butterbot
 
 
@@ -28,3 +30,14 @@ class TestPackage:
 
         assert NapcatSource is not None
         assert BiliDynamicSource is not None
+
+    def test_console_script_is_packaged(self):
+        """wheel 元数据应提供 butterbot CLI."""
+        scripts = entry_points(group="console_scripts")
+        butterbot_script = next(
+            (entry for entry in scripts if entry.name == "butterbot"),
+            None,
+        )
+
+        assert butterbot_script is not None
+        assert butterbot_script.value == "butterbot.cli:main"

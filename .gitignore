@@ -25,6 +25,7 @@ Thumbs.db
 # === Local config ===
 config.local.py
 settings.local.yaml
+.butterbot/
 
 # === AI ===
 CLAUDE.md

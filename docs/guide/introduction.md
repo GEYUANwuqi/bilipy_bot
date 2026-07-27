@@ -37,13 +37,15 @@ flowchart LR
 - `BaseFilter` 在回调执行前进行同步内容过滤。
 - `BaseSource` 与 `BaseApi` 提供公开扩展契约。
 - 内置 NapCat 和 Bilibili 适配。
+- YAML、环境变量和命名 Source 配置。
+- 用于检查配置和管理本地应用进程的 `butterbot` CLI。
 - 关闭时停止事件源、排空回调并释放 API 资源。
 
 ## 不属于当前能力的内容
 
-当前代码没有通用 Plugin、Middleware、Router、Session 或 CLI 抽象。
-`RuntimeConfig` 读取 Python 参数或 YAML，不会自动把环境变量映射为配置字段。
-文档不会用这些术语包装不存在的功能。
+当前代码没有通用 Plugin、Middleware、Router 或 Session 抽象。CLI 是本地单进程
+管理入口，不是远程控制面、热重载器或多实例 supervisor。文档不会用这些术语
+包装不存在的功能。
 
 ## 设计边界
 

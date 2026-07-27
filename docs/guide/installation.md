@@ -52,7 +52,7 @@ BotApp
 也可以查看安装版本：
 
 ```bash
-uv run python -c "import butterbot; print(butterbot.__version__)"
+uv run butterbot --version
 ```
 
 ## 平台说明
@@ -84,4 +84,5 @@ uv sync --locked --dev --python 3.12
 
 ## 下一步
 
-[运行最小闭环示例](./quick-start.md)。
+- [运行最小闭环示例](./quick-start.md)
+- [使用命令行运行应用](./cli.md)

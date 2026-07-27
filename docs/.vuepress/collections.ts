@@ -12,6 +12,7 @@ export default defineCollections([
       "quick-start",
       "project-structure",
       "lifecycle",
+      "cli",
     ],
   },
   {

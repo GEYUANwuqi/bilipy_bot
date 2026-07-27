@@ -43,6 +43,38 @@ app.run()
 `run()` 自己调用 `asyncio.run()`，适合没有现成事件循环的顶层脚本。不要在
 Jupyter、ASGI 服务或其他已运行的协程中调用它。
 
+部署入口也可以使用 [ButterBot 命令行](./cli.md) 加载模块中的 `BotApp` 对象。
+CLI 最终仍调用同一个 `BotApp.run()`，不会改变关闭顺序。
+
+::: warning CLI 入口不能在导入时运行
+单 Bot 项目推荐由 CLI 管理进程。供 CLI 导入的 `app.py` 只创建 `app`、添加
+Source 并注册 Handler，不要在模块顶层调用 `app.run()`。
+:::
+
+如果同一个文件还需要支持 `uv run app.py`，使用主模块保护：
+
+```python
+from butterbot.app import BotApp
+
+app = BotApp()
+
+
+if __name__ == "__main__":
+    app.run()
+```
+
+选择规则：
+
+| 场景 | 推荐入口 |
+| --- | --- |
+| 单 Bot 项目、需要后台管理 | `butterbot run app:app --background` |
+| 直接执行 Python 文件 | `if __name__ == "__main__": app.run()` |
+| 同步宿主且没有现有事件循环 | 由宿主调用 `app.run()` |
+| ASGI/Jupyter/现有 asyncio 应用 | `async with app` 或手动 `start()`/`close()` |
+
+CLI 的 `stop` 是操作系统级进程暂停，不调用 `BotApp.stop()`。两者的资源和恢复语义
+不同，详见[命令行的暂停与恢复](./cli.md#暂停与恢复)。
+
 传入 `duration` 可以在指定秒数后正常关闭：
 
 ```python
