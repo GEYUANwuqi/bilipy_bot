@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Callable, Mapping, MutableMapping
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import yaml
@@ -26,6 +28,95 @@ class _MissingEnvironmentError(ConfigError):
     """内部缺失标记，用于区分可回退的缺失值和其他配置错误."""
 
 
+@dataclass(frozen=True, slots=True)
+class SourceDefinition:
+    """一个已构建的命名 Source 配置定义.
+
+    ``source_name`` 是 YAML 配置构建器名称，不等同于具体事件流的
+    ``SourceRef.source_kind``。
+    """
+
+    config_key: str
+    source_name: str
+    config: Any = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True, slots=True)
+class BuilderRegistration:
+    """一次配置构建器注册的不透明句柄."""
+
+    source_name: str
+    _registry: "ConfigBuilderRegistry" = field(repr=False)
+    _token: object = field(repr=False)
+
+    def unregister(self) -> bool:
+        """仅在当前句柄仍拥有该名称时撤销注册."""
+        return self._registry.unregister(self)
+
+
+class ConfigBuilderRegistry:
+    """可隔离、可撤销的 Source 配置构建器注册表."""
+
+    def __init__(self) -> None:
+        self._builders: dict[str, ConfigBuilder] = {}
+        self._tokens: dict[str, object] = {}
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        """返回已注册名称的稳定快照."""
+        return tuple(self._builders)
+
+    def get(self, source_name: str) -> ConfigBuilder | None:
+        """查询构建器."""
+        return self._builders.get(source_name)
+
+    def register(
+        self,
+        source_name: str,
+        builder: ConfigBuilder,
+        *,
+        replace: bool = False,
+    ) -> BuilderRegistration:
+        """注册构建器，默认拒绝静默覆盖已有名称."""
+        if (
+            not isinstance(source_name, str)
+            or not source_name
+            or source_name != source_name.strip()
+        ):
+            raise ValueError("source_name 必须是非空且无首尾空白的字符串")
+        if not callable(builder):
+            raise TypeError("builder 必须可调用")
+        if source_name in self._builders and not replace:
+            raise ConfigError("配置构建器 '%s' 已注册" % source_name)
+
+        token = object()
+        self._builders[source_name] = builder
+        self._tokens[source_name] = token
+        return BuilderRegistration(source_name, self, token)
+
+    def unregister(self, registration: BuilderRegistration) -> bool:
+        """按所有权句柄撤销构建器，旧句柄不能删除后来的替换注册."""
+        if registration._registry is not self:
+            return False
+        if self._tokens.get(registration.source_name) is not registration._token:
+            return False
+        self._builders.pop(registration.source_name, None)
+        self._tokens.pop(registration.source_name, None)
+        return True
+
+    def copy(self) -> "ConfigBuilderRegistry":
+        """复制当前构建器集合，后续注册互不影响."""
+        registry = ConfigBuilderRegistry()
+        for source_name, builder in self._builders.items():
+            registry.register(source_name, builder)
+        return registry
+
+    @classmethod
+    def with_defaults(cls) -> "ConfigBuilderRegistry":
+        """复制内置构建器，适合隔离的 CLI 检查或扩展原型."""
+        return _DEFAULT_BUILDER_REGISTRY.copy()
+
+
 class RuntimeConfig:
     """运行时 API 配置类，存储和管理 API 配置信息.
 
@@ -42,6 +133,7 @@ class RuntimeConfig:
             **configs: 可变关键字参数，表示 API 配置项的键值对.
         """
         self._configs = configs
+        self._source_definitions: Mapping[str, SourceDefinition] = MappingProxyType({})
 
     def get_config(self, key: str, default: Any = None) -> Any:
         """获取指定键的配置值.
@@ -55,6 +147,15 @@ class RuntimeConfig:
         """
         return self._configs.get(key, default)
 
+    @property
+    def source_definitions(self) -> Mapping[str, SourceDefinition]:
+        """返回从 YAML 构建的命名 Source 元数据只读视图."""
+        return self._source_definitions
+
+    def get_source_definition(self, config_key: str) -> SourceDefinition | None:
+        """按配置实例键获取 Source 元数据."""
+        return self._source_definitions.get(config_key)
+
     @classmethod
     def from_yaml(
         cls,
@@ -62,6 +163,7 @@ class RuntimeConfig:
         *,
         environ: Mapping[str, str] | None = None,
         env_prefix: str = _DEFAULT_ENV_PREFIX,
+        builder_registry: ConfigBuilderRegistry | None = None,
     ) -> RuntimeConfig:
         """从 YAML 和环境变量加载配置.
 
@@ -81,6 +183,7 @@ class RuntimeConfig:
             environ: 环境变量映射。默认读取当前 ``os.environ``；该参数主要用于
                 测试、嵌入式运行和 CLI 注入确定的环境快照.
             env_prefix: 分层环境变量覆盖前缀，默认为 ``BUTTERBOT__``.
+            builder_registry: 可选的隔离构建器注册表。默认使用进程级注册表。
 
         Returns:
             RuntimeConfig 实例.
@@ -111,12 +214,19 @@ class RuntimeConfig:
         resolved_data = _resolve_environment_references(raw_data, environment)
         _apply_environment_overrides(resolved_data, environment, env_prefix)
 
-        return cls(**_build_configs(resolved_data))
+        configs, source_definitions = _build_configs(
+            resolved_data,
+            builder_registry=builder_registry,
+        )
+        runtime_config = cls(**configs)
+        runtime_config._source_definitions = MappingProxyType(source_definitions)
+        return runtime_config
 
 
 # ==================== 配置对象构建器 ====================
 
-_CONFIG_BUILDERS: dict[str, ConfigBuilder] = {}
+_DEFAULT_BUILDER_REGISTRY = ConfigBuilderRegistry()
+_CONFIG_BUILDERS = _DEFAULT_BUILDER_REGISTRY._builders
 """配置类型名称到构建函数的映射.
 
 键对应 ``sources.<config_key>.source_name``。构建函数接收该配置项的值并返回
@@ -124,12 +234,21 @@ _CONFIG_BUILDERS: dict[str, ConfigBuilder] = {}
 """
 
 
-def register_builder(key: str, builder: ConfigBuilder) -> None:
+def register_builder(
+    key: str,
+    builder: ConfigBuilder,
+    *,
+    replace: bool = False,
+) -> BuilderRegistration:
     """注册自定义配置对象构建器.
 
     Args:
         key: ``source_name`` 使用的配置类型名称.
         builder: 构建函数，接收配置值并返回配置对象实例.
+        replace: 是否显式替换已有同名构建器，默认拒绝.
+
+    Returns:
+        可精确撤销本次注册的句柄.
 
     Example:
         为自定义 ``feed`` Source 注册构建器::
@@ -144,20 +263,26 @@ def register_builder(key: str, builder: ConfigBuilder) -> None:
             #     source_name: feed
             #     endpoint: https://example.com/feed
     """
-    _CONFIG_BUILDERS[key] = builder
+    return _DEFAULT_BUILDER_REGISTRY.register(key, builder, replace=replace)
 
 
-def _build_configs(data: dict[str, Any]) -> dict[str, Any]:
+def _build_configs(
+    data: dict[str, Any],
+    *,
+    builder_registry: ConfigBuilderRegistry | None = None,
+) -> tuple[dict[str, Any], dict[str, SourceDefinition]]:
     """保留普通顶层配置，并构建命名 Source 配置."""
+    registry = builder_registry or _DEFAULT_BUILDER_REGISTRY
     source_definitions = data.pop(_SOURCES_KEY, {})
     if not isinstance(source_definitions, dict):
         raise ConfigError("配置项 'sources' 应为映射")
 
     configs: dict[str, Any] = {}
+    definitions: dict[str, SourceDefinition] = {}
     for key, value in data.items():
         if not isinstance(key, str) or not key:
             raise ConfigError("YAML 顶层配置键必须是非空字符串")
-        if key in _CONFIG_BUILDERS:
+        if registry.get(key) is not None:
             raise ConfigError(
                 "顶层 Source 配置 '%s' 不受支持；"
                 "请改为 sources.<config_key>.source_name: %s" % (key, key)
@@ -178,16 +303,20 @@ def _build_configs(data: dict[str, Any]) -> dict[str, Any]:
             raise ConfigError(
                 "Source 配置 '%s' 缺少非空字符串 'source_name'" % config_key
             )
-        builder = _CONFIG_BUILDERS.get(source_name)
+        builder = registry.get(source_name)
         if builder is None:
             raise ConfigError(
                 "Source 配置 '%s' 使用了未注册的 source_name '%s'"
                 % (config_key, source_name)
             )
-        configs[config_key] = _run_builder(
-            config_key, source_name, builder, source_config
+        config = _run_builder(config_key, source_name, builder, source_config)
+        configs[config_key] = config
+        definitions[config_key] = SourceDefinition(
+            config_key=config_key,
+            source_name=source_name,
+            config=config,
         )
-    return configs
+    return configs, definitions
 
 
 def _run_builder(

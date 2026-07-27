@@ -9,7 +9,7 @@ from butterbot.app.config import RuntimeConfig
 from butterbot.app.source_manager import SourceManager
 from butterbot.core.context import AppContext
 from butterbot.core.exceptions import LifecycleError, SourceError, SourceStartError
-from butterbot.core.source import BaseSource
+from butterbot.core.source import BaseSource, SourceRef
 from butterbot.core.types import BaseType
 
 
@@ -22,6 +22,7 @@ class StubSource(BaseSource):
     """Minimal concrete source for testing SourceManager."""
 
     supported_types = StubType
+    source_kind = "stub.events"
 
     def __init__(self, uuid: UUID | None = None, **kwargs):
         super().__init__(uuid=uuid, **kwargs)
@@ -75,6 +76,15 @@ class TestSourceManager:
         source = manager.add_source(StubSource)
         assert isinstance(source, StubSource)
 
+    def test_add_source_rejects_duplicate_uuid(self, manager):
+        """显式 UUID 冲突不能覆盖已注册事件源."""
+        source = manager.add_source(StubSource)
+
+        with pytest.raises(SourceError, match="UUID.*已注册"):
+            manager.add_source(StubSource, uuid=source.uuid)
+
+        assert manager.get_source(source.uuid) is source
+
     def test_add_source_raises_when_closed(self, manager):
         """close 后添加事件源应抛出 RuntimeError."""
         import asyncio
@@ -103,6 +113,23 @@ class TestSourceManager:
         """get_source 应返回已添加的事件源."""
         source = manager.add_source(StubSource)
         assert manager.get_source(source.uuid) is source
+
+    def test_get_source_by_logical_reference(self, manager):
+        """SourceRef 应按 source_kind 和 config_key 解析."""
+        manager.add_source(StubSource, config_key="account-a")
+        target = manager.add_source(StubSource, config_key="account-b")
+
+        assert manager.get_source(SourceRef("stub.events", "account-b")) is target
+
+    def test_ambiguous_source_reference_raises(self, manager):
+        """缺少 config_key 的唯一解析不能偶然返回首个实例."""
+        manager.add_source(StubSource, config_key="account-a")
+        manager.add_source(StubSource, config_key="account-b")
+
+        with pytest.raises(SourceError, match="匹配到 2 个"):
+            manager.get_source(SourceRef("stub.events"))
+
+        assert len(manager.get_sources(SourceRef("stub.events"))) == 2
 
     def test_get_source_nonexistent_returns_none(self, manager):
         """get_source 不存在的 UUID 应返回 None."""

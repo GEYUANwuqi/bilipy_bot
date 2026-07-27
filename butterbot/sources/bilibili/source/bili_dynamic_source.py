@@ -20,6 +20,7 @@ class BiliDynamicSource(BasePollingSource):
     """
 
     supported_types = DynamicType
+    source_kind = "bilibili.dynamic"
     config_key = "bilibili"
     _log = _log
     _source_name = "B站动态监控"

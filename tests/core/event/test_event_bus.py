@@ -647,3 +647,60 @@ class TestEventBusCapacity:
 
         assert calls == 1
         assert bus.pending_callbacks == 0
+
+
+class TestEventBusOwnership:
+    """扩展所有权只影响定向撤销，不改变现有派发语义."""
+
+    @pytest.mark.asyncio
+    async def test_remove_and_drain_owner_keeps_other_owner(
+        self,
+        fixed_uuid: UUID,
+    ):
+        bus = EventBus()
+        owner_a_started = asyncio.Event()
+        owner_b_started = asyncio.Event()
+        owner_a_cancelled = asyncio.Event()
+        release_owner_b = asyncio.Event()
+
+        async def owner_a_callback(event):
+            owner_a_started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                owner_a_cancelled.set()
+                raise
+
+        async def owner_b_callback(event):
+            owner_b_started.set()
+            await release_owner_b.wait()
+
+        bus.add_subscriber(
+            fixed_uuid,
+            owner_a_callback,
+            BusType.EVENT_A,
+            supported_types=BusType,
+            owner_id="extension-a",
+        )
+        bus.add_subscriber(
+            fixed_uuid,
+            owner_b_callback,
+            BusType.EVENT_A,
+            supported_types=BusType,
+            owner_id="extension-b",
+        )
+
+        event = Event(data=MockData(), status=BusType.EVENT_A)
+        await bus.publish(fixed_uuid, event)
+        await owner_a_started.wait()
+        await owner_b_started.wait()
+
+        assert bus.remove_subscribers_by_owner("extension-a") == 1
+        assert await bus.drain_owner("extension-a", timeout=0) == 1
+        assert owner_a_cancelled.is_set()
+        assert bus.pending_callbacks_for("extension-a") == 0
+        assert bus.pending_callbacks_for("extension-b") == 1
+
+        release_owner_b.set()
+        assert await bus.drain_owner("extension-b") == 1
+        assert bus.pending_callbacks == 0

@@ -20,6 +20,7 @@ class BiliLiveSource(BasePollingSource):
     """
 
     supported_types = LiveType
+    source_kind = "bilibili.live"
     config_key = "bilibili"
     _log = _log
     _source_name = "B站直播监控"

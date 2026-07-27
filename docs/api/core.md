@@ -24,9 +24,18 @@ class Event(Generic[BaseDataT]):
 
 ```python
 EventBus(*, max_pending_callbacks: int | None = None)
-add_subscriber(uuid, callback, status, supported_types=None, *, event_filter=None)
-subscribe(uuid, status, supported_types=None, *, event_filter=None) -> Callable
+add_subscriber(
+    uuid, callback, status, supported_types=None, *,
+    event_filter=None, owner_id=None
+) -> SubscriptionHandle
+subscribe(
+    uuid, status, supported_types=None, *,
+    event_filter=None, owner_id=None
+) -> Callable
 remove_subscribers(uuid: UUID) -> int
+remove_subscription(handle: SubscriptionHandle) -> bool
+remove_subscribers_by_owner(owner_id: str) -> int
+async drain_owner(owner_id: str, timeout: float = 5.0) -> int
 async publish(uuid: UUID, event: Event) -> None
 async close(timeout: float = 5.0) -> None
 ```
@@ -37,6 +46,9 @@ async close(timeout: float = 5.0) -> None
 - `pending_callbacks: int`
 - `max_pending_callbacks: int | None`
 
+`pending_callbacks_for(owner_id)` 返回指定 owner 的运行中回调数量。退订只阻止后续
+派发；`drain_owner()` 等待已经开始的回调，并在超时后只取消该 owner 的任务。
+
 `publish()` 在总线关闭后记录警告并丢弃事件。Handler 异常记录到日志，不从
 `publish()` 抛出。配置容量后，`publish()` 可能等待可用名额；默认 `None` 保持
 无限制行为。`close()` 幂等，会取消超时 Handler；关闭过程自身被取消时仍会尝试
@@ -44,6 +56,18 @@ async close(timeout: float = 5.0) -> None
 
 `Subscriber` 与 `SubscriberGroup` 从 `butterbot.core.event` 导出，主要用于总线
 实现和精细测试；应用订阅优先使用 `BotApp`。
+
+## `SourceRef`
+
+导入：`from butterbot.core.source import SourceRef`
+
+```python
+SourceRef(source_kind: str, config_key: str | None = None)
+```
+
+它是注册期逻辑引用，不替代 EventBus 的 UUID 路由。`source_kind` 应描述具体事件
+能力；`config_key` 对应命名配置实例。该接口当前用于插件原型，详见
+[插件原型基础](/extensions/prototype-foundations.html)。
 
 ## `BaseSource`
 
@@ -59,8 +83,8 @@ bind(ctx: AppContext) -> None
 ```
 
 子类必须实现 `on_start()`/`on_stop()` 并设置 `supported_types`。属性：
-`uuid`、`running`、`is_running`、`config_key`、`ctx`。未绑定访问 `ctx` 抛
-`RuntimeError`。
+`uuid`、`running`、`is_running`、`source_kind`、`config_key`、`ctx`。未绑定访问
+`ctx` 抛 `RuntimeError`。参与逻辑路由的 Source 还需声明非空 `source_kind`。
 
 ## `BaseApi`
 

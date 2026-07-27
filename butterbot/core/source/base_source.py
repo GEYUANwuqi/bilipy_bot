@@ -22,10 +22,12 @@ class BaseSource(ABC):
     Attributes:
         uuid: 唯一标识符，由 SourceManager 内部管理
         running: 运行状态（由 start/stop 自动管理，子类不应直接修改）
+        source_kind: 可选的逻辑事件源类型，用于注册期 SourceRef 解析
         config_key: 配置键，子类可覆盖此类属性作为默认值
         supported_types: 事件源支持的 ``BaseType`` 枚举类，用于订阅规则编译
     """
 
+    source_kind: ClassVar[str | None] = None
     config_key: str = ""
 
     # 事件源支持的 BaseType 枚举类。子类必须覆盖此属性，

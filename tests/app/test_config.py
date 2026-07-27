@@ -7,7 +7,11 @@ from unittest.mock import patch
 import pytest
 
 from butterbot.app import ConfigError
-from butterbot.app.config import RuntimeConfig, register_builder
+from butterbot.app.config import (
+    ConfigBuilderRegistry,
+    RuntimeConfig,
+    register_builder,
+)
 from butterbot.sources.napcat import NapcatConfig
 
 
@@ -190,6 +194,57 @@ class TestNamedSourceConfig:
         assert napcat.url == "ws://localhost:3001"
         assert napcat.token == "token"
         assert config.get_config("sources") is None
+
+    def test_preserves_source_definition_metadata(self, tmp_path: Path):
+        """配置加载后应保留 source_name，供后续 provider 原型使用."""
+        registry = ConfigBuilderRegistry()
+        registry.register("example", lambda value: dict(value))
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n  primary:\n    source_name: example\n    token: secret\n"
+        )
+
+        config = RuntimeConfig.from_yaml(
+            yaml_file,
+            environ={},
+            builder_registry=registry,
+        )
+        definition = config.get_source_definition("primary")
+
+        assert definition is not None
+        assert definition.config_key == "primary"
+        assert definition.source_name == "example"
+        assert definition.config is config.get_config("primary")
+        assert "secret" not in repr(definition)
+
+    def test_isolated_registry_does_not_use_global_builders(self, tmp_path: Path):
+        registry = ConfigBuilderRegistry()
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n  account:\n    source_name: napcat\n    url: ws://localhost\n"
+        )
+
+        with pytest.raises(ConfigError, match="未注册的 source_name 'napcat'"):
+            RuntimeConfig.from_yaml(
+                yaml_file,
+                environ={},
+                builder_registry=registry,
+            )
+
+
+class TestConfigBuilderRegistry:
+    def test_rejects_collision_and_supports_owned_unregister(self):
+        registry = ConfigBuilderRegistry()
+        first = registry.register("example", dict)
+
+        with pytest.raises(ConfigError, match="已注册"):
+            registry.register("example", list)
+
+        replacement = registry.register("example", list, replace=True)
+        assert first.unregister() is False
+        assert registry.get("example") is list
+        assert replacement.unregister() is True
+        assert registry.get("example") is None
 
     def test_source_name_is_not_passed_to_builder(self, tmp_path: Path):
         original = _get_builders_copy()

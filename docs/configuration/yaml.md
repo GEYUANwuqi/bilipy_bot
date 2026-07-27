@@ -122,8 +122,17 @@ sources:
     interval: 60
 ```
 
-builder 是进程级注册表；测试修改后应恢复原状态，避免用例之间泄漏。builder
-抛出的普通异常会包装为 `ConfigError` 并保留 cause。
+默认 builder registry 是进程级状态，同名注册默认抛 `ConfigError`。注册返回
+`BuilderRegistration`，可用 `unregister()` 精确撤销；明确替换时必须传
+`replace=True`。测试和扩展原型优先使用
+`ConfigBuilderRegistry.with_defaults()` 创建隔离副本，再通过
+`RuntimeConfig.from_yaml(builder_registry=registry)` 加载。
+
+配置构建完成后，`RuntimeConfig.source_definitions` 会保留每个实例的
+`config_key`、`source_name` 和构建结果。`source_name` 仍只代表配置构建器，
+不等同于具体事件流的 `SourceRef.source_kind`。
+
+builder 抛出的普通异常会包装为 `ConfigError` 并保留 cause。
 
 ## 错误
 

@@ -16,7 +16,14 @@ from butterbot.core.exceptions import (
 from butterbot.core.filter import AndFilter, BaseFilter, OrFilter
 
 from .bot_app import BotApp
-from .config import RuntimeConfig, register_builder
+from .config import (
+    BuilderRegistration,
+    ConfigBuilderRegistry,
+    RuntimeConfig,
+    SourceDefinition,
+    register_builder,
+)
+from .extensions import ExtensionRegistrar, SubscriptionSpec
 
 __all__ = [
     # 应用主入口
@@ -24,7 +31,12 @@ __all__ = [
     # 事件
     "Event",
     # 配置
+    "BuilderRegistration",
+    "ConfigBuilderRegistry",
+    "ExtensionRegistrar",
     "RuntimeConfig",
+    "SourceDefinition",
+    "SubscriptionSpec",
     "register_builder",
     # 过滤器
     "AndFilter",

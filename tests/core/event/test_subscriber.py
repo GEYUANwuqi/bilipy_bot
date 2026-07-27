@@ -79,6 +79,50 @@ class TestSubscriberGroup:
         assert len(group.get_callbacks(uuid, StubType.EVENT)) == 1
         assert len(group.get_callbacks(uuid, StubType.INACTIVE)) == 1
 
+    def test_remove_subscription_removes_all_expanded_statuses(self):
+        """句柄应删除一次注册展开出的全部状态."""
+        group = SubscriberGroup()
+        uuid = UUID("00000000-0000-0000-0000-000000000001")
+        sub = Subscriber(
+            callback=_async_callback,
+            status_filter=StubType.ALL,
+            owner_id="extension-a",
+        )
+
+        handle = group.add(uuid, sub, StubType)
+
+        assert group.remove_subscription(handle) is True
+        assert group.remove_subscription(handle) is False
+        assert group.get_callbacks(uuid, StubType.EVENT) == ()
+        assert group.get_callbacks(uuid, StubType.INACTIVE) == ()
+
+    def test_remove_owner_keeps_other_owners(self):
+        """按 owner 撤销时不能移除其他扩展的订阅."""
+        group = SubscriberGroup()
+        uuid = UUID("00000000-0000-0000-0000-000000000001")
+        group.add(
+            uuid,
+            Subscriber(
+                callback=_async_callback,
+                status_filter=StubType.ALL,
+                owner_id="extension-a",
+            ),
+            StubType,
+        )
+        group.add(
+            uuid,
+            Subscriber(
+                callback=_async_callback,
+                status_filter=StubType.EVENT,
+                owner_id="extension-b",
+            ),
+            StubType,
+        )
+
+        assert group.remove_owner("extension-a") == 1
+        assert group.get_callbacks(uuid, StubType.EVENT) == (_async_callback,)
+        assert group.get_callbacks(uuid, StubType.INACTIVE) == ()
+
     def test_get_callbacks_missing_uuid(self):
         """不存在的 UUID 应返回空列表."""
         group = SubscriberGroup()

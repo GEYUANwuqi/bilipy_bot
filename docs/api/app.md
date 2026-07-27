@@ -48,7 +48,9 @@ EventBus 达到该数量的 in-flight Handler task 时会让 `publish()` 等待�
 ```python
 add_source(source_cls, *args, **kwargs) -> BaseSourceT
 get_source(uuid) -> BaseSource | None
+get_source(source_ref: SourceRef) -> BaseSource | None
 get_source(source_cls, config_key=None) -> BaseSourceT | None
+get_sources(source_ref: SourceRef) -> tuple[BaseSource, ...]
 async start_source(source_or_uuid) -> BaseSource
 async stop_source(source_or_uuid) -> BaseSource
 async remove_source(source_id: UUID) -> BaseSource | None
@@ -74,6 +76,7 @@ subscribe(
     status: str | re.Pattern[str] | BaseType,
     *,
     event_filter: BaseFilter | None = None,
+    owner_id: str | None = None,
 ) -> Callable
 
 add_subscriber(
@@ -82,7 +85,8 @@ add_subscriber(
     status: str | re.Pattern[str] | BaseType,
     *,
     event_filter: BaseFilter | None = None,
-) -> None
+    owner_id: str | None = None,
+) -> SubscriptionHandle
 
 unsubscribe(source_id: UUID) -> int
 ```
@@ -122,29 +126,50 @@ RuntimeConfig.from_yaml(
     *,
     environ: Mapping[str, str] | None = None,
     env_prefix: str = "BUTTERBOT__",
+    builder_registry: ConfigBuilderRegistry | None = None,
 ) -> RuntimeConfig
 ```
 
 `from_yaml()` 的错误见[异常参考](./exceptions.md)和
 [YAML 配置](/configuration/yaml.html)。
 
+`source_definitions` 是只读映射，保留 YAML 中每个命名 Source 的 `config_key`、
+`source_name` 和构建结果；`get_source_definition(config_key)` 可查询单项。
+
 ## `register_builder`
 
 ```python
 from butterbot.app import register_builder
 
-register_builder(key: str, builder: Any) -> None
+register_builder(
+    key: str,
+    builder: Any,
+    *,
+    replace: bool = False,
+) -> BuilderRegistration
 ```
 
 builder 接收配置值并返回运行时配置对象。新格式由
 `sources.<config_key>.source_name` 选择 builder。builder 名称不能直接作为 YAML
-顶层键；重复注册会覆盖已有 builder，注册表为进程全局状态。
+顶层键；重复注册默认抛 `ConfigError`，显式 `replace=True` 才会替换。返回句柄的
+`unregister()` 只撤销自己仍拥有的注册。
+
+`ConfigBuilderRegistry` 提供隔离注册表；`with_defaults()` 可复制内置构建器，
+`RuntimeConfig.from_yaml(builder_registry=...)` 只使用传入实例。
+
+## 扩展原型
+
+`ExtensionRegistrar` 和 `SubscriptionSpec` 是 provisional 的手工注册 API，不是
+插件加载器。契约、事务语义和非目标见
+[插件原型基础](/extensions/prototype-foundations.html)。
 
 ## 门面中的其他导出
 
 `butterbot.app` 还导出：
 
 - `Event`
+- `SourceDefinition`、`ConfigBuilderRegistry`、`BuilderRegistration`
+- `ExtensionRegistrar`、`SubscriptionSpec`
 - `BaseFilter`、`AndFilter`、`OrFilter`
 - `ButterError` 及公开异常子类
 

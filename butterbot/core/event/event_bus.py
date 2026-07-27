@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Union
 from uuid import UUID
 
 from .event import Event
-from .subscriber import Subscriber, SubscriberGroup
+from .subscriber import Subscriber, SubscriberGroup, SubscriptionHandle
 
 if TYPE_CHECKING:
     from butterbot.core.filter import BaseFilter
@@ -38,6 +38,8 @@ class EventBus:
         self._subscriber_group = SubscriberGroup()
         # 持有 create_task 返回的 Task 强引用，防止 GC 回收未完成的任务
         self._background_tasks: set[asyncio.Task] = set()
+        # owner 维度只用于精确清理，不改变全局调度和容量语义。
+        self._tasks_by_owner: dict[str, set[asyncio.Task]] = {}
         self._max_pending_callbacks = max_pending_callbacks
         self._callback_capacity = (
             asyncio.Semaphore(max_pending_callbacks)
@@ -63,6 +65,12 @@ class EventBus:
     def max_pending_callbacks(self) -> int | None:
         """允许同时存在的回调 task 上限；``None`` 表示无限制."""
         return self._max_pending_callbacks
+
+    def pending_callbacks_for(self, owner_id: str) -> int:
+        """返回指定所有者尚未完成的回调数量."""
+        return sum(
+            1 for task in self._tasks_by_owner.get(owner_id, ()) if not task.done()
+        )
 
     def _wrap_callback(
         self,
@@ -111,7 +119,8 @@ class EventBus:
         supported_types: "type[BaseType] | None" = None,
         *,
         event_filter: "BaseFilter | None" = None,
-    ) -> None:
+        owner_id: str | None = None,
+    ) -> SubscriptionHandle:
         """添加订阅者.
 
         Args:
@@ -121,21 +130,30 @@ class EventBus:
             supported_types: 事件源声明的 ``BaseType`` 枚举类。
                 订阅规则将在注册期编译为具体状态到回调的映射。
             event_filter: 可选的事件内容过滤器，只有通过过滤器的事件才触发回调。
+            owner_id: 可选的注册所有者标识，用于扩展级撤销和任务排空。
+
+        Returns:
+            可用于精确退订的不透明句柄。
         """
+        if owner_id is not None and not owner_id:
+            raise ValueError("owner_id 不能为空字符串")
         wrapper = self._wrap_callback(callback, event_filter=event_filter)
 
         subscriber = Subscriber(
             callback=wrapper,
             status_filter=status,
             event_filter=event_filter,
+            owner_id=owner_id,
         )
-        self._subscriber_group.add(uuid, subscriber, supported_types)
+        handle = self._subscriber_group.add(uuid, subscriber, supported_types)
         _log.debug(
-            "为 '%s' 注册订阅者 callback=%s, status_filter=%s)",
+            "为 '%s' 注册订阅者 callback=%s, status_filter=%s, owner=%s)",
             uuid,
             callback.__name__,
             status,
+            owner_id,
         )
+        return handle
 
     def subscribe(
         self,
@@ -144,6 +162,7 @@ class EventBus:
         supported_types: "type[BaseType] | None" = None,
         *,
         event_filter: "BaseFilter | None" = None,
+        owner_id: str | None = None,
     ) -> Callable:
         """装饰器：订阅事件.
 
@@ -152,6 +171,7 @@ class EventBus:
             status: 状态过滤器（``BaseType`` 枚举或 ``str`` 正则）
             supported_types: 事件源声明的 ``BaseType`` 枚举类
             event_filter: 可选的事件内容过滤器，只有通过过滤器的事件才触发回调
+            owner_id: 可选的注册所有者标识
 
         Returns:
             装饰器函数
@@ -164,7 +184,12 @@ class EventBus:
 
         def decorator(func: Callable[[Event], Coroutine[Any, Any, None]]) -> Callable:
             self.add_subscriber(
-                uuid, func, status, supported_types, event_filter=event_filter
+                uuid,
+                func,
+                status,
+                supported_types,
+                event_filter=event_filter,
+                owner_id=owner_id,
             )
             return func
 
@@ -182,6 +207,68 @@ class EventBus:
             被移除的回调数量
         """
         return self._subscriber_group.remove(uuid)
+
+    def remove_subscription(self, handle: SubscriptionHandle) -> bool:
+        """按句柄精确移除一次订阅注册."""
+        return self._subscriber_group.remove_subscription(handle)
+
+    def remove_subscribers_by_owner(self, owner_id: str) -> int:
+        """移除一个所有者注册的全部订阅，保留其他所有者的订阅."""
+        if not owner_id:
+            raise ValueError("owner_id 不能为空字符串")
+        return self._subscriber_group.remove_owner(owner_id)
+
+    async def drain_owner(self, owner_id: str, timeout: float = 5.0) -> int:
+        """等待一个所有者已开始的回调完成，超时后取消.
+
+        调用方应先通过 :meth:`remove_subscribers_by_owner` 阻止该所有者产生
+        新回调。该方法不会关闭 EventBus，也不影响其他所有者。
+
+        Returns:
+            本次纳入排空的回调 task 数量。
+        """
+        if not owner_id:
+            raise ValueError("owner_id 不能为空字符串")
+        if timeout < 0:
+            raise ValueError("timeout 不能小于 0")
+
+        current = asyncio.current_task()
+        pending = [
+            task
+            for task in self._tasks_by_owner.get(owner_id, ())
+            if not task.done() and task is not current
+        ]
+        if not pending:
+            self._discard_done_owner_tasks(owner_id)
+            return 0
+
+        cancelled: asyncio.CancelledError | None = None
+        try:
+            _, not_done = await asyncio.wait(pending, timeout=timeout)
+        except asyncio.CancelledError as exc:
+            cancelled = exc
+            not_done = {task for task in pending if not task.done()}
+
+        for task in not_done:
+            task.cancel()
+        if not_done:
+            try:
+                await asyncio.gather(*not_done, return_exceptions=True)
+            except asyncio.CancelledError as exc:
+                cancelled = cancelled or exc
+
+        self._discard_done_owner_tasks(owner_id)
+        if cancelled is not None:
+            raise cancelled
+        return len(pending)
+
+    def _discard_done_owner_tasks(self, owner_id: str) -> None:
+        tasks = self._tasks_by_owner.get(owner_id)
+        if tasks is None:
+            return
+        tasks.difference_update(task for task in tuple(tasks) if task.done())
+        if not tasks:
+            self._tasks_by_owner.pop(owner_id, None)
 
     async def close(self, timeout: float = 5.0) -> None:
         """关闭事件总线：停止接受新事件，并排空正在执行的回调.
@@ -269,6 +356,7 @@ class EventBus:
         uuid: UUID,
         callback_name: str,
         status_value: str,
+        owner_id: str | None,
     ) -> None:
         """后台任务完成回调，检查并记录异常.
 
@@ -277,8 +365,15 @@ class EventBus:
             uuid: 发布器的唯一标识符
             callback_name: 回调函数名
             status_value: 事件状态值
+            owner_id: 订阅所有者标识
         """
         self._background_tasks.discard(task)
+        if owner_id is not None:
+            owner_tasks = self._tasks_by_owner.get(owner_id)
+            if owner_tasks is not None:
+                owner_tasks.discard(task)
+                if not owner_tasks:
+                    self._tasks_by_owner.pop(owner_id, None)
         if self._callback_capacity is not None:
             self._callback_capacity.release()
 
@@ -318,9 +413,10 @@ class EventBus:
             return
 
         # 查表派发：根据 uuid + 状态值直接获取所有已编译的回调
-        callbacks = self._subscriber_group.get_callbacks(uuid, event.status)
+        subscribers = self._subscriber_group.get_subscribers(uuid, event.status)
 
-        for callback in callbacks:
+        for subscriber in subscribers:
+            callback = subscriber.callback
             capacity = self._callback_capacity
             if capacity is not None:
                 await capacity.acquire()
@@ -337,9 +433,11 @@ class EventBus:
                     capacity.release()
                 raise
             self._background_tasks.add(task)
+            if subscriber.owner_id is not None:
+                self._tasks_by_owner.setdefault(subscriber.owner_id, set()).add(task)
             task.add_done_callback(
-                lambda t, u=uuid, cn=callback_name, sv=event.status.value: (
-                    self._task_done_callback(t, u, cn, sv)
+                lambda t, u=uuid, cn=callback_name, sv=event.status.value, owner=(subscriber.owner_id): (
+                    self._task_done_callback(t, u, cn, sv, owner)
                 )
             )
             _log.debug(

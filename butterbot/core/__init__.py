@@ -1,7 +1,7 @@
 from .api import BaseApi, BaseApiT
 from .context import ApiRegistry, AppContext, ConfigProvider
 from .data import AutoDispatchList, BaseDataMixin, BaseDataModel, BaseDataT
-from .event import Event, EventBus
+from .event import Event, EventBus, SubscriptionHandle
 from .exceptions import (
     ApiError,
     ButterError,
@@ -12,7 +12,7 @@ from .exceptions import (
     SubscriptionError,
 )
 from .filter import AndFilter, BaseFilter, OrFilter
-from .source import BaseSource, BaseSourceT
+from .source import BaseSource, BaseSourceT, SourceRef
 from .types import BaseType, BaseTypeT
 
 __all__ = [
@@ -41,6 +41,8 @@ __all__ = [
     "LifecycleError",
     "OrFilter",
     "SourceError",
+    "SourceRef",
     "SourceStartError",
     "SubscriptionError",
+    "SubscriptionHandle",
 ]

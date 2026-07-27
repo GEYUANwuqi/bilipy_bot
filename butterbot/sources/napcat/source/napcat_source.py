@@ -22,6 +22,7 @@ class NapcatSource(BaseSource):
     """
 
     supported_types = NapcatType
+    source_kind = "napcat.events"
     config_key = "napcat"
 
     async def on_start(self) -> None:

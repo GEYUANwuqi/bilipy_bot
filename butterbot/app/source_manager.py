@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Callable, ParamSpec, overload
 from uuid import UUID
 
 from butterbot.core.exceptions import LifecycleError, SourceError, SourceStartError
-from butterbot.core.source import BaseSource, BaseSourceT
+from butterbot.core.source import BaseSource, BaseSourceT, SourceRef
 
 _SourceP = ParamSpec("_SourceP")
 
@@ -96,6 +96,8 @@ class SourceManager:
             raise LifecycleError("SourceManager 已关闭，无法添加事件源")
 
         source = source_cls(*args, **kwargs)
+        if source.uuid in self._sources:
+            raise SourceError("事件源 UUID %s 已注册" % source.uuid)
 
         self._sources[source.uuid] = source
         if self._running:
@@ -159,25 +161,29 @@ class SourceManager:
     def get_source(self, source: UUID) -> BaseSource | None: ...
 
     @overload
+    def get_source(self, source: SourceRef) -> BaseSource | None: ...
+
+    @overload
     def get_source(
         self, source: type[BaseSourceT], config_key: str | None = None
     ) -> BaseSourceT | None: ...
 
     def get_source(
         self,
-        source: type[BaseSource] | UUID,
+        source: type[BaseSource] | SourceRef | UUID,
         config_key: str | None = None,
     ) -> BaseSource | None:
         """获取事件源.
 
-        支持三种查找方式：
+        支持四种查找方式：
 
         - ``get_source(source_id)`` — 按 UUID 查找
+        - ``get_source(SourceRef(...))`` — 按逻辑类型和配置实例精确解析
         - ``get_source(source_cls)`` — 按类型查找（单一实例时最常用）
         - ``get_source(source_cls, config_key)`` — 按类型 + 配置键查找（同源多实例时区分）
 
         Args:
-            source: 事件源类或 UUID
+            source: 事件源类、逻辑引用或 UUID
             config_key: 配置键，可选。传入时做精确匹配，否则返回该类型的第一个实例
 
         Returns:
@@ -186,6 +192,16 @@ class SourceManager:
         # 按 UUID 查找
         if isinstance(source, UUID):
             return self._sources.get(source)
+        if isinstance(source, SourceRef):
+            if config_key is not None:
+                raise TypeError("使用 SourceRef 时不能再传 config_key")
+            matches = self.get_sources(source)
+            if len(matches) > 1:
+                raise SourceError(
+                    "SourceRef %r 匹配到 %s 个事件源，请指定 config_key"
+                    % (source, len(matches))
+                )
+            return matches[0] if matches else None
 
         # 此时 source 一定是 type[BaseSource]
         source_cls: type[BaseSource] = source
@@ -196,6 +212,22 @@ class SourceManager:
                 if config_key is None or inst.config_key == config_key:
                     return inst
         return None
+
+    def get_sources(self, source_ref: SourceRef) -> tuple[BaseSource, ...]:
+        """返回逻辑引用匹配的事件源快照.
+
+        ``config_key=None`` 明确表示匹配该 kind 的所有实例；需要唯一实例的调用方
+        应使用 :meth:`get_source`，多匹配时会得到 ``SourceError``。
+        """
+        return tuple(
+            source
+            for source in self._sources.values()
+            if source.source_kind == source_ref.source_kind
+            and (
+                source_ref.config_key is None
+                or source.config_key == source_ref.config_key
+            )
+        )
 
     def _require_source(self, source: BaseSource | UUID) -> BaseSource:
         """解析并校验事件源必须已注册.

@@ -27,6 +27,7 @@ class BiliDanmakuSource(BaseSource):
     """
 
     supported_types = DanmakuType
+    source_kind = "bilibili.danmaku"
     config_key = "bilibili"
 
     def __init__(

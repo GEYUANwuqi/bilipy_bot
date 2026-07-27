@@ -8,8 +8,8 @@ from uuid import UUID
 
 from butterbot.core.api import BaseApiT
 from butterbot.core.context import ApiRegistry, AppContext
-from butterbot.core.event import Event, EventBus
-from butterbot.core.source import BaseSource, BaseSourceT
+from butterbot.core.event import Event, EventBus, SubscriptionHandle
+from butterbot.core.source import BaseSource, BaseSourceT, SourceRef
 from butterbot.core.types import BaseType
 
 if TYPE_CHECKING:
@@ -172,13 +172,16 @@ class BotApp:
     def get_source(self, source: UUID) -> BaseSource | None: ...
 
     @overload
+    def get_source(self, source: SourceRef) -> BaseSource | None: ...
+
+    @overload
     def get_source(
         self, source: type[BaseSourceT], config_key: str | None = None
     ) -> BaseSourceT | None: ...
 
     def get_source(
         self,
-        source: type[BaseSource] | UUID,
+        source: type[BaseSource] | SourceRef | UUID,
         config_key: str | None = None,
     ) -> BaseSource | None:
         """获取事件源.
@@ -189,9 +192,13 @@ class BotApp:
         - ``app.get_source(source_cls)`` — 按类型查找（单一实例时最常用）
         - ``app.get_source(source_cls, config_key)`` — 按类型 + 配置键查找（同源多实例时区分）
         """
-        if isinstance(source, UUID):
+        if isinstance(source, (UUID, SourceRef)):
             return self._manager.get_source(source)
         return self._manager.get_source(source, config_key)
+
+    def get_sources(self, source_ref: SourceRef) -> tuple[BaseSource, ...]:
+        """返回逻辑 SourceRef 匹配的全部事件源."""
+        return self._manager.get_sources(source_ref)
 
     # ============ API 访问（委托 ApiRegistry）============ #
 
@@ -215,6 +222,7 @@ class BotApp:
         status: str | re.Pattern[str] | BaseType,
         *,
         event_filter: "BaseFilter | None" = None,
+        owner_id: str | None = None,
     ) -> Callable:
         """装饰器：订阅事件.
 
@@ -222,6 +230,7 @@ class BotApp:
             source_id: 事件源的 UUID
             status: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern`` 正则）
             event_filter: 可选的事件内容过滤器，只有通过过滤器的事件才触发回调
+            owner_id: 可选的注册所有者标识
 
         Returns:
             装饰器函数
@@ -244,7 +253,11 @@ class BotApp:
         if source is None:
             raise ValueError("事件源 %s 不存在，请先通过 add_source 添加" % source_id)
         return self.bus.subscribe(
-            source_id, status, source.supported_types, event_filter=event_filter
+            source_id,
+            status,
+            source.supported_types,
+            event_filter=event_filter,
+            owner_id=owner_id,
         )
 
     def add_subscriber(
@@ -254,7 +267,8 @@ class BotApp:
         status: str | re.Pattern[str] | BaseType,
         *,
         event_filter: "BaseFilter | None" = None,
-    ) -> None:
+        owner_id: str | None = None,
+    ) -> SubscriptionHandle:
         """手动注册订阅者.
 
         Args:
@@ -262,16 +276,21 @@ class BotApp:
             callback: 异步回调函数
             status: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern`` 正则）
             event_filter: 可选的事件内容过滤器，只有通过过滤器的事件才触发回调
+            owner_id: 可选的注册所有者标识
+
+        Returns:
+            可用于精确退订的不透明句柄
         """
         source = self._manager.get_source(source_id)
         if source is None:
             raise ValueError("事件源 %s 不存在，请先通过 add_source 添加" % source_id)
-        self.bus.add_subscriber(
+        return self.bus.add_subscriber(
             source_id,
             callback,
             status,
             source.supported_types,
             event_filter=event_filter,
+            owner_id=owner_id,
         )
 
     def unsubscribe(self, source_id: UUID) -> int:

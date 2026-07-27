@@ -1,9 +1,9 @@
 import re
 from collections.abc import Callable, Coroutine
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging import getLogger
 from typing import TYPE_CHECKING, Any, Union
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from butterbot.core.exceptions import SubscriptionError
 from butterbot.core.types import BaseType
@@ -24,11 +24,27 @@ class Subscriber:
         callback: 回调函数
         status_filter: 状态过滤器（``BaseType`` 枚举、``str`` 或 ``re.Pattern[str]`` 正则）
         event_filter: 事件过滤器（``BaseFilter`` 实例，仅用于调试/内省）
+        owner_id: 注册所有者标识；用于扩展级精确撤销和任务排空
+        subscription_id: 单次订阅注册的稳定标识
     """
 
     callback: Callable[[Event], Coroutine[Any, Any, None]]
     status_filter: Union[str, re.Pattern[str], "BaseType"]
     event_filter: "BaseFilter | None" = None
+    owner_id: str | None = None
+    subscription_id: UUID = field(default_factory=uuid4)
+
+
+@dataclass(frozen=True, slots=True)
+class SubscriptionHandle:
+    """一次订阅注册的不透明句柄.
+
+    同一订阅规则可能被编译到多个具体状态，但始终只对应一个句柄。
+    """
+
+    subscription_id: UUID
+    source_id: UUID
+    owner_id: str | None = None
 
 
 class SubscriberGroup:
@@ -43,15 +59,15 @@ class SubscriberGroup:
 
     def __init__(self):
         """初始化订阅组."""
-        # 编译派发表：uuid -> concrete_status -> [callback, ...]
-        self._dispatch_table: dict[UUID, dict[BaseType, list[Callable]]] = {}
+        # 编译派发表：uuid -> concrete_status -> [subscriber, ...]
+        self._dispatch_table: dict[UUID, dict[BaseType, list[Subscriber]]] = {}
 
     def add(
         self,
         uuid: UUID,
         subscriber: Subscriber,
         supported_types: "type[BaseType] | None" = None,
-    ) -> None:
+    ) -> SubscriptionHandle:
         """添加订阅者，将订阅规则编译展开存入派发表.
 
         Args:
@@ -89,7 +105,12 @@ class SubscriberGroup:
 
         status_map = self._dispatch_table.setdefault(uuid, {})
         for status in matched:
-            status_map.setdefault(status, []).append(subscriber.callback)
+            status_map.setdefault(status, []).append(subscriber)
+        return SubscriptionHandle(
+            subscription_id=subscriber.subscription_id,
+            source_id=uuid,
+            owner_id=subscriber.owner_id,
+        )
 
     def remove(self, uuid: UUID) -> int:
         """移除某个事件源的全部订阅.
@@ -110,6 +131,71 @@ class SubscriberGroup:
         _log.debug("移除 '%s' 的 %s 个订阅回调", uuid, removed)
         return removed
 
+    def remove_subscription(self, handle: SubscriptionHandle) -> bool:
+        """按句柄移除一次订阅注册.
+
+        Returns:
+            找到并移除该订阅时返回 ``True``。一个通配订阅即使展开到多个状态，
+            也只按一次注册计算。
+        """
+        status_map = self._dispatch_table.get(handle.source_id)
+        if not status_map:
+            return False
+
+        removed = False
+        for status in tuple(status_map):
+            subscribers = status_map[status]
+            remaining = [
+                subscriber
+                for subscriber in subscribers
+                if subscriber.subscription_id != handle.subscription_id
+            ]
+            if len(remaining) != len(subscribers):
+                removed = True
+            if remaining:
+                status_map[status] = remaining
+            else:
+                del status_map[status]
+
+        if not status_map:
+            self._dispatch_table.pop(handle.source_id, None)
+        return removed
+
+    def remove_owner(self, owner_id: str) -> int:
+        """移除一个所有者注册的全部订阅.
+
+        Returns:
+            被移除的唯一订阅注册数量，不按状态展开数量重复计数。
+        """
+        removed_ids: set[UUID] = set()
+        for source_id in tuple(self._dispatch_table):
+            status_map = self._dispatch_table[source_id]
+            for status in tuple(status_map):
+                subscribers = status_map[status]
+                for subscriber in subscribers:
+                    if subscriber.owner_id == owner_id:
+                        removed_ids.add(subscriber.subscription_id)
+                remaining = [
+                    subscriber
+                    for subscriber in subscribers
+                    if subscriber.owner_id != owner_id
+                ]
+                if remaining:
+                    status_map[status] = remaining
+                else:
+                    del status_map[status]
+            if not status_map:
+                del self._dispatch_table[source_id]
+        return len(removed_ids)
+
+    def get_subscribers(
+        self,
+        uuid: UUID,
+        status: BaseType,
+    ) -> tuple[Subscriber, ...]:
+        """获取指定事件源和状态对应的订阅快照."""
+        return tuple(self._dispatch_table.get(uuid, {}).get(status, []))
+
     def get_callbacks(self, uuid: UUID, status: BaseType) -> tuple[Callable, ...]:
         """获取指定事件源和状态值对应的所有回调函数快照.
 
@@ -122,7 +208,9 @@ class SubscriberGroup:
         Returns:
             回调函数元组（无匹配时返回空元组）
         """
-        return tuple(self._dispatch_table.get(uuid, {}).get(status, []))
+        return tuple(
+            subscriber.callback for subscriber in self.get_subscribers(uuid, status)
+        )
 
     @property
     def uids(self) -> list[UUID]:
