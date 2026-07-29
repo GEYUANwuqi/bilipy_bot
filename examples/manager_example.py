@@ -28,6 +28,13 @@ _log = getLogger("BILIBILI")
 #   sources:
 #     bili_account:
 #       source_name: bilibili
+#       kwarg:
+#         BiliDynamicSource:
+#           watch_targets: [1802011210]
+#           poll_interval: 100
+#         BiliLiveSource:
+#           watch_targets: [22758221]
+#           poll_interval: 100
 #       sessdata: ""
 #       bili_jct: ""
 #       buvid3: ""
@@ -37,25 +44,11 @@ _log = getLogger("BILIBILI")
 # 创建 BotApp（自动加载 config.yaml）
 app = BotApp()
 
-# ============ 创建事件源 ============ #
-# 注册事件源，无需保存返回值
-app.add_source(
-    source_cls=BiliDynamicSource,
-    watch_targets=[1802011210],
-    poll_interval=100,
-    config_key="bili_account",
-)
-app.add_source(
-    source_cls=BiliLiveSource,
-    watch_targets=[22758221],
-    poll_interval=100,
-    config_key="bili_account",
-)
-# 通过类型获取事件源的 UUID（单一实例时无需传 config_key）
-dynamic_source = app.get_source(BiliDynamicSource)
+# ============ 获取配置自动创建的事件源 ============ #
+dynamic_source = app.get_source(BiliDynamicSource, "bili_account")
 assert dynamic_source is not None
 dynamic_id = dynamic_source.uuid
-live_source = app.get_source(BiliLiveSource)
+live_source = app.get_source(BiliLiveSource, "bili_account")
 assert live_source is not None
 live_id = live_source.uuid
 

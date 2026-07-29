@@ -50,14 +50,23 @@ source_b = app.add_source(NapcatSource, config_key="napcat_b")
 sources:
   napcat_a:
     source_name: napcat
+    kwarg:
+      NapcatSource: {}
     url: "ws://localhost:3001"
   napcat_b:
     source_name: napcat
+    kwarg:
+      NapcatSource: {}
     url: "ws://localhost:3002"
 ```
 
-自定义实例键是 `config_key`；`source_name` 只负责选择 builder。它不会决定具体
-使用 `NapcatSource` 还是其他共享同一配置类型的 Source，也不会自动创建实例。
+自定义实例键是 `config_key`；`source_name` 只负责选择 builder。可选的
+`kwarg.<SourceClassName>` 才选择并配置需要自动创建的具体 Source。使用上述 YAML
+时，`BotApp()` 已经注册两个实例，可直接通过
+`app.get_source(NapcatSource, "napcat_a")` 获取。
+
+开头的两行 `add_source()` 仍是受支持的等价手动组装方式；要使用它们，只需从
+YAML 删除 `kwarg`，避免同时声明和手动添加同一逻辑实例。
 
 ## 自定义 Provider
 
@@ -71,5 +80,7 @@ core 的 `AppContext` 接受实现 `ConfigProvider` Protocol 的对象，但 `Bo
 - 不合并多个文件；
 - `RuntimeConfig()` 本身不读取环境变量，只有 `from_yaml()` 会读取；
 - 不隐藏或加密敏感值；
+- `RuntimeConfig.from_yaml()` 只校验并保存 `kwarg`，具体工厂解析和实例化发生在
+  `BotApp` 构造时；
 - `get_config()` 对缺失键默认静默返回 `None`；API 可用
   `ApiRegistry.require_config()` 获得明确 `ConfigError`。

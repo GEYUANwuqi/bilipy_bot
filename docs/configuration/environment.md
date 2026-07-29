@@ -54,9 +54,11 @@ sources:
 export BUTTERBOT__SOURCES__QQ_ACCOUNT__URL="ws://napcat:3001"
 export BUTTERBOT__SOURCES__QQ_ACCOUNT__TOKEN="secret"
 export BUTTERBOT__SOURCES__QQ_ACCOUNT__HEARTBEAT="15.0"
+export BUTTERBOT__SOURCES__BILI_ACCOUNT__KWARG__BILIDANMAKUSOURCE__ROOM_ID="[1, 2]"
 ```
 
-路径段转换为小写，因此以上变量覆盖：
+路径段转换为小写；Source 工厂类名在 `BotApp` 解析时不区分大小写。因此以上前三
+项覆盖：
 
 ```yaml
 sources:

@@ -19,7 +19,8 @@ config = RuntimeConfig.from_yaml("config.yaml")
 2. 合并 YAML `environment` 和当前进程环境；
 3. 递归解析字符串中的环境变量引用；
 4. 应用 `BUTTERBOT__` 分层环境变量覆盖；
-5. 按 `source_name` 调用 builder。
+5. 分离可选的 `kwarg`，再按 `source_name` 调用配置 builder；
+6. `BotApp` 按 `kwarg` 中出现的 Source 类名自动实例化并注册事件源。
 
 ## 命名 Source 配置
 
@@ -29,27 +30,67 @@ config = RuntimeConfig.from_yaml("config.yaml")
 sources:
   bili_account:
     source_name: bilibili
+    kwarg:
+      BiliDanmakuSource:
+        room_id: [26498147, 22758221]
     sessdata: ""
     bili_jct: ""
     buvid3: ""
 
   qq_account:
     source_name: napcat
+    kwarg:
+      NapcatSource: {}
     url: "ws://localhost:3001"
     token: ""
 ```
 
 `bili_account` 和 `qq_account` 是用户定义的实例键，会直接成为运行时
 `config_key`。`source_name` 是配置类型或平台名，用来选择 builder；它不会传给
-builder，也不会自动创建 Source。
+builder，也不会被当作具体 Source 类。
 
 ```python
 from butterbot.app import BotApp
 from butterbot.sources.napcat import NapcatSource
 
 app = BotApp()
-source = app.add_source(NapcatSource, config_key="qq_account")
+source = app.get_source(NapcatSource, "qq_account")
+assert source is not None
 ```
+
+### `kwarg` 自动注册语法糖
+
+`kwarg` 是 `Source 类名 -> 构造关键字参数` 映射。出现某个类名表示创建一个该类
+实例；`{}` 表示创建不需要额外参数的 Source。外层实例键会自动作为
+`config_key` 注入，因此不能在 `kwarg` 中重复设置：
+
+```yaml
+sources:
+  bili_account:
+    source_name: bilibili
+    kwarg:
+      BiliDynamicSource:
+        watch_targets: [1802011210]
+        poll_interval: 60
+      BiliLiveSource:
+        watch_targets: [22758221]
+        poll_interval: 20
+    sessdata: ""
+    bili_jct: ""
+    buvid3: ""
+```
+
+`BotApp()` 构造时只完成实例化和注册，不启动 Source；订阅仍可在
+`app.start()` 或 `app.run()` 前安全注册。内置工厂如下：
+
+| `source_name` | `kwarg` 可用类名 |
+| --- | --- |
+| `bilibili` | `BiliDanmakuSource`、`BiliDynamicSource`、`BiliLiveSource` |
+| `napcat` | `NapcatSource` |
+
+`kwarg` 完全可选。没有它时不会自动创建任何 Source，原有
+`app.add_source(SourceClass, ..., config_key=...)` 用法和运行期动态接入流程均
+保持不变。
 
 同一 `source_name` 可以构建多个命名配置，适合多账号或多端点：
 
@@ -57,9 +98,13 @@ source = app.add_source(NapcatSource, config_key="qq_account")
 sources:
   qq_primary:
     source_name: napcat
+    kwarg:
+      NapcatSource: {}
     url: "ws://localhost:3001"
   qq_backup:
     source_name: napcat
+    kwarg:
+      NapcatSource: {}
     url: "ws://localhost:3002"
 ```
 
@@ -86,7 +131,7 @@ sources:
 
 ### `bilibili`
 
-把移除 `source_name` 后的映射作为关键字参数传给
+把移除 `source_name` 和 `kwarg` 后的映射作为关键字参数传给
 `bilibili_api.Credential`。可用字段由当前锁定的
 `bilibili-api-python` 决定，仓库模板列出 `sessdata`、`bili_jct` 和 `buvid3`。
 
@@ -129,8 +174,22 @@ sources:
 `RuntimeConfig.from_yaml(builder_registry=registry)` 加载。
 
 配置构建完成后，`RuntimeConfig.source_definitions` 会保留每个实例的
-`config_key`、`source_name` 和构建结果。`source_name` 仍只代表配置构建器，
-不等同于具体事件流的 `SourceRef.source_kind`。
+`config_key`、`source_name`、`kwarg` 和构建结果。`source_name` 仍只代表配置
+构建器，不等同于具体事件流的 `SourceRef.source_kind`。
+
+自定义 Source 可使用隔离工厂注册表：
+
+```python
+from butterbot.app import BotApp, SourceFactoryRegistry
+
+source_registry = SourceFactoryRegistry.with_defaults()
+source_registry.register("feed", FeedSource)
+app = BotApp(config, source_factory_registry=source_registry)
+```
+
+YAML 中即可使用 `kwarg.FeedSource`。类名默认取工厂的 `__name__`，也可通过
+`factory_name=` 显式指定。重复注册同一个 `source_name + factory_name` 会抛
+`ConfigError`。
 
 builder 抛出的普通异常会包装为 `ConfigError` 并保留 cause。
 
@@ -142,6 +201,8 @@ builder 抛出的普通异常会包装为 `ConfigError` 并保留 cause。
 | YAML 语法错误 | `yaml.YAMLError` |
 | 顶层、`sources` 或实例结构错误 | `ConfigError` |
 | `source_name` 缺失或没有注册 | `ConfigError` |
+| `kwarg` 或某个 Source 参数不是映射 | `ConfigError` |
+| `kwarg` 指向未注册工厂或构造失败 | `BotApp` 构造时抛 `ConfigError` |
 | 环境变量缺失、引用循环或覆盖路径冲突 | `ConfigError` |
 | builder 构建失败 | `ConfigError` |
 

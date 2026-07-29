@@ -21,11 +21,15 @@ BotApp(
     *,
     close_timeout: float = 5.0,
     max_pending_callbacks: int | None = None,
+    source_factory_registry: SourceFactoryRegistry | None = None,
 )
 ```
 
 `config=None` 时调用 `RuntimeConfig.from_yaml("config.yaml")`，可能抛
 `FileNotFoundError`、`yaml.YAMLError` 或 `ConfigError`。
+
+配置包含 `sources.<config_key>.kwarg` 时，构造器会用内置或传入的
+`source_factory_registry` 自动创建并注册 Source。此阶段不启动 Source。
 
 `max_pending_callbacks` 为 `None` 时保持无限并发的兼容行为；设置正整数后，
 EventBus 达到该数量的 in-flight Handler task 时会让 `publish()` 等待容量。
@@ -134,7 +138,8 @@ RuntimeConfig.from_yaml(
 [YAML 配置](/configuration/yaml.html)。
 
 `source_definitions` 是只读映射，保留 YAML 中每个命名 Source 的 `config_key`、
-`source_name` 和构建结果；`get_source_definition(config_key)` 可查询单项。
+`source_name`、`kwarg` 和构建结果；`get_source_definition(config_key)` 可查询
+单项。
 
 ## `register_builder`
 
@@ -157,6 +162,22 @@ builder 接收配置值并返回运行时配置对象。新格式由
 `ConfigBuilderRegistry` 提供隔离注册表；`with_defaults()` 可复制内置构建器，
 `RuntimeConfig.from_yaml(builder_registry=...)` 只使用传入实例。
 
+## `SourceFactoryRegistry`
+
+```python
+registry = SourceFactoryRegistry.with_defaults()
+registry.register(
+    source_name: str,
+    factory: Callable[..., BaseSource],
+    *,
+    factory_name: str | None = None,
+) -> None
+```
+
+注册表把 YAML 的 `source_name + kwarg` 类名解析为 Source 构造工厂。
+`with_defaults()` 包含内置 Bilibili 与 NapCat Source。自定义注册表通过
+`BotApp(source_factory_registry=registry)` 注入；同名注册抛 `ConfigError`。
+
 ## 扩展原型
 
 `ExtensionRegistrar` 和 `SubscriptionSpec` 是 provisional 的手工注册 API，不是
@@ -169,6 +190,7 @@ builder 接收配置值并返回运行时配置对象。新格式由
 
 - `Event`
 - `SourceDefinition`、`ConfigBuilderRegistry`、`BuilderRegistration`
+- `SourceFactoryRegistry`
 - `ExtensionRegistrar`、`SubscriptionSpec`
 - `BaseFilter`、`AndFilter`、`OrFilter`
 - `ButterError` 及公开异常子类

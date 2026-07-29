@@ -24,6 +24,8 @@ cp examples/config.example.yaml config.yaml
 sources:
   qq_account:
     source_name: napcat
+    kwarg:
+      NapcatSource: {}
     url: "${NAPCAT_URL:-ws://localhost:3001}"
     token: "${NAPCAT_TOKEN:-}"
     heartbeat: 30.0
@@ -42,7 +44,8 @@ from butterbot.sources.napcat import NapcatSource, NapcatType
 from butterbot.sources.napcat.events import NapcatGroupMessageEvent
 
 app = BotApp()
-source = app.add_source(NapcatSource, config_key="qq_account")
+source = app.get_source(NapcatSource, "qq_account")
+assert source is not None
 
 
 @app.subscribe(source.uuid, NapcatType.GROUP_MESSAGE)

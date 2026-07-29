@@ -15,7 +15,7 @@ ButterBot 当前仍然没有正式插件系统。本页描述的是用于验证�
 | 逻辑事件源引用 | `SourceRef` | 注册期解析为现有 Source UUID |
 | 订阅所有权 | `owner_id`、`SubscriptionHandle` | 精确或按 owner 撤销 |
 | owner 回调排空 | `EventBus.drain_owner()` | 等待，超时后取消该 owner 的回调 |
-| 配置元数据 | `SourceDefinition` | 保留 `config_key`、`source_name` 和构建结果 |
+| 配置元数据 | `SourceDefinition` | 保留 `config_key`、`source_name`、`kwarg` 和构建结果 |
 | 隔离构建器 | `ConfigBuilderRegistry` | 拒绝名称冲突，支持句柄撤销 |
 | 注册事务 | `ExtensionRegistrar` | 记录 Source 和订阅，失败时整体清理 |
 
@@ -133,10 +133,12 @@ async with ExtensionRegistrar(app, "example.extension") as registrar:
 definition = config.get_source_definition("primary")
 assert definition.source_name == "feed"
 assert definition.config is config.get_config("primary")
+assert definition.kwarg == {}
 ```
 
 `source_name` 只选择配置 builder，不等同于 `SourceRef.source_kind`。一个
-`source_name: bilibili` 配置可供 dynamic、live 和 danmaku 多种 Source 使用。
+`source_name: bilibili` 配置可供 dynamic、live 和 danmaku 多种 Source 使用；
+具体自动实例由可选的 `kwarg.<SourceClassName>` 显式选择。
 
 需要隔离注册表时：
 
@@ -158,7 +160,7 @@ registration.unregister()
 
 - `PluginManifest`、插件基类或统一 PluginContext；
 - entry point、目录扫描、启用列表或依赖解析；
-- 根据 `source_name` 自动选择 Source factory；
+- 只根据 `source_name` 猜测 Source factory（YAML 必须在 `kwarg` 中显式选择）；
 - 运行期延迟绑定新 Source；
 - 热重载；
 - owner 维度的 API 子集关闭或任意后台任务托管；

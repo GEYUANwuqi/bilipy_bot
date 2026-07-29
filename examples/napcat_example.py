@@ -44,6 +44,8 @@ _log = getLogger("NAPCAT")
 #   sources:
 #     qq_account:
 #       source_name: napcat
+#       kwarg:
+#         NapcatSource: {}
 #       url: "ws://localhost:3001"
 #       token: ""
 #
@@ -52,14 +54,8 @@ _log = getLogger("NAPCAT")
 # 创建 BotApp（自动加载 config.yaml）
 app = BotApp()
 
-# ============ 创建事件源 ============ #
-# 注册 NapCat 事件源
-app.add_source(
-    source_cls=NapcatSource,
-    config_key="qq_account",
-)
-# 通过类型获取事件源的 UUID（单一实例时无需传 config_key）
-napcat_source = app.get_source(NapcatSource)
+# ============ 获取配置自动创建的事件源 ============ #
+napcat_source = app.get_source(NapcatSource, "qq_account")
 assert napcat_source is not None
 napcat_id = napcat_source.uuid
 napcat_api = app.get_api(NapcatApi, "qq_account")

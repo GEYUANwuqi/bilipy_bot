@@ -27,6 +27,12 @@ cp examples/config.example.yaml config.yaml
 顶层 `napcat:`、`bilibili:` 等 Source 配置不再支持；加载错误中的迁移提示会指向
 `sources.<config_key>.source_name`。
 
+## `自动实例未注册` 或 `自动实例化失败`
+
+确认 `kwarg` 的一级键是当前 `source_name` 已注册的 Source 类名，二级映射只包含
+该类构造器支持的关键字参数。`config_key` 由外层实例键自动注入，不能重复填写。
+内置类名清单见 [YAML 配置](/configuration/yaml.html)。
+
 ## `环境变量未设置且没有默认值`
 
 `${NAME}` 要求当前进程环境或 YAML 的 `environment` 中存在 `NAME`。本地可声明

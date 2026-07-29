@@ -23,6 +23,9 @@ _log = getLogger("BILIBILI")
 #   sources:
 #     bili_account:
 #       source_name: bilibili
+#       kwarg:
+#         BiliDanmakuSource:
+#           room_id: [26498147, 22758221]
 #       sessdata: ""
 #       bili_jct: ""
 #       buvid3: ""
@@ -32,12 +35,8 @@ _log = getLogger("BILIBILI")
 # 创建 BotApp（自动加载 config.yaml）
 app = BotApp()
 
-app.add_source(
-    source_cls=BiliDanmakuSource,
-    room_id=[26498147, 22758221],
-    config_key="bili_account",
-)
-source = app.get_source(BiliDanmakuSource)
+# Source 已按 kwarg 自动注册；按类型和 config_key 获取即可。
+source = app.get_source(BiliDanmakuSource, "bili_account")
 assert source is not None
 danmaku_id = source.uuid
 

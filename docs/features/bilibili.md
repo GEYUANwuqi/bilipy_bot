@@ -16,6 +16,15 @@ title: Bilibili
 sources:
   bili_account:
     source_name: bilibili
+    kwarg:
+      BiliDynamicSource:
+        watch_targets: [123456]
+        poll_interval: 60
+      BiliLiveSource:
+        watch_targets: [123456]
+        poll_interval: 20
+      BiliDanmakuSource:
+        room_id: [123456]
     sessdata: "${BILI_SESSDATA:-}"
     bili_jct: "${BILI_JCT:-}"
     buvid3: "${BILI_BUVID3:-}"
@@ -30,12 +39,8 @@ sources:
 ```python
 from butterbot.sources.bilibili import BiliDynamicSource, DynamicType
 
-source = app.add_source(
-    BiliDynamicSource,
-    watch_targets=[123456],
-    poll_interval=60,
-    config_key="bili_account",
-)
+source = app.get_source(BiliDynamicSource, "bili_account")
+assert source is not None
 
 
 @app.subscribe(source.uuid, DynamicType.NEW)
@@ -51,12 +56,8 @@ async def on_new_dynamic(event: Event[DynamicData]) -> None:
 ```python
 from butterbot.sources.bilibili import BiliLiveSource, LiveType
 
-source = app.add_source(
-    BiliLiveSource,
-    watch_targets=[123456],
-    poll_interval=20,
-    config_key="bili_account",
-)
+source = app.get_source(BiliLiveSource, "bili_account")
+assert source is not None
 ```
 
 状态包括 `ONLINE`、`OFFLINE`、`OPEN`、`CLOSE`、`NULL` 和 `ALL`。
@@ -78,11 +79,8 @@ source.set_poll_interval(60)
 ```python
 from butterbot.sources.bilibili import BiliDanmakuSource, DanmakuType
 
-source = app.add_source(
-    BiliDanmakuSource,
-    watch_targets=[123456],
-    config_key="bili_account",
-)
+source = app.get_source(BiliDanmakuSource, "bili_account")
+assert source is not None
 
 
 @app.subscribe(source.uuid, DanmakuType.DANMAKU)

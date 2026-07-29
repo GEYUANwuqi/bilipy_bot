@@ -21,11 +21,15 @@ environment:
 
 # ---------- 命名 Source 配置 ----------
 # 自定义键（bili_account/qq_account）是运行时 config_key。
-# source_name 选择内置配置 builder，不会自动创建 Source 实例。
+# source_name 选择内置配置 builder；kwarg 中出现的类由 BotApp 自动创建并注册。
+# 请只保留应用实际使用的 Source 类，避免启动不需要的连接。
 sources:
   # bilibili_api.Credential 参数，不填则为未登录状态
   bili_account:
     source_name: bilibili
+    kwarg:
+      BiliDanmakuSource:
+        room_id: [26498147, 22758221]
     sessdata: "${BILI_SESSDATA}"
     bili_jct: "${BILI_JCT}"
     buvid3: "${BILI_BUVID3}"
@@ -35,6 +39,8 @@ sources:
   # NapcatConfig 参数
   qq_account:
     source_name: napcat
+    kwarg:
+      NapcatSource: {}
     url: "${NAPCAT_URL}"
     token: "${NAPCAT_TOKEN}"
     # heartbeat: 30.0
@@ -43,3 +49,4 @@ sources:
 
 # 也可以直接用分层环境变量覆盖字段，例如:
 # BUTTERBOT__SOURCES__QQ_ACCOUNT__TOKEN=secret
+# BUTTERBOT__SOURCES__BILI_ACCOUNT__KWARG__BILIDANMAKUSOURCE__ROOM_ID='[1, 2]'

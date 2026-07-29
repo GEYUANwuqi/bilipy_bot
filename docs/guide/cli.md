@@ -20,7 +20,8 @@ from butterbot.app import BotApp
 from butterbot.sources.napcat import NapcatSource
 
 app = BotApp()  # 导入模块时读取运行目录的 config.yaml
-source = app.add_source(NapcatSource, config_key="qq_account")
+source = app.get_source(NapcatSource, "qq_account")
+assert source is not None
 ```
 
 CLI 使用 `module:attribute` 找到这个对象。入口必须是 `BotApp` 实例，不支持应用
@@ -89,8 +90,9 @@ butterbot check
 ```
 
 该命令固定检查当前目录的 `config.yaml`，验证 YAML 结构、环境变量引用、
-`source_name` 和 builder 构建，不导入应用模块，也不启动 Source。配置有效时退出
-码为 `0`，无效时为 `1`。
+`source_name`、`kwarg` 结构和 builder 构建，不导入应用模块，也不实例化或启动
+Source。具体工厂名和构造参数会在导入应用、构造 `BotApp` 时继续验证。配置有效时
+退出码为 `0`，无效时为 `1`。
 
 检查会读取当前进程环境，因此生产部署中需要同时注入配置引用的变量。
 
