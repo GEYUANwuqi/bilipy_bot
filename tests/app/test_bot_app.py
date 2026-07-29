@@ -7,7 +7,12 @@ from uuid import UUID
 
 import pytest
 
-from butterbot.app import BotApp
+from butterbot.app import (
+    BotApp,
+    ConfigBuilderRegistry,
+    ConfigError,
+    SourceFactoryRegistry,
+)
 from butterbot.app.config import RuntimeConfig
 from butterbot.core.api import BaseApi
 from butterbot.core.context import ApiRegistry, AppContext
@@ -15,6 +20,8 @@ from butterbot.core.data import BaseDataMixin
 from butterbot.core.event import Event, EventBus
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
+from butterbot.sources.bilibili import BiliDanmakuSource
+from butterbot.sources.napcat import NapcatSource
 
 
 class MockType(BaseType):
@@ -187,6 +194,139 @@ class TestBotApp:
             assert app.running
         assert not app.running
         assert app.closed
+
+
+class TestBotAppYamlSourceSugar:
+    """YAML kwarg 自动注册 Source，同时保留显式 add_source."""
+
+    def test_registers_declared_builtin_sources(self, tmp_path, monkeypatch):
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n"
+            "  bili_account:\n"
+            "    source_name: bilibili\n"
+            "    kwarg:\n"
+            "      BiliDanmakuSource:\n"
+            "        room_id: [26498147, 22758221]\n"
+            "    sessdata: ''\n"
+            "    bili_jct: ''\n"
+            "    buvid3: ''\n"
+            "  qq_account:\n"
+            "    source_name: napcat\n"
+            "    kwarg:\n"
+            "      NapcatSource: {}\n"
+            "    url: ws://localhost:3001\n"
+        )
+
+        monkeypatch.chdir(tmp_path)
+        app = BotApp()
+
+        danmaku = app.get_source(BiliDanmakuSource, "bili_account")
+        napcat = app.get_source(NapcatSource, "qq_account")
+        assert danmaku is not None
+        assert danmaku.room_id == [26498147, 22758221]
+        assert danmaku.config_key == "bili_account"
+        assert napcat is not None
+        assert napcat.config_key == "qq_account"
+        assert not danmaku.running
+        assert not napcat.running
+
+    def test_config_without_kwarg_keeps_manual_add_source_flow(self, tmp_path):
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n"
+            "  qq_account:\n"
+            "    source_name: napcat\n"
+            "    url: ws://localhost:3001\n"
+        )
+        app = BotApp(RuntimeConfig.from_yaml(yaml_file, environ={}))
+
+        assert app.get_source(NapcatSource) is None
+        source = app.add_source(NapcatSource, config_key="qq_account")
+        assert app.get_source(NapcatSource) is source
+
+    def test_unknown_declared_source_factory_raises_config_error(self, tmp_path):
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n"
+            "  qq_account:\n"
+            "    source_name: napcat\n"
+            "    kwarg:\n"
+            "      MissingSource: {}\n"
+            "    url: ws://localhost:3001\n"
+        )
+
+        with pytest.raises(ConfigError, match="MissingSource.*未注册"):
+            BotApp(RuntimeConfig.from_yaml(yaml_file, environ={}))
+
+    def test_constructor_failure_has_configuration_context(self, tmp_path):
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n"
+            "  bili_account:\n"
+            "    source_name: bilibili\n"
+            "    kwarg:\n"
+            "      BiliDanmakuSource: {}\n"
+        )
+
+        with pytest.raises(
+            ConfigError,
+            match="bili_account.*BiliDanmakuSource.*TypeError",
+        ):
+            BotApp(RuntimeConfig.from_yaml(yaml_file, environ={}))
+
+    def test_factory_name_from_environment_override_is_case_insensitive(
+        self,
+        tmp_path,
+    ):
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n"
+            "  qq_account:\n"
+            "    source_name: napcat\n"
+            "    url: ws://localhost:3001\n"
+        )
+        config = RuntimeConfig.from_yaml(
+            yaml_file,
+            environ={
+                "BUTTERBOT__SOURCES__QQ_ACCOUNT__KWARG__NAPCATSOURCE": "{}",
+            },
+        )
+
+        app = BotApp(config)
+
+        assert app.get_source(NapcatSource, "qq_account") is not None
+
+    def test_supports_injected_factory_registry(self, tmp_path):
+        class ConfiguredSource(StubSource):
+            def __init__(self, label: str, **kwargs):
+                super().__init__(**kwargs)
+                self.label = label
+
+        builder_registry = ConfigBuilderRegistry()
+        builder_registry.register("custom", dict)
+        source_registry = SourceFactoryRegistry()
+        source_registry.register("custom", ConfiguredSource)
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n"
+            "  primary:\n"
+            "    source_name: custom\n"
+            "    kwarg:\n"
+            "      ConfiguredSource:\n"
+            "        label: yaml\n"
+        )
+        config = RuntimeConfig.from_yaml(
+            yaml_file,
+            environ={},
+            builder_registry=builder_registry,
+        )
+
+        app = BotApp(config, source_factory_registry=source_registry)
+
+        source = app.get_source(ConfiguredSource, "primary")
+        assert source is not None
+        assert source.label == "yaml"
 
 
 class TestBotAppCloseOrder:

@@ -9,6 +9,7 @@ from uuid import UUID
 from butterbot.core.api import BaseApiT
 from butterbot.core.context import ApiRegistry, AppContext
 from butterbot.core.event import Event, EventBus, SubscriptionHandle
+from butterbot.core.exceptions import ConfigError
 from butterbot.core.source import BaseSource, BaseSourceT, SourceRef
 from butterbot.core.types import BaseType
 
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from butterbot.core.filter import BaseFilter
 
 from .config import RuntimeConfig
+from .source_factory import SourceFactory, SourceFactoryRegistry
 from .source_manager import SourceManager
 
 _BotSourceP = ParamSpec("_BotSourceP")
@@ -44,6 +46,7 @@ class BotApp:
         *,
         close_timeout: float = 5.0,
         max_pending_callbacks: int | None = None,
+        source_factory_registry: SourceFactoryRegistry | None = None,
     ) -> None:
         """初始化 BotApp.
 
@@ -53,9 +56,12 @@ class BotApp:
             close_timeout: 关闭时等待 in-flight 回调完成的秒数，超时后强制取消
             max_pending_callbacks: 自动创建 EventBus 时可选的回调 task 上限；
                 达到上限后 publish 等待容量。注入 ``ctx`` 时该参数必须为 ``None``
+            source_factory_registry: 可选的 YAML Source 工厂注册表。默认使用内置
+                Bilibili 和 NapCat Source；只在配置包含 ``kwarg`` 时使用
 
         Raises:
             FileNotFoundError: 自动加载时 ``config.yaml`` 不存在
+            ConfigError: YAML 声明了未知 Source 工厂，或自动实例化失败
         """
         self._config = config or RuntimeConfig.from_yaml()
 
@@ -70,8 +76,60 @@ class BotApp:
 
         # 事件源生命周期管理器
         self._manager = SourceManager(self._ctx)
+        self._add_configured_sources(source_factory_registry)
 
         self._close_timeout = close_timeout
+
+    def _add_configured_sources(
+        self,
+        registry: SourceFactoryRegistry | None,
+    ) -> None:
+        """注册 YAML ``kwarg`` 显式声明的 Source 实例."""
+        configured: list[tuple[str, str, SourceFactory, dict[str, Any]]] = []
+        definitions = tuple(self._config.source_definitions.values())
+        if not any(definition.kwarg for definition in definitions):
+            return
+
+        resolved_registry = registry or SourceFactoryRegistry.with_defaults()
+        for definition in definitions:
+            for factory_name, arguments in definition.kwarg.items():
+                factory = resolved_registry.get(
+                    definition.source_name,
+                    factory_name,
+                )
+                if factory is None:
+                    available = ", ".join(
+                        resolved_registry.names(definition.source_name)
+                    )
+                    raise ConfigError(
+                        "Source 配置 '%s' 的自动实例 '%s' 未注册；"
+                        "source_name='%s' 可用工厂: %s"
+                        % (
+                            definition.config_key,
+                            factory_name,
+                            definition.source_name,
+                            available or "无",
+                        )
+                    )
+                kwargs = dict(arguments)
+                kwargs["config_key"] = definition.config_key
+                configured.append(
+                    (
+                        definition.config_key,
+                        factory_name,
+                        factory,
+                        kwargs,
+                    )
+                )
+
+        for config_key, factory_name, factory, kwargs in configured:
+            try:
+                self._manager.add_source(factory, **kwargs)
+            except Exception as exc:
+                raise ConfigError(
+                    "Source 配置 '%s' 自动实例化 '%s' 失败（%s）"
+                    % (config_key, factory_name, type(exc).__name__)
+                ) from exc
 
     # ============ 属性 ============ #
 

@@ -201,7 +201,13 @@ class TestNamedSourceConfig:
         registry.register("example", lambda value: dict(value))
         yaml_file = tmp_path / "config.yaml"
         yaml_file.write_text(
-            "sources:\n  primary:\n    source_name: example\n    token: secret\n"
+            "sources:\n"
+            "  primary:\n"
+            "    source_name: example\n"
+            "    kwarg:\n"
+            "      ExampleSource:\n"
+            "        interval: 30\n"
+            "    token: secret\n"
         )
 
         config = RuntimeConfig.from_yaml(
@@ -215,6 +221,7 @@ class TestNamedSourceConfig:
         assert definition.config_key == "primary"
         assert definition.source_name == "example"
         assert definition.config is config.get_config("primary")
+        assert definition.kwarg["ExampleSource"] == {"interval": 30}
         assert "secret" not in repr(definition)
 
     def test_isolated_registry_does_not_use_global_builders(self, tmp_path: Path):
@@ -257,6 +264,9 @@ class TestConfigBuilderRegistry:
                 "sources:\n"
                 "  account:\n"
                 "    source_name: custom\n"
+                "    kwarg:\n"
+                "      ExampleSource:\n"
+                "        interval: 30\n"
                 "    endpoint: https://example.com\n"
             )
 
@@ -265,6 +275,37 @@ class TestConfigBuilderRegistry:
             assert received == {"endpoint": "https://example.com"}
         finally:
             _restore_builders(original)
+
+    @pytest.mark.parametrize(
+        ("kwarg", "message"),
+        [
+            ("[]", "'kwarg' 应为映射"),
+            ("{ExampleSource: []}", "'kwarg.ExampleSource' 应为映射"),
+            (
+                "{ExampleSource: {config_key: other}}",
+                "'kwarg.ExampleSource.config_key' 不允许设置",
+            ),
+        ],
+    )
+    def test_rejects_invalid_source_kwarg(
+        self,
+        tmp_path: Path,
+        kwarg: str,
+        message: str,
+    ):
+        registry = ConfigBuilderRegistry()
+        registry.register("example", dict)
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            f"sources:\n  primary:\n    source_name: example\n    kwarg: {kwarg}\n"
+        )
+
+        with pytest.raises(ConfigError, match=message):
+            RuntimeConfig.from_yaml(
+                yaml_file,
+                environ={},
+                builder_registry=registry,
+            )
 
     @pytest.mark.parametrize(
         ("content", "message"),

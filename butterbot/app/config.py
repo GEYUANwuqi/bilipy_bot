@@ -17,6 +17,7 @@ ConfigBuilder = Callable[[Any], Any]
 _ENVIRONMENT_KEY = "environment"
 _SOURCES_KEY = "sources"
 _SOURCE_NAME_KEY = "source_name"
+_SOURCE_KWARG_KEY = "kwarg"
 _DEFAULT_ENV_PREFIX = "BUTTERBOT__"
 _ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _ENV_REFERENCE_PATTERN = re.compile(
@@ -33,12 +34,17 @@ class SourceDefinition:
     """一个已构建的命名 Source 配置定义.
 
     ``source_name`` 是 YAML 配置构建器名称，不等同于具体事件流的
-    ``SourceRef.source_kind``。
+    ``SourceRef.source_kind``。``kwarg`` 按 Source 类名保存可选的自动实例化参数。
     """
 
     config_key: str
     source_name: str
     config: Any = field(repr=False, compare=False)
+    kwarg: Mapping[str, Mapping[str, Any]] = field(
+        default_factory=lambda: MappingProxyType({}),
+        repr=False,
+        compare=False,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +174,8 @@ class RuntimeConfig:
         """从 YAML 和环境变量加载配置.
 
         Source 配置使用 ``sources.<config_key>.source_name`` 选择构建器。
+        可选的 ``kwarg.<SourceClassName>`` 映射声明需要由 ``BotApp`` 自动创建的
+        Source 及其构造关键字参数。
         ``bilibili``、``napcat`` 等 builder 名称不能直接作为顶层配置键。
 
         ``environment`` 中可以声明供当前配置使用的环境变量默认值，当前进程中的
@@ -303,6 +311,10 @@ def _build_configs(
             raise ConfigError(
                 "Source 配置 '%s' 缺少非空字符串 'source_name'" % config_key
             )
+        source_kwarg = _build_source_kwarg(
+            config_key,
+            source_config.pop(_SOURCE_KWARG_KEY, {}),
+        )
         builder = registry.get(source_name)
         if builder is None:
             raise ConfigError(
@@ -315,8 +327,47 @@ def _build_configs(
             config_key=config_key,
             source_name=source_name,
             config=config,
+            kwarg=source_kwarg,
         )
     return configs, definitions
+
+
+def _build_source_kwarg(
+    config_key: str,
+    value: Any,
+) -> Mapping[str, Mapping[str, Any]]:
+    """校验并冻结一个配置实例的 Source 构造参数."""
+    if not isinstance(value, dict):
+        raise ConfigError("Source 配置 '%s' 的 'kwarg' 应为映射" % config_key)
+
+    source_kwarg: dict[str, Mapping[str, Any]] = {}
+    for source_class, arguments in value.items():
+        if (
+            not isinstance(source_class, str)
+            or not source_class
+            or source_class != source_class.strip()
+        ):
+            raise ConfigError(
+                "Source 配置 '%s' 的 'kwarg' 类名必须是非空且无首尾空白的字符串"
+                % config_key
+            )
+        if not isinstance(arguments, dict):
+            raise ConfigError(
+                "Source 配置 '%s' 的 'kwarg.%s' 应为映射" % (config_key, source_class)
+            )
+        for argument_name in arguments:
+            if not isinstance(argument_name, str) or not argument_name:
+                raise ConfigError(
+                    "Source 配置 '%s' 的 'kwarg.%s' 参数名必须是非空字符串"
+                    % (config_key, source_class)
+                )
+        if "config_key" in arguments:
+            raise ConfigError(
+                "Source 配置 '%s' 的 'kwarg.%s.config_key' 不允许设置；"
+                "该值由外层配置键自动注入" % (config_key, source_class)
+            )
+        source_kwarg[source_class] = MappingProxyType(dict(arguments))
+    return MappingProxyType(source_kwarg)
 
 
 def _run_builder(
