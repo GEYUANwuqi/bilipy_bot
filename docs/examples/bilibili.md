@@ -7,15 +7,19 @@ title: Bilibili 示例
 ## 动态与直播状态
 
 源码：
-[`examples/manager_example.py`](https://github.com/GEYUANwuqi/ButterBot/blob/dev_main/examples/manager_example.py)
+[`examples/plugins/manager_example/`](https://github.com/GEYUANwuqi/ButterBot/tree/dev_main/examples/plugins/manager_example)
 
 ```bash
 cp examples/config.example.yaml config.yaml
-uv run examples/manager_example.py
+uv run butterbot plugins list
+uv run butterbot plugins check examples.plugin_app:create_app
+uv run butterbot run examples.plugin_app:create_app
 ```
 
-示例注册 `BiliDynamicSource` 和 `BiliLiveSource`，分别订阅动态变化、在线状态、
-开播与下播。
+按目录内 README 启用插件，并让 YAML 创建 `BiliDynamicSource` 和
+`BiliLiveSource`。插件通过 `SourceRef` 分别订阅动态变化、在线状态、开播与下播。
+入口模块只定义一个 `LocalPlugin` 子类，由 loader 自动实例化，不需要
+`create_plugin()`。
 
 ## 直播弹幕
 
@@ -31,8 +35,9 @@ uv run examples/live_danmaku_example.py
 
 ## 验证说明
 
-两个文件均通过 AST 语法测试和配置模板路径检查。CI 不调用 Bilibili 网络，因此
-账号凭证、房间/用户 ID、上游限流、字段变化和线程连接关闭需在实际环境验证。
+两个示例均通过 AST 语法测试；manager 插件还通过真实 manifest 自动发现测试。
+CI 不调用 Bilibili 网络，因此账号凭证、房间/用户 ID、上游限流、字段变化和线程
+连接关闭需在实际环境验证。
 
 ## 建议
 

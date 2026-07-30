@@ -61,13 +61,12 @@ NapCat 当前使用 `napcat.events`。
 下面的 provider 与 consumer 是两个独立注册单元：
 
 ```python
-from butterbot.app import (
-    BotApp,
+from butterbot.app import BotApp, RuntimeConfig
+from butterbot.plugin import (
     ExtensionRegistrar,
-    RuntimeConfig,
+    SourceRef,
     SubscriptionSpec,
 )
-from butterbot.core.source import SourceRef
 
 app = BotApp(RuntimeConfig())
 

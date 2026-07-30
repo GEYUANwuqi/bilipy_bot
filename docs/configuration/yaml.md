@@ -23,10 +23,11 @@ config = RuntimeConfig.from_yaml("config.yaml")
 6. `BotApp` 按 `kwarg` 中出现的 Source 类名自动实例化并注册事件源。
 
 实验插件模式必须改用 `PluginBootstrap`。它先读取同一份已合并配置中的
-`plugins.enabled`，在第 5 步前登记插件 builder、在第 6 步前登记插件 factory，
-随后才执行运行阶段注册。`RuntimeConfig.from_yaml()` 本身不会发现或导入插件。
+`plugins.enabled`、`plugins.local` 和插件私有配置，在第 5 步前登记插件
+builder、在第 6 步前登记插件 factory，随后才执行运行阶段注册。
+`RuntimeConfig.from_yaml()` 本身不会发现或导入插件。
 
-## 实验插件启用列表
+## 实验插件设置
 
 `plugins` 是 bootstrap 保留段，不会出现在
 `RuntimeConfig.get_config("plugins")` 中：
@@ -34,12 +35,30 @@ config = RuntimeConfig.from_yaml("config.yaml")
 ```yaml
 plugins:
   enabled:
+    - local.hello
     - example.feed
     - example.handler
+
+  local:
+    path: "./plugins"
+    auto_enable: false
+
+  config:
+    local.hello:
+      greeting: "${HELLO_GREETING:-hello}"
 ```
 
-只有列表中的 `butterbot.plugins` entry point 会被导入。未知字段、重复 ID、缺失
-entry point、版本不兼容和依赖错误都会使配置无效。分层环境覆盖同样适用：
+候选可来自已安装的 `butterbot.plugins` entry point，或本地
+`plugins/<folder>/plugin.toml`。默认只导入 `enabled` 中的候选；
+`local.auto_enable: true` 会显式选择本地目录中的全部合法候选。
+
+相对 `local.path` 以配置文件父目录为基准。本地目录不存在且没有自动启用时视为空；
+存在的无效 manifest 即使未启用也会使 `check` 和 `run` 失败。框架不修改
+`sys.path`，不跟随符号链接，也不自动安装依赖。
+
+`plugins.config` 的每个值必须是 mapping，只读注入对应插件，不进入
+`RuntimeConfig`。引用未发现 plugin ID 的私有配置会直接报错。未知字段、重复 ID、
+缺失候选、版本不兼容和依赖错误都会使配置无效。分层环境覆盖同样适用：
 
 ```bash
 export BUTTERBOT__PLUGINS__ENABLED='[example.feed, example.handler]'

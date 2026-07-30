@@ -11,8 +11,6 @@ title: 项目结构
 ```text
 butterbot/
 ├── app/                 # BotApp、RuntimeConfig、SourceManager
-│   └── extensions/
-│       └── experimental/ # 启动期 provisional 插件控制面
 ├── cli/                 # 应用加载、配置检查与本地进程管理
 ├── core/
 │   ├── api/             # BaseApi
@@ -22,6 +20,7 @@ butterbot/
 │   ├── filter/          # BaseFilter 与组合过滤器
 │   ├── source/          # BaseSource
 │   └── types/           # BaseType
+├── plugin/              # 插件契约、发现、注册、生命周期与 bootstrap
 ├── sources/
 │   ├── bilibili/        # Bilibili API、Source、Data、Type
 │   └── napcat/          # NapCat API、Source、Data、Filter、Type
@@ -42,13 +41,26 @@ from butterbot.app import BotApp, Event, RuntimeConfig
 from butterbot.sources.napcat import NapcatSource, NapcatType
 ```
 
-## 扩展开发者从哪里导入
+## 插件作者从哪里导入
 
-实现自定义扩展时，从具体 core 子模块导入契约：
+业务 Handler、本地目录插件和 distribution 插件统一从
+`butterbot.plugin` 导入插件契约：
 
 ```python
-from butterbot.core.api import BaseApi
-from butterbot.core.context import AppContext, ConfigProvider
+from butterbot.plugin import (
+    Event,
+    LocalPlugin,
+    PluginRegistrar,
+    SourceRef,
+    SubscriptionSpec,
+)
+```
+
+普通插件不应导入 `butterbot.core`。只有实现新事件源、数据模型、状态类型或底层
+API 的适配作者需要使用 core：
+
+```python
+from butterbot.core.data import BaseDataMixin
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
 ```
@@ -65,19 +77,28 @@ from butterbot.core.types import BaseType
 ```mermaid
 flowchart TD
   U[用户应用] --> APP[butterbot.app]
+  P[业务插件] --> PLUGIN[butterbot.plugin]
+  APP --> CONTRACT[plugin.source_ref]
+  PLUGIN --> APP
   APP --> CORE[butterbot.core]
+  PLUGIN --> CORE
   U --> SOURCES[butterbot.sources]
   SOURCES --> CORE
   SOURCES --> UTILS[butterbot.utils]
   CORE -. 不允许 .-> APP
+  CORE -. 不允许 .-> PLUGIN
   CORE -. 不允许 .-> SOURCES
 ```
+
+`BotApp` 只导入轻量的 `plugin.source_ref`；反向组合应用的 bootstrap 在运行时延迟
+导出，因此模块级导入图不会形成循环。
 
 ## 测试结构
 
 `tests/` 基本镜像生产包结构。异步测试使用 `pytest-asyncio` 严格模式；
 Source 和 API 测试通过替身避免外部网络。修改公共生命周期时，应优先查看
-`tests/app/`、`tests/core/event/` 和 `tests/core/source/`。
+`tests/app/`、`tests/plugin/`、`tests/core/event/` 和
+`tests/core/source/`。
 
 ## 下一步
 

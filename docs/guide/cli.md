@@ -54,6 +54,35 @@ butterbot run mybot.app:create_app
 已构造的全局 `BotApp` 不能用于插件模式。完整边界见
 [实验性插件系统](/extensions/plugins.html)。
 
+## 插件命令
+
+列出当前 `config.yaml` 能发现的 distribution 和本地目录候选：
+
+```bash
+butterbot plugins list
+```
+
+输出包含 ID、版本、来源类型、是否已选择、核心兼容、依赖结果和来源位置。未选择的
+本地候选只读取 `plugin.toml` 和 fingerprint 输入，不执行代码；distribution
+候选未选择时不会为了显示版本而导入，版本、兼容和依赖会标记为延迟检查。
+
+使用与运行期相同的发现、导入、两阶段注册和回滚路径检查插件：
+
+```bash
+butterbot plugins check
+butterbot plugins check mybot.app:create_app
+```
+
+创建可直接复制的本地目录插件模板：
+
+```bash
+butterbot plugins init local.hello
+```
+
+模板位于 `./plugins/local.hello/`，只有 `plugin.toml` 和 `plugin.py`，不创建
+`pyproject.toml`、不安装依赖、不修改 `config.yaml`，也不会覆盖已有目录。生成的
+entry 模块只定义一个 `LocalPlugin` 子类，由 loader 自动实例化，无需 factory。
+
 ## 入口选择
 
 ### 单 Bot 项目
@@ -114,10 +143,10 @@ butterbot check mybot.app:create_app
 ```
 
 该命令固定检查当前目录的 `config.yaml`，验证 YAML 结构、环境变量引用、
-`source_name`、`kwarg` 结构和 builder 构建。它会执行插件 discovery、两阶段
-配置、Source 构造和插件运行阶段注册，但不会启动外部 Source；结束前会完整撤销
-测试注册。提供 entry point 时会导入该应用 factory，从而与 `run` 使用同一构造
-路径。配置有效时退出码为 `0`，无效时为 `1`。
+`source_name`、`kwarg` 结构和 builder 构建。它会静态扫描本地 manifest，并对
+已选择候选执行插件 discovery、两阶段配置、Source 构造和插件运行阶段注册，但
+不会启动外部 Source；结束前会完整撤销测试注册。提供 entry point 时会导入该应用
+factory，从而与 `run` 使用同一构造路径。配置有效时退出码为 `0`，无效时为 `1`。
 
 检查会读取当前进程环境，因此生产部署中需要同时注入配置引用的变量。
 

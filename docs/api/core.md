@@ -57,18 +57,6 @@ async close(timeout: float = 5.0) -> None
 `Subscriber` 与 `SubscriberGroup` 从 `butterbot.core.event` 导出，主要用于总线
 实现和精细测试；应用订阅优先使用 `BotApp`。
 
-## `SourceRef`
-
-导入：`from butterbot.core.source import SourceRef`
-
-```python
-SourceRef(source_kind: str, config_key: str | None = None)
-```
-
-它是注册期逻辑引用，不替代 EventBus 的 UUID 路由。`source_kind` 应描述具体事件
-能力；`config_key` 对应命名配置实例。该接口当前用于插件原型，详见
-[插件原型基础](/extensions/prototype-foundations.html)。
-
 ## `BaseSource`
 
 导入：`from butterbot.core.source import BaseSource`

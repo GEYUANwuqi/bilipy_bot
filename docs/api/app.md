@@ -111,7 +111,7 @@ async __aexit__(exc_type, exc_val, exc_tb) -> None
 
 `start()` 可能抛 `SourceStartError`。启动被取消时会回滚此前已启动的 Source，
 完成后传播 `CancelledError`。`close()` 为终态清理，并按 Source、EventBus、API
-顺序尽力释放全部资源；存在 experimental PluginManager 时，会先按逆依赖顺序撤销
+顺序尽力释放全部资源；存在 PluginManager 时，会先按逆依赖顺序撤销
 插件 Handler、callback、Source 和 registry。`run()` 是拥有事件循环的同步入口，
 内部使用 `asyncio.run()`。
 
@@ -200,11 +200,21 @@ assert entry.owner_id == "example.plugin"
 
 ## 扩展原型
 
-`ExtensionRegistrar` 和 `SubscriptionSpec` 是 provisional 的手工注册 API。
-自动 discovery、两阶段 bootstrap、依赖状态机和统一回滚位于独立的
-`butterbot.app.extensions.experimental` 命名空间，见
+`SourceRef`、`ExtensionRegistrar`、`SubscriptionSpec`、插件发现、两阶段
+bootstrap、依赖状态机和统一回滚都位于独立的 `butterbot.plugin` 命名空间，见
+[插件 API](./plugin.md)和
 [实验性插件系统](/extensions/plugins.html)。底层手工契约见
 [插件原型基础](/extensions/prototype-foundations.html)。
+
+`PluginCandidate` 使用 `DistributionPluginOrigin` 或 `DirectoryPluginOrigin`
+记录来源；选中后统一成为 `LoadedPlugin` 并进入 `PluginManager`。本地 manifest
+转换为 `PluginDescriptor`，本地 entry 模块只需定义唯一 `LocalPlugin` 子类；
+loader 自动实例化，不需要 factory。两种来源最终都按 `PluginHooks` 进入 manager。
+
+`ConfigRegistrar` 和 `PluginRegistrar` 都提供当前 owner 隔离的只读 `settings`；
+`resource_root` 对本地目录插件是 manifest 所在目录，对 distribution 插件为
+`None`。`PluginStatus` 提供来源类型、来源位置和可选 fingerprint，但不保存插件
+私有配置。
 
 ## 门面中的其他导出
 
@@ -214,8 +224,8 @@ assert entry.owner_id == "example.plugin"
 - `SourceDefinition`、`ConfigBuilderRegistry`、`BuilderRegistration`
 - `SourceFactoryRegistry`、`FactoryRegistration`、`SourceFactoryEntry`
 - `SourceCatalog`、`SourceCatalogEntry`
-- `ExtensionRegistrar`、`SubscriptionSpec`
 - `BaseFilter`、`AndFilter`、`OrFilter`
 - `ButterError` 及公开异常子类
 
-详细定义见 [core API](./core.md) 与 [异常参考](./exceptions.md)。
+详细定义见 [core API](./core.md)、[插件 API](./plugin.md)与
+[异常参考](./exceptions.md)。

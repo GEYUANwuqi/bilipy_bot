@@ -15,6 +15,10 @@ title: 插件系统引入资本与准入复审
 >
 > 实施复核：2026-07-30 已按本文完成 P0-1 至 P0-7。第 3 至第 7 节保留实施前的
 > 基线证据和设计理由；实施结果以第 1.3、8.2 和 14 节为准。
+>
+> 后续结构复核：插件控制面已从 `butterbot/app/extensions/experimental/` 迁至
+> 顶层 `butterbot/plugin/`，`SourceRef` 同步移入插件契约；普通插件不再需要导入
+> `core`。第 3 至第 7 节中的旧路径作为实施前历史证据保留。
 
 ## 1. 执行结论
 
@@ -56,8 +60,8 @@ title: 插件系统引入资本与准入复审
 
 具备，原因有五项：
 
-1. `core` 不反向依赖 `app` 或具体 Source，实现层可以在 `app/extensions` 增加控制面，
-   不需要污染核心契约；
+1. `core` 不反向依赖 `app`、`plugin` 或具体 Source；插件控制面可以位于独立顶层包，
+   不需要污染事件源适配契约；
 2. Source、EventBus 和 API 已有明确生命周期和取消安全，插件层可以复用，不需要
    再造运行时；
 3. `SourceRef`、`SubscriptionHandle`、`owner_id` 和 `ExtensionRegistrar`
@@ -73,12 +77,12 @@ title: 插件系统引入资本与准入复审
 
 | P0 | 已实现结果 | 主要证据 |
 | --- | --- | --- |
-| P0-1 | 独立 experimental 命名空间；可信代码、启动期和非沙箱边界 | `butterbot/app/extensions/experimental/`、`docs/extensions/plugins.md` |
+| P0-1 | 独立 provisional 插件包；可信代码、启动期和非沙箱边界 | `butterbot/plugin/`、`docs/extensions/plugins.md` |
 | P0-2 | descriptor、固定 entry point group、allow-list、版本/依赖/capability 校验 | `descriptor.py`、`discovery.py` |
 | P0-3 | 配置与运行共用两阶段 `PluginBootstrap`；CLI 支持应用 factory | `bootstrap.py`、`butterbot/cli/main.py` |
 | P0-4 | owner-aware builder/factory receipt、稳定 factory ID 和 `SourceCatalog` | `config.py`、`source_factory.py`、`source_catalog.py` |
 | P0-5 | 配置与运行 registrar、统一收据、close callback、普通异常和取消回滚 | `registrar.py`、`manager.py` |
-| P0-6 | 确定性拓扑、`failed/blocked/closed` 状态和无 secret 诊断快照 | `manager.py`、`tests/app/extensions/` |
+| P0-6 | 确定性拓扑、`failed/blocked/closed` 状态和无 secret 诊断快照 | `manager.py`、`tests/plugin/` |
 | P0-7 | Source-only、Handler-only、Combined 三个独立 wheel；clean-venv 冒烟 | `tests/fixtures/plugins/`、`scripts/smoke_plugins.py`、CI Python 矩阵 |
 
 实现保留了旧路径：禁用插件时不会导入已安装 entry point，原有 `BotApp` 对象、
@@ -169,7 +173,7 @@ P0 实施后又在本地 clean venv 实测 Python 3.12.3、3.13.12 和 3.14.3：
 
 ## 4. 现有可复用资本
 
-### 4.1 模块边界正确
+### 4.1 模块边界正确（实施前方案）
 
 插件控制面最适合位于 `app` 层：
 
@@ -185,6 +189,12 @@ flowchart LR
 `SourceRef`、Event、BaseSource 等运行时契约继续留在 `core`；发现、依赖、启用列表和
 注册事务属于应用组合职责，应留在 `app/extensions`。不需要把 entry point 或
 PluginManifest 放进 `core`。
+
+后续结构复核修订了“必须留在 app/extensions”的位置判断：`SourceRef` 是
+Handler 插件的逻辑路由契约，和 `PluginDescriptor`、registrar 一并放入
+`butterbot.plugin` 更能形成单一用户入口。`BaseSource`、EventBus、数据和状态基类仍
+留在 `core`；core 不导入 plugin。`BotApp` 只依赖轻量
+`plugin.source_ref`，bootstrap 再依赖 app，模块级导入图保持无环。
 
 ### 4.2 生命周期足够可靠
 
@@ -296,7 +306,7 @@ EventBus 派发表模型：`butterbot/app/extensions/registrar.py:100-137`。
 
 - 第一阶段只支持可信插件、启动期加载、随整个进程关闭；
 - 新 API 放在明确的 provisional 命名空间，例如
-  `butterbot.app.extensions.experimental`；
+  `butterbot.plugin`；
 - 文档和异常明确“不支持运行期 install/reload，不隔离恶意代码”；
 - 保留现有显式 `BotApp.add_source()` 和 `subscribe()` 路径；
 - 在 3.1 正式稳定前决定当前门面导出的原型符号是迁移、保留还是标注实验性。
@@ -823,7 +833,7 @@ P0 实现采用以下边界：
 3. 缺失或歧义 SourceRef 使注册失败，下游保留 `blocked` 诊断，整体启动失败；
 4. entry point 与 plugin ID 一一对应；一个 distribution 可声明多个 entry point；
 5. 内置 `kwarg.<ClassName>` 保持兼容，新插件使用稳定 factory ID；
-6. 插件协议只从 `butterbot.app.extensions.experimental` 导出；
+6. 插件协议只从 `butterbot.plugin` 导出；
 7. L1 不支持运行期卸载，以进程 restart 作为完整重建边界；
 8. 暂不自动安装依赖，继续交给 uv/pip 和部署系统。
 
