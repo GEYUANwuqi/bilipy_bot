@@ -22,6 +22,32 @@ config = RuntimeConfig.from_yaml("config.yaml")
 5. 分离可选的 `kwarg`，再按 `source_name` 调用配置 builder；
 6. `BotApp` 按 `kwarg` 中出现的 Source 类名自动实例化并注册事件源。
 
+实验插件模式必须改用 `PluginBootstrap`。它先读取同一份已合并配置中的
+`plugins.enabled`，在第 5 步前登记插件 builder、在第 6 步前登记插件 factory，
+随后才执行运行阶段注册。`RuntimeConfig.from_yaml()` 本身不会发现或导入插件。
+
+## 实验插件启用列表
+
+`plugins` 是 bootstrap 保留段，不会出现在
+`RuntimeConfig.get_config("plugins")` 中：
+
+```yaml
+plugins:
+  enabled:
+    - example.feed
+    - example.handler
+```
+
+只有列表中的 `butterbot.plugins` entry point 会被导入。未知字段、重复 ID、缺失
+entry point、版本不兼容和依赖错误都会使配置无效。分层环境覆盖同样适用：
+
+```bash
+export BUTTERBOT__PLUGINS__ENABLED='[example.feed, example.handler]'
+```
+
+完整的打包、应用 factory 和信任边界见
+[实验性插件系统](/extensions/plugins.html)。
+
 ## 命名 Source 配置
 
 推荐把 Source 配置放在 `sources` 下：
@@ -91,6 +117,19 @@ sources:
 `kwarg` 完全可选。没有它时不会自动创建任何 Source，原有
 `app.add_source(SourceClass, ..., config_key=...)` 用法和运行期动态接入流程均
 保持不变。
+
+插件应使用 `register_factory(..., factory_id="source")` 声明稳定 ID，YAML 使用
+`kwarg.source`，而不是依赖 Python 类名：
+
+```yaml
+sources:
+  primary:
+    source_name: example
+    kwarg:
+      source: {}
+```
+
+内置 Source 类名继续作为兼容配置协议。
 
 同一 `source_name` 可以构建多个命名配置，适合多账号或多端点：
 
@@ -183,13 +222,19 @@ sources:
 from butterbot.app import BotApp, SourceFactoryRegistry
 
 source_registry = SourceFactoryRegistry.with_defaults()
-source_registry.register("feed", FeedSource)
+registration = source_registry.register(
+    "feed",
+    FeedSource,
+    factory_name="source",
+    owner_id="example.feed",
+)
 app = BotApp(config, source_factory_registry=source_registry)
 ```
 
-YAML 中即可使用 `kwarg.FeedSource`。类名默认取工厂的 `__name__`，也可通过
-`factory_name=` 显式指定。重复注册同一个 `source_name + factory_name` 会抛
-`ConfigError`。
+YAML 中即可使用 `kwarg.source`。省略 `factory_name` 时兼容使用工厂的
+`__name__`。重复注册同一个 `source_name + factory_name` 会抛 `ConfigError`；
+返回的 `FactoryRegistration` 可用 `unregister()` 精确撤销，旧收据不能误删后来
+替换的注册。
 
 builder 抛出的普通异常会包装为 `ConfigError` 并保留 cause。
 
@@ -200,6 +245,7 @@ builder 抛出的普通异常会包装为 `ConfigError` 并保留 cause。
 | 文件不存在 | `FileNotFoundError` |
 | YAML 语法错误 | `yaml.YAMLError` |
 | 顶层、`sources` 或实例结构错误 | `ConfigError` |
+| `plugins` 保留段或启用列表结构错误 | `ConfigError` |
 | `source_name` 缺失或没有注册 | `ConfigError` |
 | `kwarg` 或某个 Source 参数不是映射 | `ConfigError` |
 | `kwarg` 指向未注册工厂或构造失败 | `BotApp` 构造时抛 `ConfigError` |

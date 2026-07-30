@@ -19,6 +19,11 @@ environment:
   NAPCAT_URL: "ws://localhost:3001"
   NAPCAT_TOKEN: ""
 
+# ---------- 实验插件（默认关闭） ----------
+# 只列出明确可信且已安装的 butterbot.plugins entry point。
+plugins:
+  enabled: []
+
 # ---------- 命名 Source 配置 ----------
 # 自定义键（bili_account/qq_account）是运行时 config_key。
 # source_name 选择内置配置 builder；kwarg 中出现的类由 BotApp 自动创建并注册。

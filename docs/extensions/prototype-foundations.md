@@ -4,9 +4,9 @@ title: 插件原型基础
 
 # 插件原型基础
 
-ButterBot 当前仍然没有正式插件系统。本页描述的是用于验证插件模型的
-**provisional 基础 API**，它们允许测试 Source 提供方与 Handler 消费方的解耦，
-但不负责发现、导入或信任第三方代码。
+本页描述插件控制面之下仍可独立使用的 **provisional 手工基础 API**。自动发现、
+依赖排序和两阶段 bootstrap 已在[实验性插件系统](./plugins.md)中提供；这里的
+`ExtensionRegistrar` 继续服务不需要 distribution discovery 的显式 Python 组装。
 
 ## 已提供的基础
 
@@ -154,11 +154,10 @@ registration.unregister()
 同名注册默认抛 `ConfigError`。只有明确迁移已有构建器时才使用 `replace=True`；
 旧句柄不能撤销后来替换的注册。
 
-## 明确非目标
+## 手工 registrar 的边界
 
-本阶段没有实现：
+`ExtensionRegistrar` 本身不实现：
 
-- `PluginManifest`、插件基类或统一 PluginContext；
 - entry point、目录扫描、启用列表或依赖解析；
 - 只根据 `source_name` 猜测 Source factory（YAML 必须在 `kwarg` 中显式选择）；
 - 运行期延迟绑定新 Source；
@@ -166,8 +165,8 @@ registration.unregister()
 - owner 维度的 API 子集关闭或任意后台任务托管；
 - Python 插件沙箱、签名或权限隔离。
 
-因此这些 API 只适合核心仓库内和受控外部包的原型。插件发现层出现之前，不应把
-它们声明为稳定插件协议。
+需要 discovery 和插件级跨阶段回滚时使用 experimental `PluginBootstrap`；
+手工 registrar 和实验插件 API 都不构成不可信代码隔离。
 
 ## 原型验收边界
 
@@ -181,5 +180,6 @@ registration.unregister()
 6. owner 回调排空超时后只取消该 owner 的任务；
 7. 配置 builder 名称冲突和旧句柄误删得到阻止。
 
-下一阶段原型应在测试代码中手工提供 `SourceProvider`/factory，验证至少两种不同
-Source 形态后再决定其公开 Protocol；不要先加入自动发现。
+独立 distribution 的发布边界由 Source-only、Handler-only 和 Combined 三类
+wheel contract fixture 持续验证；这些结果仍不足以把 3.x experimental API
+声明为稳定协议。

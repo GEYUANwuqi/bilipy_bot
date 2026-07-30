@@ -111,8 +111,9 @@ async __aexit__(exc_type, exc_val, exc_tb) -> None
 
 `start()` 可能抛 `SourceStartError`。启动被取消时会回滚此前已启动的 Source，
 完成后传播 `CancelledError`。`close()` 为终态清理，并按 Source、EventBus、API
-顺序尽力释放全部资源；`run()` 是拥有事件循环的同步入口，内部使用
-`asyncio.run()`。
+顺序尽力释放全部资源；存在 experimental PluginManager 时，会先按逆依赖顺序撤销
+插件 Handler、callback、Source 和 registry。`run()` 是拥有事件循环的同步入口，
+内部使用 `asyncio.run()`。
 
 ## `RuntimeConfig`
 
@@ -171,17 +172,38 @@ registry.register(
     factory: Callable[..., BaseSource],
     *,
     factory_name: str | None = None,
-) -> None
+    owner_id: str | None = None,
+) -> FactoryRegistration
 ```
 
 注册表把 YAML 的 `source_name + kwarg` 类名解析为 Source 构造工厂。
 `with_defaults()` 包含内置 Bilibili 与 NapCat Source。自定义注册表通过
 `BotApp(source_factory_registry=registry)` 注入；同名注册抛 `ConfigError`。
+`factory_name` 是稳定的配置 ID，不要求等于类名。返回收据的 `unregister()` 只在
+收据仍拥有该注册时撤销；`resolve()` 返回包含 owner 的 `SourceFactoryEntry`。
+
+## `SourceCatalog`
+
+`SourceManager.source_catalog` 记录有 `source_kind` 的 Source：
+
+```python
+entry = app.manager.source_catalog.entries[0]
+assert entry.source_id == source.uuid
+assert entry.source_kind == "example.events"
+assert entry.config_key == "primary"
+assert entry.owner_id == "example.plugin"
+```
+
+`SourceRef` 查询通过 catalog 解析。插件拥有的重复
+`(source_kind, config_key)` 会在应用构造或注册期抛 `SourceError`，避免 Handler
+绑定到不确定实现。手工组装的旧式重复 Source 仍保留兼容行为。
 
 ## 扩展原型
 
-`ExtensionRegistrar` 和 `SubscriptionSpec` 是 provisional 的手工注册 API，不是
-插件加载器。契约、事务语义和非目标见
+`ExtensionRegistrar` 和 `SubscriptionSpec` 是 provisional 的手工注册 API。
+自动 discovery、两阶段 bootstrap、依赖状态机和统一回滚位于独立的
+`butterbot.app.extensions.experimental` 命名空间，见
+[实验性插件系统](/extensions/plugins.html)。底层手工契约见
 [插件原型基础](/extensions/prototype-foundations.html)。
 
 ## 门面中的其他导出
@@ -190,7 +212,8 @@ registry.register(
 
 - `Event`
 - `SourceDefinition`、`ConfigBuilderRegistry`、`BuilderRegistration`
-- `SourceFactoryRegistry`
+- `SourceFactoryRegistry`、`FactoryRegistration`、`SourceFactoryEntry`
+- `SourceCatalog`、`SourceCatalogEntry`
 - `ExtensionRegistrar`、`SubscriptionSpec`
 - `BaseFilter`、`AndFilter`、`OrFilter`
 - `ButterError` 及公开异常子类

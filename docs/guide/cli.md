@@ -10,7 +10,7 @@ title: 命令行
 `status`、`restart` 和 `close`。
 :::
 
-## 应用对象
+## 应用对象与 factory
 
 在用户模块中定义已经注册好 Source 和 Handler 的 `BotApp` 对象：
 
@@ -24,13 +24,35 @@ source = app.get_source(NapcatSource, "qq_account")
 assert source is not None
 ```
 
-CLI 使用 `module:attribute` 找到这个对象。入口必须是 `BotApp` 实例，不支持应用
-工厂或 coroutine。单 Bot 项目建议让 CLI 统一拥有运行和关闭生命周期，因此文件
-末尾不需要写 `app.run()`：
+CLI 使用 `module:attribute` 找到这个对象。未启用插件时，入口可以是 `BotApp`
+实例或返回 `BotApp` 的零参数同步 factory；不支持 coroutine。单 Bot 项目建议让
+CLI 统一拥有运行和关闭生命周期，因此文件末尾不需要写 `app.run()`：
 
 ```bash
 butterbot run mybot.app:app --background
 ```
+
+启用实验插件时，入口必须是接受 `config` 和 `source_factory_registry` 关键字参数
+的同步 factory。bootstrap 需要先注册插件 builder/factory，再构造应用：
+
+```python
+from butterbot.app import BotApp
+
+
+def create_app(*, config, source_factory_registry):
+    return BotApp(
+        config=config,
+        source_factory_registry=source_factory_registry,
+    )
+```
+
+```bash
+butterbot check mybot.app:create_app
+butterbot run mybot.app:create_app
+```
+
+已构造的全局 `BotApp` 不能用于插件模式。完整边界见
+[实验性插件系统](/extensions/plugins.html)。
 
 ## 入口选择
 
@@ -87,12 +109,15 @@ async with app:
 
 ```bash
 butterbot check
+# 插件模式建议提供与 run 相同的 factory
+butterbot check mybot.app:create_app
 ```
 
 该命令固定检查当前目录的 `config.yaml`，验证 YAML 结构、环境变量引用、
-`source_name`、`kwarg` 结构和 builder 构建，不导入应用模块，也不实例化或启动
-Source。具体工厂名和构造参数会在导入应用、构造 `BotApp` 时继续验证。配置有效时
-退出码为 `0`，无效时为 `1`。
+`source_name`、`kwarg` 结构和 builder 构建。它会执行插件 discovery、两阶段
+配置、Source 构造和插件运行阶段注册，但不会启动外部 Source；结束前会完整撤销
+测试注册。提供 entry point 时会导入该应用 factory，从而与 `run` 使用同一构造
+路径。配置有效时退出码为 `0`，无效时为 `1`。
 
 检查会读取当前进程环境，因此生产部署中需要同时注入配置引用的变量。
 
@@ -104,8 +129,9 @@ Source。具体工厂名和构造参数会在导入应用、构造 `BotApp` 时�
 butterbot run mybot.app:app
 ```
 
-前台模式适合终端、容器和 systemd。应用模块中的 `BotApp()` 从执行命令的当前目录
-读取 `config.yaml`。`SIGINT`、`SIGTERM` 会进入现有 `BotApp.close()` 路径。
+前台模式适合终端、容器和 systemd。未启用插件时，应用模块中的 `BotApp()` 从
+执行命令的当前目录读取 `config.yaml`；插件模式由 bootstrap 读取一次配置并注入
+应用 factory。`SIGINT`、`SIGTERM` 都进入 `BotApp.close()` 路径。
 
 后台运行：
 
