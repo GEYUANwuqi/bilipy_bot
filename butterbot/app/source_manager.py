@@ -6,6 +6,8 @@ from uuid import UUID
 from butterbot.core.exceptions import LifecycleError, SourceError, SourceStartError
 from butterbot.core.source import BaseSource, BaseSourceT, SourceRef
 
+from .source_catalog import SourceCatalog
+
 _SourceP = ParamSpec("_SourceP")
 
 if TYPE_CHECKING:
@@ -39,6 +41,7 @@ class SourceManager:
 
         # 事件源集合：UUID -> Source
         self._sources: dict[UUID, BaseSource] = {}
+        self._source_catalog = SourceCatalog()
 
         # 生命周期状态
         self._running = False
@@ -66,6 +69,11 @@ class SourceManager:
         """获取所有事件源的副本."""
         return dict(self._sources)
 
+    @property
+    def source_catalog(self) -> SourceCatalog:
+        """返回 Source 逻辑目录."""
+        return self._source_catalog
+
     # ============ Source 管理 ============ #
 
     def add_source(
@@ -92,6 +100,28 @@ class SourceManager:
         Raises:
             LifecycleError: 如果 SourceManager 已关闭
         """
+        return self._add_source(None, source_cls, *args, **kwargs)
+
+    def add_owned_source(
+        self,
+        owner_id: str,
+        source_cls: Callable[_SourceP, BaseSourceT],
+        *args: _SourceP.args,
+        **kwargs: _SourceP.kwargs,
+    ) -> BaseSourceT:
+        """为受管扩展注册 Source，owner 由插件控制面注入."""
+        if not owner_id or owner_id != owner_id.strip():
+            raise ValueError("owner_id 必须是非空且无首尾空白的字符串")
+        return self._add_source(owner_id, source_cls, *args, **kwargs)
+
+    def _add_source(
+        self,
+        owner_id: str | None,
+        source_cls: Callable[_SourceP, BaseSourceT],
+        *args: _SourceP.args,
+        **kwargs: _SourceP.kwargs,
+    ) -> BaseSourceT:
+        """实例化 Source，并原子登记 UUID 与逻辑目录."""
         if self._closed:
             raise LifecycleError("SourceManager 已关闭，无法添加事件源")
 
@@ -99,6 +129,7 @@ class SourceManager:
         if source.uuid in self._sources:
             raise SourceError("事件源 UUID %s 已注册" % source.uuid)
 
+        self._source_catalog.register(source, owner_id=owner_id)
         self._sources[source.uuid] = source
         if self._running:
             # 运行中新增：先注入上下文，让用户可以立刻订阅，再显式启动
@@ -147,6 +178,7 @@ class SourceManager:
         finally:
             removed_callbacks = self._ctx.bus.remove_subscribers(source_id)
             self._sources.pop(source_id, None)
+            self._source_catalog.remove(source_id)
         _log.info(
             "移除事件源: %s (uuid=%s)，同时清理 %s 个订阅回调",
             source.__class__.__name__,
@@ -156,6 +188,21 @@ class SourceManager:
         if cancelled is not None:
             raise cancelled
         return source
+
+    def discard_unstarted_source(self, source_id: UUID) -> BaseSource | None:
+        """同步撤销一个尚未启动的 Source.
+
+        仅供 BotApp 构造和插件 bootstrap 的注册期回滚使用。运行中的 Source 必须
+        通过 :meth:`remove_source` 完成异步停止。
+        """
+        source = self._sources.get(source_id)
+        if source is None:
+            return None
+        if source.running:
+            raise LifecycleError("运行中的 Source 不能同步撤销")
+        self._ctx.bus.remove_subscribers(source_id)
+        self._source_catalog.remove(source_id)
+        return self._sources.pop(source_id)
 
     @overload
     def get_source(self, source: UUID) -> BaseSource | None: ...
@@ -220,13 +267,9 @@ class SourceManager:
         应使用 :meth:`get_source`，多匹配时会得到 ``SourceError``。
         """
         return tuple(
-            source
-            for source in self._sources.values()
-            if source.source_kind == source_ref.source_kind
-            and (
-                source_ref.config_key is None
-                or source.config_key == source_ref.config_key
-            )
+            self._sources[source_id]
+            for source_id in self._source_catalog.resolve(source_ref)
+            if source_id in self._sources
         )
 
     def _require_source(self, source: BaseSource | UUID) -> BaseSource:
@@ -425,5 +468,6 @@ class SourceManager:
         finally:
             # 清理资源
             self._sources.clear()
+            self._source_catalog.clear()
             self._closed = True
             _log.info("SourceManager 已关闭")

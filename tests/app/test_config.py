@@ -80,6 +80,18 @@ class TestRuntimeConfigFromYaml:
         config = RuntimeConfig.from_yaml(yaml_file)
         assert config.get_config("anything") is None
 
+    def test_plugins_section_is_reserved_for_bootstrap(self, tmp_path: Path):
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "plugins:\n  enabled: []\nordinary: value\n",
+            encoding="utf-8",
+        )
+
+        config = RuntimeConfig.from_yaml(yaml_file, environ={})
+
+        assert config.get_config("plugins") is None
+        assert config.get_config("ordinary") == "value"
+
     @pytest.mark.parametrize("source_name", ["bilibili", "napcat"])
     def test_rejects_top_level_source_config(
         self,

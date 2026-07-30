@@ -24,7 +24,12 @@ from .config import (
     register_builder,
 )
 from .extensions import ExtensionRegistrar, SubscriptionSpec
-from .source_factory import SourceFactoryRegistry
+from .source_catalog import SourceCatalog, SourceCatalogEntry
+from .source_factory import (
+    FactoryRegistration,
+    SourceFactoryEntry,
+    SourceFactoryRegistry,
+)
 
 __all__ = [
     # 应用主入口
@@ -35,8 +40,12 @@ __all__ = [
     "BuilderRegistration",
     "ConfigBuilderRegistry",
     "ExtensionRegistrar",
+    "FactoryRegistration",
     "RuntimeConfig",
     "SourceDefinition",
+    "SourceCatalog",
+    "SourceCatalogEntry",
+    "SourceFactoryEntry",
     "SourceFactoryRegistry",
     "SubscriptionSpec",
     "register_builder",

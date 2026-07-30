@@ -15,6 +15,7 @@ from butterbot.core.exceptions import ConfigError
 ConfigBuilder = Callable[[Any], Any]
 
 _ENVIRONMENT_KEY = "environment"
+_PLUGINS_KEY = "plugins"
 _SOURCES_KEY = "sources"
 _SOURCE_NAME_KEY = "source_name"
 _SOURCE_KWARG_KEY = "kwarg"
@@ -52,6 +53,7 @@ class BuilderRegistration:
     """一次配置构建器注册的不透明句柄."""
 
     source_name: str
+    owner_id: str | None
     _registry: "ConfigBuilderRegistry" = field(repr=False)
     _token: object = field(repr=False)
 
@@ -66,6 +68,7 @@ class ConfigBuilderRegistry:
     def __init__(self) -> None:
         self._builders: dict[str, ConfigBuilder] = {}
         self._tokens: dict[str, object] = {}
+        self._owners: dict[str, str | None] = {}
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -82,6 +85,7 @@ class ConfigBuilderRegistry:
         builder: ConfigBuilder,
         *,
         replace: bool = False,
+        owner_id: str | None = None,
     ) -> BuilderRegistration:
         """注册构建器，默认拒绝静默覆盖已有名称."""
         if (
@@ -92,13 +96,20 @@ class ConfigBuilderRegistry:
             raise ValueError("source_name 必须是非空且无首尾空白的字符串")
         if not callable(builder):
             raise TypeError("builder 必须可调用")
+        if owner_id is not None and (
+            not isinstance(owner_id, str)
+            or not owner_id
+            or owner_id != owner_id.strip()
+        ):
+            raise ValueError("owner_id 必须是非空且无首尾空白的字符串")
         if source_name in self._builders and not replace:
             raise ConfigError("配置构建器 '%s' 已注册" % source_name)
 
         token = object()
         self._builders[source_name] = builder
         self._tokens[source_name] = token
-        return BuilderRegistration(source_name, self, token)
+        self._owners[source_name] = owner_id
+        return BuilderRegistration(source_name, owner_id, self, token)
 
     def unregister(self, registration: BuilderRegistration) -> bool:
         """按所有权句柄撤销构建器，旧句柄不能删除后来的替换注册."""
@@ -108,13 +119,18 @@ class ConfigBuilderRegistry:
             return False
         self._builders.pop(registration.source_name, None)
         self._tokens.pop(registration.source_name, None)
+        self._owners.pop(registration.source_name, None)
         return True
 
     def copy(self) -> "ConfigBuilderRegistry":
         """复制当前构建器集合，后续注册互不影响."""
         registry = ConfigBuilderRegistry()
         for source_name, builder in self._builders.items():
-            registry.register(source_name, builder)
+            registry.register(
+                source_name,
+                builder,
+                owner_id=self._owners[source_name],
+            )
         return registry
 
     @classmethod
@@ -201,29 +217,26 @@ class RuntimeConfig:
             yaml.YAMLError: YAML 文件格式错误.
             ConfigError: YAML 结构、环境变量引用或配置项构建失败.
         """
-        path = Path(path)
-        if not path.exists():
-            raise FileNotFoundError("配置文件不存在: %s" % path)
-        with path.open(encoding="utf-8") as file:
-            data = yaml.safe_load(file)
-        if not isinstance(data, dict):
-            raise ConfigError(
-                "配置文件格式错误: 顶层应为映射 (dict)，实际得到 %s"
-                % type(data).__name__
-            )
-
-        raw_data: dict[str, Any] = dict(data)
-        declared_environment = raw_data.pop(_ENVIRONMENT_KEY, {})
-        process_environment = dict(os.environ if environ is None else environ)
-        environment = _merge_environment(
-            declared_environment,
-            process_environment,
+        resolved_data = _load_resolved_yaml(
+            path,
+            environ=environ,
+            env_prefix=env_prefix,
         )
-        resolved_data = _resolve_environment_references(raw_data, environment)
-        _apply_environment_overrides(resolved_data, environment, env_prefix)
-
-        configs, source_definitions = _build_configs(
+        return cls._from_resolved_data(
             resolved_data,
+            builder_registry=builder_registry,
+        )
+
+    @classmethod
+    def _from_resolved_data(
+        cls,
+        resolved_data: Mapping[str, Any],
+        *,
+        builder_registry: ConfigBuilderRegistry | None = None,
+    ) -> RuntimeConfig:
+        """从已完成环境变量合并的数据构建配置，供 bootstrap 复用."""
+        configs, source_definitions = _build_configs(
+            dict(resolved_data),
             builder_registry=builder_registry,
         )
         runtime_config = cls(**configs)
@@ -281,6 +294,7 @@ def _build_configs(
 ) -> tuple[dict[str, Any], dict[str, SourceDefinition]]:
     """保留普通顶层配置，并构建命名 Source 配置."""
     registry = builder_registry or _DEFAULT_BUILDER_REGISTRY
+    data.pop(_PLUGINS_KEY, None)
     source_definitions = data.pop(_SOURCES_KEY, {})
     if not isinstance(source_definitions, dict):
         raise ConfigError("配置项 'sources' 应为映射")
@@ -330,6 +344,35 @@ def _build_configs(
             kwarg=source_kwarg,
         )
     return configs, definitions
+
+
+def _load_resolved_yaml(
+    path: str | Path,
+    *,
+    environ: Mapping[str, str] | None = None,
+    env_prefix: str = _DEFAULT_ENV_PREFIX,
+) -> dict[str, Any]:
+    """读取 YAML，并完成与 RuntimeConfig 一致的环境变量合并."""
+    resolved_path = Path(path)
+    if not resolved_path.exists():
+        raise FileNotFoundError("配置文件不存在: %s" % resolved_path)
+    with resolved_path.open(encoding="utf-8") as file:
+        data = yaml.safe_load(file)
+    if not isinstance(data, dict):
+        raise ConfigError(
+            "配置文件格式错误: 顶层应为映射 (dict)，实际得到 %s" % type(data).__name__
+        )
+
+    raw_data: dict[str, Any] = dict(data)
+    declared_environment = raw_data.pop(_ENVIRONMENT_KEY, {})
+    process_environment = dict(os.environ if environ is None else environ)
+    environment = _merge_environment(
+        declared_environment,
+        process_environment,
+    )
+    resolved_data = _resolve_environment_references(raw_data, environment)
+    _apply_environment_overrides(resolved_data, environment, env_prefix)
+    return resolved_data
 
 
 def _build_source_kwarg(
