@@ -109,11 +109,12 @@ async __aenter__() -> BotApp
 async __aexit__(exc_type, exc_val, exc_tb) -> None
 ```
 
-`start()` 可能抛 `SourceStartError`。启动被取消时会回滚此前已启动的 Source，
-完成后传播 `CancelledError`。`close()` 为终态清理，并按 Source、EventBus、API
-顺序尽力释放全部资源；存在 PluginManager 时，会先按逆依赖顺序撤销
-插件 Handler、callback、Source 和 registry。`run()` 是拥有事件循环的同步入口，
-内部使用 `asyncio.run()`。
+`start()` 可能抛 `SourceStartError` 或 `PluginRegistrationError`。启动被取消时会
+回滚此前已启动的 Source 和插件注册，完成后传播 `CancelledError`。存在
+PluginManager 时，全部 Source 启动后按依赖顺序调用插件 `on_start()`；停止和关闭
+时先按逆依赖顺序调用 `on_stop()`。`close()` 随后撤销插件 Handler、callback、
+Source 和 registry，再按 Source、EventBus、API 顺序尽力释放其余资源。`run()` 是
+拥有事件循环的同步入口，内部使用 `asyncio.run()`。
 
 ## `RuntimeConfig`
 
@@ -208,8 +209,9 @@ bootstrap、依赖状态机和统一回滚都位于独立的 `butterbot.plugin` 
 
 `PluginCandidate` 使用 `DistributionPluginOrigin` 或 `DirectoryPluginOrigin`
 记录来源；选中后统一成为 `LoadedPlugin` 并进入 `PluginManager`。本地 manifest
-转换为 `PluginDescriptor`，本地 entry 模块只需定义唯一 `LocalPlugin` 子类；
-loader 自动实例化，不需要 factory。两种来源最终都按 `PluginHooks` 进入 manager。
+转换为 `PluginDescriptor`，本地 entry 模块只需定义唯一 `ButterPlugin` 子类；
+loader 自动实例化，不需要 factory。两种来源最终都实例化为 `ButterPlugin` 并进入
+同一个 manager。
 
 `ConfigRegistrar` 和 `PluginRegistrar` 都提供当前 owner 隔离的只读 `settings`；
 `resource_root` 对本地目录插件是 manifest 所在目录，对 distribution 插件为

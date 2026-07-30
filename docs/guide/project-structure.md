@@ -20,7 +20,11 @@ butterbot/
 │   ├── filter/          # BaseFilter 与组合过滤器
 │   ├── source/          # BaseSource
 │   └── types/           # BaseType
-├── plugin/              # 插件契约、发现、注册、生命周期与 bootstrap
+├── plugin/
+│   ├── contracts/       # ButterPlugin、descriptor、路由和订阅契约
+│   ├── discovery/       # catalog、目录加载、manifest、来源与设置
+│   ├── runtime/         # bootstrap、registrar、manager 与生命周期事务
+│   └── errors.py        # 插件系统共享异常
 ├── sources/
 │   ├── bilibili/        # Bilibili API、Source、Data、Type
 │   └── napcat/          # NapCat API、Source、Data、Filter、Type
@@ -49,7 +53,7 @@ from butterbot.sources.napcat import NapcatSource, NapcatType
 ```python
 from butterbot.plugin import (
     Event,
-    LocalPlugin,
+    ButterPlugin,
     PluginRegistrar,
     SourceRef,
     SubscriptionSpec,
@@ -78,7 +82,7 @@ from butterbot.core.types import BaseType
 flowchart TD
   U[用户应用] --> APP[butterbot.app]
   P[业务插件] --> PLUGIN[butterbot.plugin]
-  APP --> CONTRACT[plugin.source_ref]
+  APP --> CONTRACT[plugin.contracts.routing]
   PLUGIN --> APP
   APP --> CORE[butterbot.core]
   PLUGIN --> CORE
@@ -90,8 +94,13 @@ flowchart TD
   CORE -. 不允许 .-> SOURCES
 ```
 
-`BotApp` 只导入轻量的 `plugin.source_ref`；反向组合应用的 bootstrap 在运行时延迟
-导出，因此模块级导入图不会形成循环。
+`BotApp` 只导入轻量的 `plugin.contracts.routing`；反向组合应用的 bootstrap、
+registrar 和 manager 由 `butterbot.plugin` 门面延迟导出，因此模块级导入图不会
+形成循环。业务插件只依赖根门面，不把上述内部分类当作稳定导入路径。
+
+`butterbot/plugin/` 内部同一目录的模块使用单点相对导入；跨
+`contracts/discovery/runtime` 目录或访问根目录模块时使用完整
+`butterbot.plugin...` 绝对导入。
 
 ## 测试结构
 

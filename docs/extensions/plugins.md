@@ -51,10 +51,10 @@ entry point 名必须和 `PluginDescriptor.plugin_id` 完全一致。ID 使用�
 不要使用可变的类名或展示名称。
 
 ```python
-from butterbot.plugin import PluginBase, PluginDescriptor
+from butterbot.plugin import ButterPlugin, PluginDescriptor
 
 
-class ExamplePlugin(PluginBase):
+class ExamplePlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="example.feed",
         version="1.0.0",
@@ -95,21 +95,29 @@ requires_distributions = []
 ```
 
 入口只允许插件根目录的直接 `.py` 子文件。该模块必须且只能定义一个
-`LocalPlugin` 子类，loader 会自动实例化；插件代码不重复声明 descriptor，也不需要
+`ButterPlugin` 子类，loader 会自动实例化；插件代码不重复声明 descriptor，也不需要
 factory：
 
 ```python
-from butterbot.plugin import LocalPlugin
+from butterbot.plugin import ButterPlugin
 
 
-class HelloPlugin(LocalPlugin):
+class HelloPlugin(ButterPlugin):
     async def register(self, registrar) -> None:
         greeting = str(registrar.settings.get("greeting", "hello"))
         resource = registrar.resource_root
         # 使用 registrar 注册 Source、Handler 或 close callback
+
+    async def on_start(self) -> None:
+        # 全部 Source 启动成功后执行
+        ...
+
+    async def on_stop(self) -> None:
+        # 停止 Source 和撤销插件注册前执行
+        ...
 ```
 
-只有 `candidate.__module__ == entry_module.__name__` 的具体 `LocalPlugin` 子类会被
+只有 `candidate.__module__ == entry_module.__name__` 的具体 `ButterPlugin` 子类会被
 计入，因此从 helper 导入的基类或其他插件类不会被误选。找到零个或多个候选都会
 报错；实现不会扫描“第一个看起来像插件的类”，也不使用跨模块全局注册表。
 
@@ -137,7 +145,7 @@ import 前被拒绝。未启用本地插件只读取 manifest 和用于 fingerpr
 from butterbot.plugin import ConfigRegistrar
 
 
-class ExamplePlugin(PluginBase):
+class ExamplePlugin(ButterPlugin):
     # descriptor 同上
 
     def register_config(self, registrar: ConfigRegistrar) -> None:
@@ -157,7 +165,7 @@ class ExamplePlugin(PluginBase):
 
 ```python
 from butterbot.plugin import (
-    PluginBase,
+    ButterPlugin,
     PluginDescriptor,
     PluginRegistrar,
     SourceRef,
@@ -165,11 +173,7 @@ from butterbot.plugin import (
 )
 
 
-async def on_item(event) -> None:
-    ...
-
-
-class HandlerPlugin(PluginBase):
+class HandlerPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="example.handler",
         version="1.0.0",
@@ -183,15 +187,29 @@ class HandlerPlugin(PluginBase):
             SubscriptionSpec(
                 source=SourceRef("example.events", "primary"),
                 status="example.item",
-                callback=on_item,
+                callback=self.handle_item,
             )
         )
         registrar.on_close(close_plugin_resource)
+
+    async def on_start(self) -> None:
+        """全部 Source 启动后执行一次."""
+
+    async def on_stop(self) -> None:
+        """停止 Source 和撤销 Handler 前执行一次."""
+
+    async def handle_item(self, event) -> None:
+        ...
 ```
 
 `PluginManager` 注入 owner ID。插件不能代替其他插件登记 Source 或 Handler。
-L1 插件不得在 registrar 之外创建后台 task；长期任务应由 Source 的
-`on_start()`/`on_stop()` 管理，Handler task 由 EventBus 管理。
+建议把 Handler 写成插件实例方法，便于复用插件实例状态。`register()` 只执行一次；
+应用每次启动和停止都会成对调用插件 `on_start()`/`on_stop()`。启动回调按依赖顺序
+执行，停止回调按逆依赖顺序执行。
+
+插件 `on_start()` 只适合依赖 Source 已就绪的轻量初始化。L1 插件仍不得在 registrar
+之外创建无人托管的后台 task；长期任务应由 Source 的 `on_start()`/`on_stop()`
+管理，Handler task 由 EventBus 管理。
 
 ## 配置与应用 factory
 

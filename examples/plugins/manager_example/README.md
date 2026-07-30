@@ -1,8 +1,9 @@
 # Bilibili Manager 本地插件示例
 
 这个目录可以整体复制，不需要 `pyproject.toml`、wheel 或安装命令。`plugin.py`
-只定义一个 `LocalPlugin` 子类；启动时会被自动发现和实例化，不需要
-`create_plugin()`。
+只定义一个 `ButterPlugin` 子类；启动时会被自动发现和实例化，不需要
+`create_plugin()`。所有 Handler 都是插件实例方法，并通过 `self.handle_*` 注册；
+`on_start()`/`on_stop()` 展示了 Source 启动后的初始化和停止前清理边界。
 
 从仓库根目录准备配置：
 
@@ -50,5 +51,6 @@ uv run butterbot plugins check examples.plugin_app:create_app
 uv run butterbot run examples.plugin_app:create_app
 ```
 
-插件只注册 Handler；Bilibili Source 仍由 YAML 和内置 factory 创建。关闭时 Handler
-由 `PluginManager` 按 owner 自动撤销。
+插件只注册 Handler；Bilibili Source 仍由 YAML 和内置 factory 创建。启动时先启动
+全部 Source，再调用插件 `on_start()`；关闭时先调用 `on_stop()`，随后由
+`PluginManager` 按 owner 自动撤销 Handler。

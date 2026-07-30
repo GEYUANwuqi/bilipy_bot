@@ -18,8 +18,9 @@ uv run butterbot run examples.plugin_app:create_app
 
 按目录内 README 启用插件，并让 YAML 创建 `BiliDynamicSource` 和
 `BiliLiveSource`。插件通过 `SourceRef` 分别订阅动态变化、在线状态、开播与下播。
-入口模块只定义一个 `LocalPlugin` 子类，由 loader 自动实例化，不需要
-`create_plugin()`。
+入口模块只定义一个 `ButterPlugin` 子类，由 loader 自动实例化，不需要
+`create_plugin()`。Handler 作为插件实例方法注册，示例同时展示
+`on_start()`/`on_stop()` 生命周期回调。
 
 ## 直播弹幕
 

@@ -81,7 +81,7 @@ butterbot plugins init local.hello
 
 模板位于 `./plugins/local.hello/`，只有 `plugin.toml` 和 `plugin.py`，不创建
 `pyproject.toml`、不安装依赖、不修改 `config.yaml`，也不会覆盖已有目录。生成的
-entry 模块只定义一个 `LocalPlugin` 子类，由 loader 自动实例化，无需 factory。
+entry 模块只定义一个 `ButterPlugin` 子类，由 loader 自动实例化，无需 factory。
 
 ## 入口选择
 
