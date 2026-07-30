@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+from butterbot.app.extensions.experimental import (
+    ConfigRegistrar,
+    PluginBase,
+    PluginDescriptor,
+    PluginRegistrar,
+    SubscriptionSpec,
+)
+from butterbot.core.data import BaseDataMixin
+from butterbot.core.event import Event
+from butterbot.core.source import BaseSource, SourceRef
+from butterbot.core.types import BaseType
+
+RECEIVED: list[str] = []
+
+
+class CombinedType(BaseType):
+    ALL = "combined.all"
+    MESSAGE = "combined.message"
+
+
+class CombinedData(BaseDataMixin):
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+
+class CombinedSource(BaseSource):
+    source_kind = "combined.events"
+    supported_types = CombinedType
+
+    async def on_start(self) -> None:
+        await self.ctx.bus.publish(
+            self.uuid,
+            Event(CombinedData("combined"), CombinedType.MESSAGE),
+        )
+
+    async def on_stop(self) -> None:
+        pass
+
+
+class CombinedPlugin(PluginBase):
+    descriptor = PluginDescriptor(
+        plugin_id="contract.combined",
+        version="1.0.0",
+        requires_core=">=3.1.0.dev2,<4",
+        provides=("combined.events", "combined.handler"),
+    )
+
+    def register_config(self, registrar: ConfigRegistrar) -> None:
+        registrar.register_builder("combined", dict)
+        registrar.register_factory(
+            "combined",
+            CombinedSource,
+            factory_id="source",
+        )
+
+    async def register(self, registrar: PluginRegistrar) -> None:
+        async def handle(event: Event) -> None:
+            RECEIVED.append(str(event.data.value))
+
+        registrar.add_subscription(
+            SubscriptionSpec(
+                source=SourceRef("combined.events", "secondary"),
+                status="combined.message",
+                callback=handle,
+            )
+        )
+
+
+def create_plugin() -> CombinedPlugin:
+    return CombinedPlugin()
+
+
+__all__ = ["RECEIVED", "create_plugin"]

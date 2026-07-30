@@ -75,7 +75,6 @@ jobs:
         run: uv run pytest
 
       - name: Build distributions
-        if: matrix.python-version == '3.12'
         run: uv build
 
       - name: Smoke test wheel
@@ -88,3 +87,23 @@ jobs:
           cd "$smoke_dir"
           "$GITHUB_WORKSPACE/.smoke-venv/bin/python" \
             "$GITHUB_WORKSPACE/scripts/smoke_wheel.py"
+
+      - name: Build external plugin contract fixtures
+        shell: bash
+        run: |
+          mkdir -p plugin-dist
+          for fixture in source_only handler_only combined; do
+            uv build "tests/fixtures/plugins/$fixture" --out-dir plugin-dist
+          done
+
+      - name: Smoke test external plugin wheels
+        shell: bash
+        run: |
+          uv venv .plugin-smoke-venv --python "${{ matrix.python-version }}"
+          uv pip install \
+            --python .plugin-smoke-venv/bin/python \
+            dist/*.whl plugin-dist/*.whl
+          smoke_dir="$(mktemp -d)"
+          cd "$smoke_dir"
+          "$GITHUB_WORKSPACE/.plugin-smoke-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/smoke_plugins.py"

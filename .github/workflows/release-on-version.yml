@@ -108,6 +108,25 @@ jobs:
           "$GITHUB_WORKSPACE/.smoke-venv/bin/python" \
             "$GITHUB_WORKSPACE/scripts/smoke_wheel.py"
 
+      - name: Build external plugin contract fixtures
+        shell: bash
+        run: |
+          mkdir -p plugin-dist
+          for fixture in source_only handler_only combined; do
+            uv build "tests/fixtures/plugins/$fixture" --out-dir plugin-dist
+          done
+
+      - name: Smoke test external plugin wheels
+        shell: bash
+        run: |
+          uv pip install \
+            --python .smoke-venv/bin/python \
+            plugin-dist/*.whl
+          smoke_dir="$(mktemp -d)"
+          cd "$smoke_dir"
+          "$GITHUB_WORKSPACE/.smoke-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/smoke_plugins.py"
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
