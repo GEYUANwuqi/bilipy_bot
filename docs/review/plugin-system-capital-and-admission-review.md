@@ -18,7 +18,9 @@ title: 插件系统引入资本与准入复审
 >
 > 后续结构复核：插件控制面已从 `butterbot/app/extensions/experimental/` 迁至
 > 顶层 `butterbot/plugin/`，`SourceRef` 同步移入插件契约；普通插件不再需要导入
-> `core`。第 3 至第 7 节中的旧路径作为实施前历史证据保留。
+> `core`。当前实现进一步按 `contracts/`、`discovery/`、`runtime/` 分类，并以
+> `ButterPlugin` 作为两种来源的唯一基类。第 3 至第 7 节中的旧路径作为实施前
+> 历史证据保留。
 
 ## 1. 执行结论
 
@@ -78,11 +80,11 @@ title: 插件系统引入资本与准入复审
 | P0 | 已实现结果 | 主要证据 |
 | --- | --- | --- |
 | P0-1 | 独立 provisional 插件包；可信代码、启动期和非沙箱边界 | `butterbot/plugin/`、`docs/extensions/plugins.md` |
-| P0-2 | descriptor、固定 entry point group、allow-list、版本/依赖/capability 校验 | `descriptor.py`、`discovery.py` |
-| P0-3 | 配置与运行共用两阶段 `PluginBootstrap`；CLI 支持应用 factory | `bootstrap.py`、`butterbot/cli/main.py` |
+| P0-2 | descriptor、固定 entry point group、allow-list、版本/依赖/capability 校验 | `plugin/contracts/descriptor.py`、`plugin/discovery/catalog.py` |
+| P0-3 | 配置与运行共用两阶段 `PluginBootstrap`；CLI 支持应用 factory | `plugin/runtime/bootstrap.py`、`butterbot/cli/main.py` |
 | P0-4 | owner-aware builder/factory receipt、稳定 factory ID 和 `SourceCatalog` | `config.py`、`source_factory.py`、`source_catalog.py` |
-| P0-5 | 配置与运行 registrar、统一收据、close callback、普通异常和取消回滚 | `registrar.py`、`manager.py` |
-| P0-6 | 确定性拓扑、`failed/blocked/closed` 状态和无 secret 诊断快照 | `manager.py`、`tests/plugin/` |
+| P0-5 | 配置与运行 registrar、统一收据、close callback、普通异常和取消回滚 | `plugin/runtime/registrar.py`、`plugin/runtime/manager.py` |
+| P0-6 | 确定性拓扑、`failed/blocked/closed` 状态和无 secret 诊断快照 | `plugin/runtime/manager.py`、`tests/plugin/` |
 | P0-7 | Source-only、Handler-only、Combined 三个独立 wheel；clean-venv 冒烟 | `tests/fixtures/plugins/`、`scripts/smoke_plugins.py`、CI Python 矩阵 |
 
 实现保留了旧路径：禁用插件时不会导入已安装 entry point，原有 `BotApp` 对象、
@@ -194,7 +196,8 @@ PluginManifest 放进 `core`。
 Handler 插件的逻辑路由契约，和 `PluginDescriptor`、registrar 一并放入
 `butterbot.plugin` 更能形成单一用户入口。`BaseSource`、EventBus、数据和状态基类仍
 留在 `core`；core 不导入 plugin。`BotApp` 只依赖轻量
-`plugin.source_ref`，bootstrap 再依赖 app，模块级导入图保持无环。
+`plugin.contracts.routing`，根门面再延迟导入 runtime 控制面，模块级导入图保持
+无环。
 
 ### 4.2 生命周期足够可靠
 

@@ -4,12 +4,13 @@ title: 本地目录与完整插件系统可行性及实施复核
 
 # ButterBot 本地目录与完整插件系统可行性及实施复核
 
-> 审议日期：2026-07-30
+> 审议日期：2026-07-31
 >
-> Git 基线：`dev_main`，`HEAD=ab19658`，标签仍为 `v3.1.0.dev2`
+> Git 基线：`dev_main`，`HEAD=8375474`
 >
-> P0 已拆分为 `b3f3117`、`fa3cf8b`、`0319d37`、`ab19658` 四个提交；
-> L1D/L1H 实现与本报告复核结论按要求保留为未提交工作区改动。
+> P0 与 L1D/L1H 已按 feat、test、examples、docs 职责拆分提交；本轮
+> `ButterPlugin` 统一命名、`contracts/discovery/runtime` 结构调整和生命周期补强
+> 也已拆为功能与文档提交，本报告继续单独提交。
 >
 > 本报告所说的“本地目录插件”是指：用户把一个不含 `pyproject.toml`、不构建
 > wheel、也不安装为 Python distribution 的插件目录复制到项目
@@ -19,8 +20,8 @@ title: 本地目录与完整插件系统可行性及实施复核
 
 ### 0.1 当前结论
 
-**当前未提交工作区已经达到 L1D 和 L1H 的实验版实现线，可以称为“完整的、可信
-代码、启动期 ButterBot 混合插件系统实验版”。**
+**当前 `dev_main` 已达到 L1D 和 L1H 的实验版实现线，可以称为“完整的、可信代码、
+启动期 ButterBot 混合插件系统实验版”。本轮结构调整不改变该能力边界。**
 
 这里的“完整”严格限定为：
 
@@ -47,12 +48,12 @@ title: 本地目录与完整插件系统可行性及实施复核
 | 目标 | 复核结果 |
 | --- | --- |
 | L1E：entry-point distribution | 已由 P0 提交并通过外部 wheel contract |
-| L1D：便携本地目录 | 已实现，等待代码审查与提交 |
-| L1H：两种来源统一控制面 | 已实现，等待代码审查与提交 |
+| L1D：便携本地目录 | 已实现并提交 |
+| L1H：两种来源统一控制面 | 已实现并提交 |
 | 稳定插件 API | 未准入；`butterbot.plugin` 仍是 provisional API |
 | L2 动态插件 | 未准入，也不属于本轮 |
 
-### 0.2 P0 提交事实
+### 0.2 提交事实
 
 P0 已按职责拆成四个可独立审查和回退的提交：
 
@@ -62,22 +63,28 @@ P0 已按职责拆成四个可独立审查和回退的提交：
 | `fa3cf8b feat(plugin)` | experimental bootstrap、manager、registrar 和 CLI 接线 |
 | `0319d37 test(plugin)` | 三个外部 wheel fixture、smoke 和 CI |
 | `ab19658 docs(plugin)` | provisional API、配置、CLI 和 P0 审议文档 |
+| `8e6f12d feat(plugin)` | 统一插件公共包、目录自动发现与混合控制面 |
+| `71a0e5d test(plugin)` | 本地目录与多 Python 版本合约验证 |
+| `2053bd5 feat(examples)` | 将 manager 示例迁移为便携目录插件 |
+| `1bf2c59 docs(plugin)` | 更新目录插件指南与本审议报告 |
+| `8336956 feat(plugin)` | 统一插件契约、内部结构和生命周期回调 |
+| `8375474 docs(plugin)` | 更新插件契约、生命周期与实例指南 |
 
-本地目录与混合来源代码没有混入上述提交，符合“先稳定 P0，再单独审查 L1D/L1H”
-的原准入要求。
+本地目录与混合来源代码没有混入 P0 四个提交，后续也继续按功能、测试、示例和文档
+拆分，符合“先稳定 P0，再单独审查 L1D/L1H”的原准入要求。
 
 ### 0.3 已实现控制点
 
 | 原缺口 | 实现证据 | 结果 |
 | --- | --- | --- |
-| 来源模型 | `origin.py` 的 distribution/directory origin | 两种来源可诊断 |
-| 统一候选 | `discovery.py` 的 `PluginCandidate` | 同一 selection/catalog |
-| manifest | `manifest.py` 的 schema 1 parser | import 前静态失败 |
-| 目录索引 | `directory.py:index_local_manifests()` | 直接子目录、稳定排序 |
+| 来源模型 | `plugin/discovery/origin.py` | 两种来源可诊断 |
+| 统一候选 | `plugin/discovery/catalog.py` 的 `PluginCandidate` | 同一 selection/catalog |
+| manifest | `plugin/discovery/manifest.py` 的 schema 1 parser | import 前静态失败 |
+| 目录索引 | `plugin/discovery/directory.py:index_local_manifests()` | 直接子目录、稳定排序 |
 | 路径边界 | manifest/entry/root symlink 与 containment 检查 | 无目录逃逸 |
 | 模块隔离 | `_butterbot_local.p_<hash>` 合成 package | 不修改 `sys.path` |
 | 相对 import | package `__path__` + file spec | `.helpers` 可用 |
-| 自动类发现 | entry 模块唯一 `LocalPlugin` 子类 | 无需 factory 或全局 registry |
+| 自动类发现 | entry 模块唯一 `ButterPlugin` 子类 | 无需 factory 或全局 registry |
 | import 回滚 | 只清本轮合成 namespace | 失败不污染其他候选 |
 | 混合依赖 | 统一 `PluginCatalog` 拓扑 | 支持两个方向依赖 |
 | 配置 | `plugins.config.<id>` | registrar 只读 owner namespace |
@@ -112,7 +119,7 @@ plugins:
 4. `auto_enable` 默认关闭，与 `enabled` 取并集；
 5. 有 manifest 的无效候选即使 disabled 也使 check/run 失败；
 6. directory/distribution 同 ID 全局拒绝，不做隐式覆盖；
-7. 本地入口限于根目录直接 `.py` 文件，且必须定义唯一 `LocalPlugin` 子类；
+7. 本地入口限于根目录直接 `.py` 文件，且必须定义唯一 `ButterPlugin` 子类；
 8. 不修改 `sys.path`，不跟随 symlink；
 9. 本地 Python distribution 依赖只检查，不安装；
 10. 文件变化只保证 restart 后新进程生效。
@@ -134,21 +141,33 @@ entry = "plugin.py"
 
 loader 导入已授权的 entry 后，只考虑同时满足以下条件的类：
 
-1. 是 `LocalPlugin` 的具体子类；
-2. 不是 `LocalPlugin` 基类本身；
+1. 是 `ButterPlugin` 的具体子类；
+2. 不是 `ButterPlugin` 基类本身；
 3. `__module__` 等于 entry 模块，排除 helper import；
 4. 全模块去重后恰好一个；
 5. 可以零参数实例化。
 
 零个或多个候选都以 discovery error 失败。该方案比“扫描第一个结构相似的类”更
 确定，也不需要 decorator 写入进程级 pending registry。manifest 仍是身份、兼容和
-依赖唯一事实来源，自动类发现只取代本地 hooks factory，不改变显式授权、来源冲突或
-PluginManager 生命周期。
+依赖唯一事实来源，自动类发现只改变本地 hook 实例的获得方式，不改变显式授权、
+来源冲突或 PluginManager 生命周期。
 
 ### 0.6 公共插件包边界复核
 
-插件系统实现已统一迁入 `butterbot/plugin/`，包括 descriptor、发现、目录加载、
-manifest、registrar、manager、bootstrap、错误、设置和来源模型。原
+插件系统实现已统一迁入 `butterbot/plugin/`，并按依赖稳定性拆为三层：
+
+```text
+butterbot/plugin/
+├── contracts/       # ButterPlugin、PluginDescriptor、SourceRef、SubscriptionSpec
+├── discovery/       # catalog、目录加载、manifest、来源与设置
+├── runtime/         # bootstrap、registrar、manager 与事务生命周期
+├── errors.py
+└── __init__.py      # 面向插件作者的公共门面与控制面延迟导出
+```
+
+`contracts/descriptor.py` 只保留 `PluginDescriptor`；标识符校验、统一基类与路由
+声明不再堆叠在 descriptor 模块。旧 `LocalPlugin` 和 `PluginBase` 名称被移除，
+本地目录和 distribution 统一继承 `ButterPlugin`。原
 `butterbot/app/extensions/` 不再保留插件实现。
 
 `SourceRef` 也从 `butterbot/core/source/` 移入插件包。普通 Handler 插件现在只需：
@@ -156,7 +175,7 @@ manifest、registrar、manager、bootstrap、错误、设置和来源模型。�
 ```python
 from butterbot.plugin import (
     Event,
-    LocalPlugin,
+    ButterPlugin,
     PluginRegistrar,
     SourceRef,
     SubscriptionSpec,
@@ -166,15 +185,16 @@ from butterbot.plugin import (
 `manager_example`、本地 Handler fixture 和外部 Handler-only wheel fixture 均不再
 导入 `butterbot.core`。只有 Source-only/Combined 事件源适配实现继续从 core 导入
 `BaseSource`、数据和状态基类。core 自身不导入 plugin；`BotApp` 只依赖轻量
-`plugin.source_ref`，plugin bootstrap 再组合 app，避免运行时循环导入。
+`plugin.contracts.routing`，根门面延迟导入 runtime 和 discovery 控制面，避免
+运行时循环导入。插件作者仍只使用 `butterbot.plugin`，不依赖内部分类路径。
 
 ### 0.7 验证结果
 
 本轮实现后的仓库门禁：
 
 ```text
-529 passed
-coverage 77.45%（门槛 70%）
+539 passed
+coverage 77.62%（门槛 70%）
 ruff check: passed
 pyright: 0 errors, 0 warnings
 ```
@@ -767,7 +787,7 @@ requires_distributions = []
 | `plugin_id` | 是 | 全局稳定 owner 和依赖 ID |
 | `version` | 是 | 本地插件自身版本 |
 | `requires_core` | 是 | ButterBot 兼容范围 |
-| `entry` | 是 | 根目录内 Python 文件；自动发现唯一 `LocalPlugin` 子类 |
+| `entry` | 是 | 根目录内 Python 文件；自动发现唯一 `ButterPlugin` 子类 |
 | `requires_plugins` | 否 | 必需插件 ID |
 | `provides` | 否 | capability 声明 |
 | `requires_distributions` | 否 | 只诊断、不自动安装的 Python distribution 要求 |
@@ -789,34 +809,29 @@ requires_distributions = []
 当前 distribution 插件由 Python 对象提供 `descriptor`。目录插件若同时在
 `plugin.toml` 和 `plugin.py` 重复写版本、依赖和 capability，很容易漂移。
 
-建议把协议拆成：
+最终实现不再额外公开一层 `PluginHooks` 协议，而是让两种来源共享唯一基类：
 
 ```python
-class PluginHooks(Protocol):
-    def register_config(self, registrar: ConfigRegistrar) -> None: ...
-    async def register(self, registrar: PluginRegistrar) -> None: ...
-
-
 @dataclass(frozen=True)
 class LoadedPlugin:
     descriptor: PluginDescriptor
-    hooks: PluginHooks
+    hooks: ButterPlugin
     origin: PluginOrigin
 ```
 
 对 distribution：
 
 ```text
-entry point 返回现有 Plugin
--> 读取 Plugin.descriptor
--> Plugin 本身作为 hooks
+entry point 返回 ButterPlugin
+-> 读取子类的 PluginDescriptor
+-> ButterPlugin 实例作为 hooks
 ```
 
 对 directory：
 
 ```text
 plugin.toml 转为 PluginDescriptor
--> entry 模块唯一 LocalPlugin 子类作为 hooks
+-> entry 模块唯一 ButterPlugin 子类作为 hooks
 -> loader 组合为 LoadedPlugin
 ```
 
@@ -844,7 +859,7 @@ plugin.py
 - 禁止 `/`、反斜杠和空路径段；
 - 文件必须以 `.py` 结尾；
 - resolve 后仍位于插件根；
-- entry 模块必须且只能定义一个具体 `LocalPlugin` 子类；
+- entry 模块必须且只能定义一个具体 `ButterPlugin` 子类；
 - 只看 `__module__` 等于 entry 模块的类，不扫描 imported helper class；
 - 自动零参数实例化，不扫描“第一个结构相似的类”。
 
@@ -948,8 +963,8 @@ _butterbot_local.p_<origin_hash>.helpers
 3. 用 `importlib.util.spec_from_file_location()` 创建入口 spec；
 4. 在执行前把 package 和入口放入 `sys.modules`，支持相对 import；
 5. 执行入口；
-6. 读取 manifest 指定 attribute；
-7. 调用 factory 并校验 hooks；
+6. 找出 entry 模块直接定义的唯一具体 `ButterPlugin` 子类；
+7. 零参数实例化，并与 manifest descriptor 组合；
 8. 失败时只移除本轮创建的 namespace 子模块；
 9. 不触碰其他插件和应用模块。
 
@@ -1032,7 +1047,7 @@ class PluginCandidate:
     plugin_id: str
     origin: PluginOrigin
     descriptor: PluginDescriptor | None
-    load: Callable[[], PluginHooks]
+    load: Callable[[], LoadedPlugin]
 ```
 
 目录 candidate 在 import 前已有 descriptor；现有 distribution candidate 可能需要
@@ -1213,9 +1228,10 @@ registrar.resource_root
 -> 构建 BotApp 和配置 Source
 -> 按拓扑 register
 -> 启动 Source
--> 标记 started
+-> 按拓扑 on_start
 -> 运行
--> 逆拓扑关闭插件
+-> 逆拓扑 on_stop
+-> 逆拓扑撤销插件注册
 -> 关闭其余 Source、EventBus、ApiRegistry
 ```
 
@@ -1241,11 +1257,13 @@ registrar.resource_root
 | path validation | 不 import；错误含被拒路径和 root |
 | dependency distribution check | 不 import 插件代码 |
 | module import | 清理本轮合成 modules；无 registrar 副作用 |
-| factory/hook validation | 清理本轮 modules；标记 discovery failure |
+| ButterPlugin 子类校验 | 清理本轮 modules；标记 discovery failure |
 | `register_config` | 撤销本轮和整体 bootstrap config 注册 |
 | RuntimeConfig/app factory | 撤销 builder/factory 和未启动 Source |
 | `register` | 逆序撤销全部本轮插件 |
 | Source start | 撤销插件 Source、Handler、registry |
+| `on_start` | 逆序调用已进入启动阶段插件的 `on_stop`，再整体回滚 |
+| `on_stop` | 普通异常记录后继续清理；取消在清理完成后传播 |
 | close callback | 记录后继续关闭；取消最终传播 |
 
 现有 PluginManager 已覆盖表格后半部分。目录实现主要补前五行。
@@ -1411,26 +1429,32 @@ from butterbot.plugin import (
 from butterbot.plugin import SourceRef
 
 
-from butterbot.plugin import LocalPlugin
+from butterbot.plugin import ButterPlugin
 
 
-class HelloPlugin(LocalPlugin):
+class HelloPlugin(ButterPlugin):
     def register_config(self, registrar) -> None:
         pass
 
     async def register(self, registrar: PluginRegistrar) -> None:
-        greeting = str(registrar.settings.get("greeting", "hello"))
-
-        async def handle(event) -> None:
-            print(greeting, event)
+        self.greeting = str(registrar.settings.get("greeting", "hello"))
 
         registrar.add_subscription(
             SubscriptionSpec(
                 source=SourceRef("napcat.events", "primary"),
                 status="message.*",
-                callback=handle,
+                callback=self.handle_message,
             )
         )
+
+    async def on_start(self) -> None:
+        print("plugin started")
+
+    async def on_stop(self) -> None:
+        print("plugin stopping")
+
+    async def handle_message(self, event) -> None:
+        print(self.greeting, event)
 ```
 
 不需要：
@@ -1600,7 +1624,7 @@ fully isolated
 
 - `PluginOrigin`；
 - `PluginCandidate`；
-- `PluginHooks`；
+- `ButterPlugin` 统一基类；
 - `LocalPluginManifest`；
 - 扩展 `PluginSettings`；
 - entry point adapter；
@@ -1625,7 +1649,7 @@ fully isolated
 内容：
 
 - 合成 package namespace；
-- 显式 entry factory；
+- entry 模块唯一 `ButterPlugin` 子类发现；
 - 相对 import；
 - import 失败 module cleanup；
 - fingerprint；
@@ -1762,8 +1786,9 @@ fully isolated
 
 - disabled 不执行顶层哨兵；
 - enabled 只执行一次；
-- factory function；
-- hooks object；
+- 恰好一个 entry-local `ButterPlugin` 子类；
+- 零个或多个候选均失败；
+- imported helper 子类不参与候选；
 - 同名 `plugin.py` 不冲突；
 - 同名 helper 不冲突；
 - 相对 import；
@@ -1805,6 +1830,9 @@ fully isolated
 
 - 第一个/中间/最后一个 config hook 失败；
 - 第一个/中间/最后一个 runtime hook 失败；
+- 第一个/中间/最后一个 `on_start` 失败及逆序 `on_stop`；
+- 重复 start/stop 时 register 只执行一次，生命周期 hook 成对执行；
+- `on_stop` 普通异常和取消都不跳过后续清理；
 - `CancelledError`；
 - Source constructor 失败；
 - Source start 失败；
@@ -1915,10 +1943,10 @@ fully isolated
 
 拒绝。全局污染、模块遮蔽和测试顺序风险高。
 
-### 19.4 扫描第一个 `PluginBase` 子类
+### 19.4 扫描第一个看起来像插件的类
 
-拒绝。入口歧义、import 重导出和 helper class 都会造成偶然行为。manifest 应指定
-factory attribute。
+拒绝。当前只接受 entry 模块直接定义的具体 `ButterPlugin` 子类，并要求去重后
+恰好一个；不会按遍历顺序取第一个，也不会把 import 进来的 helper 类算作候选。
 
 ### 19.5 为目录插件复制 PluginManager
 
@@ -1982,7 +2010,7 @@ ButterBot 当前 P0 的优势正是 registrar 收据、Source 所有权和 owner
 | manifest 名 | `plugin.toml` |
 | 目录层级 | 只扫描直接子目录 |
 | symlink | 第一版全部拒绝 |
-| entry | `relative.py` + entry 模块唯一 `LocalPlugin` 子类 |
+| entry | `relative.py` + entry 模块唯一 `ButterPlugin` 子类 |
 | descriptor 来源 | 目录 manifest |
 | folder 与 plugin ID | 不要求一致 |
 | 同 ID 跨来源 | 直接失败 |
