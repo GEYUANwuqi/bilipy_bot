@@ -3,16 +3,25 @@
 import ast
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
+from butterbot.plugin import (
+    LocalPlugin,
+    LocalPluginSettings,
+    PluginCatalog,
+)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MANAGER_PLUGIN_ROOT = PROJECT_ROOT / "examples" / "plugins" / "manager_example"
 CONFIGURED_EXAMPLE_FILES = (
     PROJECT_ROOT / "examples" / "live_danmaku_example.py",
-    PROJECT_ROOT / "examples" / "manager_example.py",
     PROJECT_ROOT / "examples" / "napcat_example.py",
 )
 EXAMPLE_FILES = (
     PROJECT_ROOT / "examples" / "minimal_source_example.py",
+    PROJECT_ROOT / "examples" / "plugin_app.py",
+    MANAGER_PLUGIN_ROOT / "plugin.py",
     *CONFIGURED_EXAMPLE_FILES,
 )
 
@@ -55,3 +64,24 @@ def test_napcat_command_example_uses_command_filter() -> None:
 
     assert "from butterbot.sources.napcat.filters import CommandFilter" in source
     assert 'event_filter=CommandFilter("/help", "/status")' in source
+
+
+def test_manager_example_is_an_auto_discovered_local_plugin() -> None:
+    manifest = tomllib.loads(
+        MANAGER_PLUGIN_ROOT.joinpath("plugin.toml").read_text(encoding="utf-8")
+    )
+    assert manifest["entry"] == "plugin.py"
+    assert "create_plugin" not in MANAGER_PLUGIN_ROOT.joinpath("plugin.py").read_text(
+        encoding="utf-8"
+    )
+
+    catalog = PluginCatalog.discover(
+        ["example.bilibili-manager"],
+        entry_points=[],
+        local=LocalPluginSettings(path="./examples/plugins"),
+        config_root=PROJECT_ROOT,
+    )
+
+    loaded = catalog.get("example.bilibili-manager")
+    assert loaded is not None
+    assert isinstance(loaded.hooks, LocalPlugin)
