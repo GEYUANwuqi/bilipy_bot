@@ -3,15 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from butterbot.plugin import (
+    ButterPlugin,
     Event,
-    LocalPlugin,
     PluginRegistrar,
     SourceRef,
     SubscriptionSpec,
 )
 
 
-class HybridHandlerPlugin(LocalPlugin):
+class HybridHandlerPlugin(ButterPlugin):
     def register_config(self, registrar) -> None:
         pass
 

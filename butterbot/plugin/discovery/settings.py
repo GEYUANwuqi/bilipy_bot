@@ -6,9 +6,8 @@ from types import MappingProxyType
 from typing import Any
 
 from butterbot.core.exceptions import ConfigError
-
-from .descriptor import validate_plugin_id
-from .errors import PluginCompatibilityError
+from butterbot.plugin.contracts.identifiers import validate_plugin_id
+from butterbot.plugin.errors import PluginCompatibilityError
 
 
 @dataclass(frozen=True, slots=True)

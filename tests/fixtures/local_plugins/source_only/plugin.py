@@ -4,7 +4,7 @@ from butterbot.core.data import BaseDataMixin
 from butterbot.core.event import Event
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
-from butterbot.plugin import ConfigRegistrar, LocalPlugin
+from butterbot.plugin import ButterPlugin, ConfigRegistrar
 
 from .helpers import MESSAGE
 
@@ -33,7 +33,7 @@ class LocalContractSource(BaseSource):
         pass
 
 
-class SourcePlugin(LocalPlugin):
+class SourcePlugin(ButterPlugin):
     def register_config(self, registrar: ConfigRegistrar) -> None:
         registrar.register_builder("local-contract", dict)
         registrar.register_factory(

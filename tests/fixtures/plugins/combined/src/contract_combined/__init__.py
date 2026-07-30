@@ -5,8 +5,8 @@ from butterbot.core.event import Event
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
 from butterbot.plugin import (
+    ButterPlugin,
     ConfigRegistrar,
-    PluginBase,
     PluginDescriptor,
     PluginRegistrar,
     SourceRef,
@@ -40,7 +40,7 @@ class CombinedSource(BaseSource):
         pass
 
 
-class CombinedPlugin(PluginBase):
+class CombinedPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="contract.combined",
         version="1.0.0",

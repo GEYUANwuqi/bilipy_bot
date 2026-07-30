@@ -15,8 +15,8 @@ from butterbot.core.exceptions import ConfigError, SourceError, SourceStartError
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
 from butterbot.plugin import (
+    ButterPlugin,
     Event,
-    PluginBase,
     PluginDescriptor,
     PluginRegistrationError,
     PluginState,
@@ -71,7 +71,7 @@ class FakeEntryPoint:
         return self.target
 
 
-class ProviderPlugin(PluginBase):
+class ProviderPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="example.provider",
         version="1.0.0",
@@ -88,7 +88,7 @@ class ProviderPlugin(PluginBase):
         )
 
 
-class ConsumerPlugin(PluginBase):
+class ConsumerPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="example.consumer",
         version="1.0.0",
@@ -184,6 +184,180 @@ async def test_bootstrap_routes_across_independent_plugins(tmp_path: Path):
     assert manager.receipts == ()
 
 
+@pytest.mark.asyncio
+async def test_plugin_lifecycle_hooks_follow_dependency_order_and_restart(
+    tmp_path: Path,
+):
+    lifecycle: list[str] = []
+
+    class LifecycleProvider(ProviderPlugin):
+        async def on_start(self) -> None:
+            lifecycle.append("start:provider")
+
+        async def on_stop(self) -> None:
+            lifecycle.append("stop:provider")
+
+    class LifecycleConsumer(ConsumerPlugin):
+        async def on_start(self) -> None:
+            lifecycle.append("start:consumer")
+
+        async def on_stop(self) -> None:
+            lifecycle.append("stop:consumer")
+
+    config_path = tmp_path / "config.yaml"
+    write_config(config_path)
+    app = bootstrap_app(
+        config_path,
+        entry_points=(
+            FakeEntryPoint("example.provider", LifecycleProvider),
+            FakeEntryPoint("example.consumer", LifecycleConsumer),
+        ),
+        core_version=CORE_VERSION,
+    )
+    manager = app._plugin_manager
+    assert manager is not None
+
+    await app.start()
+    assert lifecycle == ["start:provider", "start:consumer"]
+    assert all(status.state == PluginState.STARTED for status in manager.statuses)
+
+    await app.stop()
+    assert lifecycle[-2:] == ["stop:consumer", "stop:provider"]
+    assert all(status.state == PluginState.REGISTERED for status in manager.statuses)
+
+    await app.start()
+    await app.close()
+    assert lifecycle == [
+        "start:provider",
+        "start:consumer",
+        "stop:consumer",
+        "stop:provider",
+        "start:provider",
+        "start:consumer",
+        "stop:consumer",
+        "stop:provider",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_plugin_start_failure_runs_stop_hooks_and_rolls_back(
+    tmp_path: Path,
+):
+    lifecycle: list[str] = []
+
+    class LifecycleProvider(ProviderPlugin):
+        async def on_start(self) -> None:
+            lifecycle.append("start:provider")
+
+        async def on_stop(self) -> None:
+            lifecycle.append("stop:provider")
+
+    class FailingConsumer(ConsumerPlugin):
+        async def on_start(self) -> None:
+            lifecycle.append("start:consumer")
+            raise RuntimeError("plugin start failed")
+
+        async def on_stop(self) -> None:
+            lifecycle.append("stop:consumer")
+
+    config_path = tmp_path / "config.yaml"
+    write_config(config_path)
+    app = bootstrap_app(
+        config_path,
+        entry_points=(
+            FakeEntryPoint("example.provider", LifecycleProvider),
+            FakeEntryPoint("example.consumer", FailingConsumer),
+        ),
+        core_version=CORE_VERSION,
+    )
+    manager = app._plugin_manager
+    assert manager is not None
+
+    with pytest.raises(PluginRegistrationError) as exc_info:
+        await app.start()
+
+    assert exc_info.value.plugin_id == "example.consumer"
+    assert exc_info.value.phase == "starting"
+    assert lifecycle == [
+        "start:provider",
+        "start:consumer",
+        "stop:consumer",
+        "stop:provider",
+    ]
+    assert app.manager.sources == {}
+    assert app.bus.pending_callbacks == 0
+    assert [status.state for status in manager.statuses] == [
+        PluginState.CLOSED,
+        PluginState.FAILED,
+    ]
+    await app.close()
+
+
+@pytest.mark.asyncio
+async def test_plugin_start_cancellation_rolls_back_before_propagating(
+    tmp_path: Path,
+):
+    stopped = False
+
+    class CancelledProvider(ProviderPlugin):
+        async def on_start(self) -> None:
+            raise asyncio.CancelledError
+
+        async def on_stop(self) -> None:
+            nonlocal stopped
+            stopped = True
+
+    config_path = tmp_path / "config.yaml"
+    write_config(config_path, enabled=("example.provider",))
+    app = bootstrap_app(
+        config_path,
+        entry_points=(FakeEntryPoint("example.provider", CancelledProvider),),
+        core_version=CORE_VERSION,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await app.start()
+
+    assert stopped
+    assert app.manager.sources == {}
+    assert app.bus.pending_callbacks == 0
+    await app.close()
+
+
+@pytest.mark.asyncio
+async def test_plugin_stop_cancellation_does_not_skip_cleanup(tmp_path: Path):
+    stopped: list[str] = []
+
+    class CancelledProvider(ProviderPlugin):
+        async def on_stop(self) -> None:
+            stopped.append("provider")
+            raise asyncio.CancelledError
+
+    class ClosingConsumer(ConsumerPlugin):
+        async def on_stop(self) -> None:
+            stopped.append("consumer")
+
+    config_path = tmp_path / "config.yaml"
+    write_config(config_path)
+    app = bootstrap_app(
+        config_path,
+        entry_points=(
+            FakeEntryPoint("example.provider", CancelledProvider),
+            FakeEntryPoint("example.consumer", ClosingConsumer),
+        ),
+        core_version=CORE_VERSION,
+    )
+
+    await app.start()
+    with pytest.raises(asyncio.CancelledError):
+        await app.close()
+
+    assert stopped == ["consumer", "provider"]
+    assert app.manager.sources == {}
+    assert app.bus.pending_callbacks == 0
+    assert app.closed
+
+
 def test_validate_uses_same_config_and_runtime_registration(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     write_config(config_path)
@@ -264,7 +438,7 @@ async def test_runtime_failure_rolls_back_all_registration(tmp_path: Path):
 async def test_runtime_failure_marks_transitive_dependents_blocked(
     tmp_path: Path,
 ):
-    class FailingPlugin(PluginBase):
+    class FailingPlugin(ButterPlugin):
         descriptor = PluginDescriptor(
             plugin_id="example.failing",
             version="1.0.0",
@@ -276,7 +450,7 @@ async def test_runtime_failure_marks_transitive_dependents_blocked(
             del registrar
             raise RuntimeError("register failed")
 
-    class BlockedPlugin(PluginBase):
+    class BlockedPlugin(ButterPlugin):
         descriptor = PluginDescriptor(
             plugin_id="example.blocked",
             version="1.0.0",
@@ -323,7 +497,7 @@ async def test_runtime_failure_marks_transitive_dependents_blocked(
 
 
 def test_config_failure_rolls_back_builder_and_factory_receipts(tmp_path: Path):
-    class FailingConfigPlugin(PluginBase):
+    class FailingConfigPlugin(ButterPlugin):
         descriptor = PluginDescriptor(
             plugin_id="example.config-failure",
             version="1.0.0",

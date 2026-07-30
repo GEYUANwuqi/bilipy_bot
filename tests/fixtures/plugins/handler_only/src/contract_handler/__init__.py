@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 
 from butterbot.plugin import (
+    ButterPlugin,
     Event,
-    PluginBase,
     PluginDescriptor,
     PluginRegistrar,
     SourceRef,
@@ -14,7 +14,7 @@ from butterbot.plugin import (
 RECEIVED: list[str] = []
 
 
-class HandlerPlugin(PluginBase):
+class HandlerPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="contract.handler",
         version="1.0.0",

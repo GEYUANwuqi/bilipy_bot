@@ -24,7 +24,7 @@ from butterbot.core.event import SubscriptionHandle
 from butterbot.core.exceptions import LifecycleError, SourceError
 from butterbot.core.source import BaseSourceT
 
-from .extension import ExtensionRegistrar, SubscriptionSpec
+from .extension import ExtensionRegistrar
 
 _SourceP = ParamSpec("_SourceP")
 _log = getLogger(__name__)
@@ -320,5 +320,4 @@ __all__ = [
     "ConfigRegistrar",
     "PluginRegistrar",
     "RegistrationReceipt",
-    "SubscriptionSpec",
 ]

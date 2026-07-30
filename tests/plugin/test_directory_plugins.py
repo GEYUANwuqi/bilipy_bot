@@ -11,8 +11,8 @@ import pytest
 
 from butterbot.core.exceptions import ConfigError
 from butterbot.plugin import (
+    ButterPlugin,
     LocalPluginSettings,
-    PluginBase,
     PluginBootstrap,
     PluginCatalog,
     PluginDependencyError,
@@ -65,9 +65,9 @@ def write_plugin(
     plugin_root.joinpath("plugin.py").write_text(
         code
         or (
-            "from butterbot.plugin import LocalPlugin\n"
+            "from butterbot.plugin import ButterPlugin\n"
             "\n"
-            "class Hooks(LocalPlugin):\n"
+            "class Hooks(ButterPlugin):\n"
             "    def register_config(self, registrar) -> None:\n"
             "        pass\n"
             "\n"
@@ -204,10 +204,10 @@ def test_auto_enable_loads_local_plugins_without_sys_path_changes(tmp_path: Path
         "local.relative",
         folder="same-name",
         code=(
-            "from butterbot.plugin import LocalPlugin\n"
+            "from butterbot.plugin import ButterPlugin\n"
             "from .helpers import VALUE\n"
             "\n"
-            "class Hooks(LocalPlugin):\n"
+            "class Hooks(ButterPlugin):\n"
             "    value = VALUE\n"
             "    def register_config(self, registrar) -> None:\n"
             "        pass\n"
@@ -244,10 +244,10 @@ def test_auto_enable_loads_local_plugins_without_sys_path_changes(tmp_path: Path
             "找到: 0",
         ),
         (
-            "from butterbot.plugin import LocalPlugin\n"
-            "class One(LocalPlugin):\n"
+            "from butterbot.plugin import ButterPlugin\n"
+            "class One(ButterPlugin):\n"
             "    pass\n"
-            "class Two(LocalPlugin):\n"
+            "class Two(ButterPlugin):\n"
             "    pass\n",
             "One, Two",
         ),
@@ -305,10 +305,10 @@ def test_same_folder_and_module_names_are_isolated_across_workspaces(
             "local.workspace-%s" % index,
             folder="same",
             code=(
-                "from butterbot.plugin import LocalPlugin\n"
+                "from butterbot.plugin import ButterPlugin\n"
                 "from .helpers import VALUE\n"
                 "\n"
-                "class Hooks(LocalPlugin):\n"
+                "class Hooks(ButterPlugin):\n"
                 "    value = VALUE\n"
                 "    def register_config(self, registrar) -> None:\n"
                 "        pass\n"
@@ -377,7 +377,7 @@ def test_distribution_requirements_fail_before_import(tmp_path: Path):
 
 
 def test_cross_origin_plugin_id_collision_is_rejected_before_import(tmp_path: Path):
-    class InstalledPlugin(PluginBase):
+    class InstalledPlugin(ButterPlugin):
         descriptor = PluginDescriptor(
             plugin_id="shared.plugin",
             version="1.0.0",
@@ -400,7 +400,7 @@ def test_cross_origin_plugin_id_collision_is_rejected_before_import(tmp_path: Pa
 
 
 def test_hybrid_dependencies_share_one_topological_graph(tmp_path: Path):
-    class InstalledProvider(PluginBase):
+    class InstalledProvider(ButterPlugin):
         descriptor = PluginDescriptor(
             plugin_id="installed.provider",
             version="1.0.0",
@@ -425,7 +425,7 @@ def test_hybrid_dependencies_share_one_topological_graph(tmp_path: Path):
 
 
 def test_distribution_can_depend_on_local_plugin(tmp_path: Path):
-    class InstalledConsumer(PluginBase):
+    class InstalledConsumer(ButterPlugin):
         descriptor = PluginDescriptor(
             plugin_id="installed.consumer",
             version="1.0.0",
@@ -454,9 +454,9 @@ async def test_bootstrap_injects_read_only_settings_and_resource_root(
         tmp_path / "plugins",
         "local.context",
         code=(
-            "from butterbot.plugin import LocalPlugin\n"
+            "from butterbot.plugin import ButterPlugin\n"
             "\n"
-            "class Hooks(LocalPlugin):\n"
+            "class Hooks(ButterPlugin):\n"
             "    def _check(self, registrar) -> None:\n"
             "        assert registrar.settings['greeting'] == 'hello'\n"
             "        assert registrar.settings['nested']['value'] == 1\n"
@@ -507,7 +507,7 @@ async def test_bootstrap_injects_read_only_settings_and_resource_root(
 
 @pytest.mark.asyncio
 async def test_distribution_plugin_receives_same_private_settings(tmp_path: Path):
-    class InstalledPlugin(PluginBase):
+    class InstalledPlugin(ButterPlugin):
         descriptor = PluginDescriptor(
             plugin_id="installed.settings",
             version="1.0.0",
@@ -547,9 +547,9 @@ async def test_local_runtime_failure_uses_existing_transaction_rollback(
         tmp_path / "plugins",
         "local.runtime-failure",
         code=(
-            "from butterbot.plugin import LocalPlugin\n"
+            "from butterbot.plugin import ButterPlugin\n"
             "\n"
-            "class Hooks(LocalPlugin):\n"
+            "class Hooks(ButterPlugin):\n"
             "    def register_config(self, registrar) -> None:\n"
             "        registrar.register_builder('local-failure', dict)\n"
             "    async def register(self, registrar) -> None:\n"
@@ -600,9 +600,9 @@ def test_plugin_failure_status_does_not_leak_private_settings(tmp_path: Path):
         tmp_path / "plugins",
         "local.secret-failure",
         code=(
-            "from butterbot.plugin import LocalPlugin\n"
+            "from butterbot.plugin import ButterPlugin\n"
             "\n"
-            "class Hooks(LocalPlugin):\n"
+            "class Hooks(ButterPlugin):\n"
             "    def register_config(self, registrar) -> None:\n"
             "        raise RuntimeError(str(registrar.settings))\n"
             "    async def register(self, registrar) -> None:\n"

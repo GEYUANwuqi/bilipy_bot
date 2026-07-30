@@ -6,20 +6,22 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Protocol
 
 from butterbot import __version__
+from butterbot.plugin.contracts.descriptor import PluginDescriptor
+from butterbot.plugin.contracts.hooks import ButterPlugin
+from butterbot.plugin.contracts.identifiers import validate_plugin_id
+from butterbot.plugin.errors import (
+    PluginCompatibilityError,
+    PluginDependencyError,
+    PluginDiscoveryError,
+)
 
-from .descriptor import Plugin, PluginDescriptor, PluginHooks, validate_plugin_id
 from .directory import (
     index_local_manifests,
     load_local_hooks,
     validate_distribution_requirements,
-)
-from .errors import (
-    PluginCompatibilityError,
-    PluginDependencyError,
-    PluginDiscoveryError,
 )
 from .manifest import LocalPluginManifest
 from .origin import (
@@ -46,11 +48,11 @@ class LoadedPlugin:
     """一个已导入并通过静态校验的插件."""
 
     descriptor: PluginDescriptor
-    hooks: PluginHooks
+    hooks: ButterPlugin
     origin: PluginOrigin
 
     @property
-    def plugin(self) -> PluginHooks:
+    def plugin(self) -> ButterPlugin:
         """兼容 P0 provisional API 的 hook 别名."""
         return self.hooks
 
@@ -217,8 +219,8 @@ def _distribution_candidate(entry_point: PluginEntryPoint) -> PluginCandidate:
     )
 
     def load() -> LoadedPlugin:
-        plugin = _load_distribution_plugin(entry_point)
-        return LoadedPlugin(plugin.descriptor, plugin, origin)
+        plugin, descriptor = _load_distribution_plugin(entry_point)
+        return LoadedPlugin(descriptor, plugin, origin)
 
     return PluginCandidate(
         plugin_id=plugin_id,
@@ -263,7 +265,9 @@ def _reject_origin_collisions(candidates: tuple[PluginCandidate, ...]) -> None:
         raise PluginDiscoveryError("插件 '%s' 有%s: %s" % (plugin_id, label, origins))
 
 
-def _load_distribution_plugin(entry_point: PluginEntryPoint) -> Plugin:
+def _load_distribution_plugin(
+    entry_point: PluginEntryPoint,
+) -> tuple[ButterPlugin, PluginDescriptor]:
     try:
         target = entry_point.load()
         candidate = (
@@ -282,20 +286,22 @@ def _load_distribution_plugin(entry_point: PluginEntryPoint) -> Plugin:
         if inspect.iscoroutine(candidate):
             candidate.close()
         raise PluginDiscoveryError(
-            "插件 entry point '%s' 必须返回 Plugin 实例或零参数 factory"
+            "插件 entry point '%s' 必须返回 ButterPlugin 实例或零参数 factory"
             % entry_point.name
         )
-    plugin = cast(Plugin, candidate)
-    if not isinstance(plugin.descriptor, PluginDescriptor):
+    assert isinstance(candidate, ButterPlugin)
+    descriptor = getattr(candidate, "descriptor", None)
+    if not isinstance(descriptor, PluginDescriptor):
         raise PluginDiscoveryError(
             "插件 '%s' 的 descriptor 必须是 PluginDescriptor" % entry_point.name
         )
-    return plugin
+    return candidate, descriptor
 
 
 def _looks_like_distribution_plugin(candidate: object) -> bool:
     return (
-        hasattr(candidate, "descriptor")
+        isinstance(candidate, ButterPlugin)
+        and hasattr(candidate, "descriptor")
         and callable(getattr(candidate, "register_config", None))
         and callable(getattr(candidate, "register", None))
     )

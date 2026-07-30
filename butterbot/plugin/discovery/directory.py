@@ -13,8 +13,9 @@ from types import ModuleType
 from packaging.requirements import Requirement
 from packaging.version import InvalidVersion, Version
 
-from .descriptor import LocalPlugin, PluginHooks
-from .errors import PluginDependencyError, PluginDiscoveryError
+from butterbot.plugin.contracts.hooks import ButterPlugin
+from butterbot.plugin.errors import PluginDependencyError, PluginDiscoveryError
+
 from .manifest import LocalPluginManifest
 from .settings import LocalPluginSettings
 
@@ -98,7 +99,7 @@ def validate_distribution_requirements(
             )
 
 
-def load_local_hooks(manifest: LocalPluginManifest) -> PluginHooks:
+def load_local_hooks(manifest: LocalPluginManifest) -> ButterPlugin:
     """在私有合成 package 中加载一个显式启用的本地插件入口."""
     origin = manifest.origin
     namespace_hash = hashlib.sha256(
@@ -122,9 +123,9 @@ def load_local_hooks(manifest: LocalPluginManifest) -> PluginHooks:
         spec.loader.exec_module(module)
         plugin_class = _find_local_plugin_class(module, manifest.plugin_id)
         candidate = plugin_class()
-        if not isinstance(candidate, LocalPlugin):
+        if not isinstance(candidate, ButterPlugin):
             raise PluginDiscoveryError(
-                "本地插件 '%s' 自动实例化后不是 LocalPlugin" % manifest.plugin_id
+                "本地插件 '%s' 自动实例化后不是 ButterPlugin" % manifest.plugin_id
             )
         return candidate
     except BaseException as exc:
@@ -168,20 +169,20 @@ def _ensure_namespace(
 def _find_local_plugin_class(
     module: ModuleType,
     plugin_id: str,
-) -> type[LocalPlugin]:
+) -> type[ButterPlugin]:
     candidates = {
         candidate
         for candidate in vars(module).values()
         if inspect.isclass(candidate)
-        and candidate is not LocalPlugin
-        and issubclass(candidate, LocalPlugin)
+        and candidate is not ButterPlugin
+        and issubclass(candidate, ButterPlugin)
         and candidate.__module__ == module.__name__
         and not inspect.isabstract(candidate)
     }
     if len(candidates) != 1:
         names = ", ".join(sorted(candidate.__qualname__ for candidate in candidates))
         raise PluginDiscoveryError(
-            "本地插件 '%s' 的 entry 模块必须且只能定义一个 LocalPlugin 子类；找到: %s"
+            "本地插件 '%s' 的 entry 模块必须且只能定义一个 ButterPlugin 子类；找到: %s"
             % (plugin_id, names or "0")
         )
     return candidates.pop()

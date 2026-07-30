@@ -213,10 +213,10 @@ def _plugins_init(args: argparse.Namespace) -> int:
         encoding="utf-8",
     )
     (target / "plugin.py").write_text(
-        "from butterbot.plugin import LocalPlugin\n"
+        "from butterbot.plugin import ButterPlugin\n"
         "\n"
         "\n"
-        "class Plugin(LocalPlugin):\n"
+        "class Plugin(ButterPlugin):\n"
         "    def register_config(self, registrar) -> None:\n"
         "        pass\n"
         "\n"

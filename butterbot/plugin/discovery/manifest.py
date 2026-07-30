@@ -9,8 +9,9 @@ from typing import Any
 
 from packaging.requirements import InvalidRequirement, Requirement
 
-from .descriptor import PluginDescriptor
-from .errors import PluginCompatibilityError, PluginDiscoveryError
+from butterbot.plugin.contracts.descriptor import PluginDescriptor
+from butterbot.plugin.errors import PluginCompatibilityError, PluginDiscoveryError
+
 from .origin import DirectoryPluginOrigin
 
 _MANIFEST_NAME = "plugin.toml"

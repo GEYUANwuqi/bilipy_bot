@@ -7,8 +7,8 @@ from butterbot.core.event import Event
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
 from butterbot.plugin import (
+    ButterPlugin,
     ConfigRegistrar,
-    PluginBase,
     PluginDescriptor,
 )
 
@@ -39,7 +39,7 @@ class ContractSource(BaseSource):
         pass
 
 
-class SourcePlugin(PluginBase):
+class SourcePlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="contract.source",
         version="1.0.0",

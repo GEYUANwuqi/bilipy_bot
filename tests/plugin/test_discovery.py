@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from butterbot.plugin import (
-    PluginBase,
+    ButterPlugin,
     PluginCatalog,
     PluginCompatibilityError,
     PluginDependencyError,
@@ -39,8 +39,8 @@ def make_plugin(
     requires: tuple[str, ...] = (),
     provides: tuple[str, ...] = (),
     requires_core: str = ">=3.1.0.dev1",
-) -> type[PluginBase]:
-    class TestPlugin(PluginBase):
+) -> type[ButterPlugin]:
+    class TestPlugin(ButterPlugin):
         descriptor = PluginDescriptor(
             plugin_id=plugin_id,
             version="1.0.0",
@@ -68,6 +68,28 @@ def test_only_enabled_entry_points_are_imported():
     assert catalog.plugin_ids == ("example.enabled",)
     assert enabled.loads == 1
     assert disabled.loads == 0
+
+
+def test_distribution_plugin_must_inherit_butter_plugin():
+    class DuckPlugin:
+        descriptor = PluginDescriptor(
+            plugin_id="example.duck",
+            version="1.0.0",
+            requires_core=">=3.1.0.dev1",
+        )
+
+        def register_config(self, registrar) -> None:
+            del registrar
+
+        async def register(self, registrar) -> None:
+            del registrar
+
+    with pytest.raises(PluginDiscoveryError, match="ButterPlugin"):
+        PluginCatalog.discover(
+            ["example.duck"],
+            entry_points=[FakeEntryPoint("example.duck", DuckPlugin)],
+            core_version=CORE_VERSION,
+        )
 
 
 def test_dependencies_are_sorted_before_consumers():

@@ -7,8 +7,8 @@ from butterbot.core.event import Event
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
 from butterbot.plugin import (
+    ButterPlugin,
     ConfigRegistrar,
-    LocalPlugin,
     PluginRegistrar,
     SourceRef,
     SubscriptionSpec,
@@ -39,7 +39,7 @@ class CombinedSource(BaseSource):
         pass
 
 
-class CombinedPlugin(LocalPlugin):
+class CombinedPlugin(ButterPlugin):
     def register_config(self, registrar: ConfigRegistrar) -> None:
         registrar.register_builder("local-combined", dict)
         registrar.register_factory(

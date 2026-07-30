@@ -12,6 +12,7 @@ import butterbot.core.source as core_source
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CORE_ROOT = PROJECT_ROOT / "butterbot" / "core"
+PLUGIN_ROOT = PROJECT_ROOT / "butterbot" / "plugin"
 HANDLER_PLUGIN_FILES = (
     PROJECT_ROOT / "examples" / "plugins" / "manager_example" / "plugin.py",
     PROJECT_ROOT
@@ -42,7 +43,7 @@ def test_app_and_plugin_public_api_import_in_fresh_process() -> None:
     plugin_import = "\n".join(
         (
             "from butterbot.plugin import (",
-            "    Event, LocalPlugin, PluginBootstrap, PluginRegistrar,",
+            "    Event, ButterPlugin, PluginBootstrap, PluginRegistrar,",
             "    SourceRef, SubscriptionSpec,",
             ")",
         )
@@ -64,6 +65,82 @@ def test_app_and_plugin_public_api_import_in_fresh_process() -> None:
 def test_source_ref_is_not_exported_from_core() -> None:
     assert not hasattr(core, "SourceRef")
     assert not hasattr(core_source, "SourceRef")
+
+
+def test_obsolete_plugin_base_names_are_not_exported() -> None:
+    import butterbot.plugin as plugin
+
+    assert not hasattr(plugin, "LocalPlugin")
+    assert not hasattr(plugin, "PluginBase")
+
+
+def test_plugin_package_is_grouped_by_responsibility() -> None:
+    root_modules = {path.name for path in PLUGIN_ROOT.glob("*.py")}
+
+    assert root_modules == {"__init__.py", "errors.py"}
+    assert {
+        "contracts",
+        "discovery",
+        "runtime",
+    } <= {path.name for path in PLUGIN_ROOT.iterdir() if path.is_dir()}
+
+
+def test_descriptor_module_has_one_public_concept() -> None:
+    from butterbot.plugin.contracts import descriptor
+
+    assert descriptor.__all__ == ["PluginDescriptor"]
+
+
+def _module_directory(module_name: str) -> Path | None:
+    module_path = PROJECT_ROOT.joinpath(*module_name.split("."))
+    file_path = module_path.with_suffix(".py")
+    if file_path.is_file():
+        return file_path.parent
+    if module_path.joinpath("__init__.py").is_file():
+        return module_path
+    return None
+
+
+def test_plugin_internal_imports_follow_directory_boundaries() -> None:
+    """同目录使用单点相对导入，跨目录使用完整绝对导入."""
+    for path in PLUGIN_ROOT.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.level:
+                assert node.level == 1, path
+                assert node.module is not None, path
+                target_dir = _module_directory(
+                    ".".join(
+                        (
+                            *path.parent.relative_to(PROJECT_ROOT).parts,
+                            node.module,
+                        )
+                    )
+                )
+                assert target_dir == path.parent, (path, node.module)
+                continue
+
+            module_names: tuple[str, ...] = ()
+            if isinstance(node, ast.ImportFrom) and node.module is not None:
+                module_names = (node.module,)
+            elif isinstance(node, ast.Import):
+                module_names = tuple(alias.name for alias in node.names)
+            for module_name in module_names:
+                if module_name == "butterbot.plugin" or module_name.startswith(
+                    "butterbot.plugin."
+                ):
+                    target_dir = _module_directory(module_name)
+                    assert target_dir is not None, (path, module_name)
+                    assert target_dir != path.parent, (path, module_name)
+
+
+def test_lazy_plugin_exports_use_absolute_module_paths() -> None:
+    import butterbot.plugin as plugin
+
+    assert all(
+        module_name.startswith("butterbot.plugin.")
+        for module_name, _ in plugin._LAZY_EXPORTS.values()
+    )
 
 
 def test_core_does_not_import_plugin_package() -> None:

@@ -14,11 +14,15 @@ from butterbot.app.config import (
 )
 from butterbot.app.source_factory import SourceFactoryRegistry
 from butterbot.core.exceptions import ConfigError
+from butterbot.plugin.discovery.catalog import (
+    PluginCandidate,
+    PluginCatalog,
+    PluginEntryPoint,
+)
+from butterbot.plugin.discovery.settings import PluginSettings
+from butterbot.plugin.errors import PluginRegistrationError
 
-from .discovery import PluginCandidate, PluginCatalog, PluginEntryPoint
-from .errors import PluginRegistrationError
 from .manager import PluginManager
-from .settings import PluginSettings
 
 BotAppFactory = Callable[..., BotApp]
 

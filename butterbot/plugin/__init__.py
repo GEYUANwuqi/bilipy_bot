@@ -12,16 +12,13 @@ from typing import TYPE_CHECKING, Any
 from butterbot.core.event import Event
 from butterbot.core.filter import AndFilter, BaseFilter, OrFilter
 from butterbot.core.types import BaseType
-
-from .descriptor import (
-    LocalPlugin,
-    Plugin,
-    PluginBase,
+from butterbot.plugin.contracts import (
+    ButterPlugin,
     PluginDescriptor,
-    PluginHooks,
-    validate_plugin_id,
+    SourceRef,
+    SubscriptionSpec,
 )
-from .discovery import ENTRY_POINT_GROUP, PluginCandidate, PluginCatalog
+
 from .errors import (
     PluginCompatibilityError,
     PluginDependencyError,
@@ -29,52 +26,100 @@ from .errors import (
     PluginError,
     PluginRegistrationError,
 )
-from .extension import ExtensionRegistrar, SubscriptionSpec
-from .manager import PluginManager, PluginState, PluginStatus
-from .manifest import LocalPluginManifest
-from .origin import (
-    DirectoryPluginOrigin,
-    DistributionPluginOrigin,
-    PluginOrigin,
-)
-from .registrar import (
-    CleanupRegistration,
-    ConfigRegistrar,
-    PluginRegistrar,
-    RegistrationReceipt,
-)
-from .settings import LocalPluginSettings, PluginSettings
-from .source_ref import SourceRef
 
 if TYPE_CHECKING:
-    from .bootstrap import (
+    from butterbot.plugin.discovery import (
+        DirectoryPluginOrigin,
+        DistributionPluginOrigin,
+        LocalPluginManifest,
+        LocalPluginSettings,
+        PluginCandidate,
+        PluginCatalog,
+        PluginOrigin,
+        PluginSettings,
+    )
+    from butterbot.plugin.discovery.catalog import ENTRY_POINT_GROUP
+    from butterbot.plugin.runtime.bootstrap import (
         BotAppFactory,
         PluginBootstrap,
         bootstrap_app,
         validate_plugin_config,
     )
+    from butterbot.plugin.runtime.extension import ExtensionRegistrar
+    from butterbot.plugin.runtime.manager import (
+        PluginManager,
+        PluginState,
+        PluginStatus,
+    )
+    from butterbot.plugin.runtime.registrar import (
+        CleanupRegistration,
+        ConfigRegistrar,
+        PluginRegistrar,
+        RegistrationReceipt,
+    )
 
-_BOOTSTRAP_EXPORTS = frozenset(
-    {
-        "BotAppFactory",
-        "PluginBootstrap",
-        "bootstrap_app",
+_LAZY_EXPORTS = {
+    "BotAppFactory": ("butterbot.plugin.runtime.bootstrap", "BotAppFactory"),
+    "CleanupRegistration": (
+        "butterbot.plugin.runtime.registrar",
+        "CleanupRegistration",
+    ),
+    "ConfigRegistrar": ("butterbot.plugin.runtime.registrar", "ConfigRegistrar"),
+    "DirectoryPluginOrigin": (
+        "butterbot.plugin.discovery.origin",
+        "DirectoryPluginOrigin",
+    ),
+    "DistributionPluginOrigin": (
+        "butterbot.plugin.discovery.origin",
+        "DistributionPluginOrigin",
+    ),
+    "ENTRY_POINT_GROUP": ("butterbot.plugin.discovery.catalog", "ENTRY_POINT_GROUP"),
+    "ExtensionRegistrar": (
+        "butterbot.plugin.runtime.extension",
+        "ExtensionRegistrar",
+    ),
+    "LocalPluginManifest": (
+        "butterbot.plugin.discovery.manifest",
+        "LocalPluginManifest",
+    ),
+    "LocalPluginSettings": (
+        "butterbot.plugin.discovery.settings",
+        "LocalPluginSettings",
+    ),
+    "PluginBootstrap": ("butterbot.plugin.runtime.bootstrap", "PluginBootstrap"),
+    "PluginCandidate": ("butterbot.plugin.discovery.catalog", "PluginCandidate"),
+    "PluginCatalog": ("butterbot.plugin.discovery.catalog", "PluginCatalog"),
+    "PluginManager": ("butterbot.plugin.runtime.manager", "PluginManager"),
+    "PluginOrigin": ("butterbot.plugin.discovery.origin", "PluginOrigin"),
+    "PluginRegistrar": ("butterbot.plugin.runtime.registrar", "PluginRegistrar"),
+    "PluginSettings": ("butterbot.plugin.discovery.settings", "PluginSettings"),
+    "PluginState": ("butterbot.plugin.runtime.manager", "PluginState"),
+    "PluginStatus": ("butterbot.plugin.runtime.manager", "PluginStatus"),
+    "RegistrationReceipt": (
+        "butterbot.plugin.runtime.registrar",
+        "RegistrationReceipt",
+    ),
+    "bootstrap_app": ("butterbot.plugin.runtime.bootstrap", "bootstrap_app"),
+    "validate_plugin_config": (
+        "butterbot.plugin.runtime.bootstrap",
         "validate_plugin_config",
-    }
-)
+    ),
+}
 
 
 def __getattr__(name: str) -> Any:
-    """延迟导入依赖 BotApp 的 bootstrap，避免应用入口循环导入."""
-    if name not in _BOOTSTRAP_EXPORTS:
+    """延迟导入发现与运行时控制面，保持插件契约轻量."""
+    target = _LAZY_EXPORTS.get(name)
+    if target is None:
         raise AttributeError("module %r has no attribute %r" % (__name__, name))
-    value = getattr(import_module(".bootstrap", __name__), name)
+    module_name, attribute = target
+    value = getattr(import_module(module_name), attribute)
     globals()[name] = value
     return value
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | _BOOTSTRAP_EXPORTS)
+    return sorted(set(globals()) | set(_LAZY_EXPORTS))
 
 
 __all__ = [
@@ -82,6 +127,7 @@ __all__ = [
     "BaseFilter",
     "BaseType",
     "BotAppFactory",
+    "ButterPlugin",
     "CleanupRegistration",
     "ConfigRegistrar",
     "DirectoryPluginOrigin",
@@ -89,12 +135,9 @@ __all__ = [
     "ENTRY_POINT_GROUP",
     "Event",
     "ExtensionRegistrar",
-    "LocalPlugin",
     "LocalPluginManifest",
     "LocalPluginSettings",
     "OrFilter",
-    "Plugin",
-    "PluginBase",
     "PluginBootstrap",
     "PluginCandidate",
     "PluginCatalog",
@@ -103,7 +146,6 @@ __all__ = [
     "PluginDescriptor",
     "PluginDiscoveryError",
     "PluginError",
-    "PluginHooks",
     "PluginManager",
     "PluginOrigin",
     "PluginRegistrar",
@@ -116,5 +158,4 @@ __all__ = [
     "SubscriptionSpec",
     "bootstrap_app",
     "validate_plugin_config",
-    "validate_plugin_id",
 ]

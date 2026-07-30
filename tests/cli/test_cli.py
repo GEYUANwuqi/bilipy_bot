@@ -86,7 +86,7 @@ def test_plugins_init_list_and_check(
     assert 'entry = "plugin.py"' in plugin_root.joinpath("plugin.toml").read_text(
         encoding="utf-8"
     )
-    assert "LocalPlugin" in plugin_root.joinpath("plugin.py").read_text(
+    assert "ButterPlugin" in plugin_root.joinpath("plugin.py").read_text(
         encoding="utf-8"
     )
     assert "create_plugin" not in plugin_root.joinpath("plugin.py").read_text(

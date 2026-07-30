@@ -1,35 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-import re
-from collections.abc import Callable, Coroutine
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ParamSpec
+from collections.abc import Callable
+from typing import TYPE_CHECKING, ParamSpec
 from uuid import UUID
 
-from butterbot.core.event import Event, SubscriptionHandle
+from butterbot.core.event import SubscriptionHandle
 from butterbot.core.exceptions import LifecycleError, SourceError
 from butterbot.core.source import BaseSourceT
-from butterbot.core.types import BaseType
-
-from .source_ref import SourceRef
+from butterbot.plugin.contracts.routing import SubscriptionSpec
 
 if TYPE_CHECKING:
     from butterbot.app.bot_app import BotApp
-    from butterbot.core.filter import BaseFilter
 
 _SourceP = ParamSpec("_SourceP")
-
-
-@dataclass(frozen=True, slots=True)
-class SubscriptionSpec:
-    """一个待解析的逻辑订阅声明."""
-
-    source: SourceRef
-    status: str | re.Pattern[str] | BaseType
-    callback: Callable[[Event], Coroutine[Any, Any, None]]
-    event_filter: BaseFilter | None = None
-    allow_multiple: bool = False
 
 
 class ExtensionRegistrar:
@@ -194,3 +178,6 @@ class ExtensionRegistrar:
             self.commit()
         else:
             await self.rollback()
+
+
+__all__ = ["ExtensionRegistrar"]

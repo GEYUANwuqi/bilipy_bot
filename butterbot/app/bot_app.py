@@ -12,11 +12,11 @@ from butterbot.core.event import Event, EventBus, SubscriptionHandle
 from butterbot.core.exceptions import ConfigError
 from butterbot.core.source import BaseSource, BaseSourceT
 from butterbot.core.types import BaseType
-from butterbot.plugin.source_ref import SourceRef
+from butterbot.plugin.contracts.routing import SourceRef
 
 if TYPE_CHECKING:
     from butterbot.core.filter import BaseFilter
-    from butterbot.plugin.manager import PluginManager
+    from butterbot.plugin.runtime.manager import PluginManager
 
 from .config import RuntimeConfig
 from .source_factory import SourceFactoryEntry, SourceFactoryRegistry
@@ -406,11 +406,12 @@ class BotApp:
     # ============ 生命周期 ============ #
 
     async def start(self) -> None:
-        """启动应用（启动所有事件源）.
+        """启动应用、所有事件源和插件生命周期回调.
 
         Raises:
             SourceStartError: 一个或多个事件源启动失败
                 （抛出前已回滚成功启动的事件源）
+            PluginRegistrationError: 插件 ``on_start`` 回调失败
         """
         if self._plugin_manager is not None:
             await self._plugin_manager.register()
@@ -421,19 +422,28 @@ class BotApp:
                 await self._plugin_manager.fail_start(exc)
             raise
         if self._plugin_manager is not None:
-            self._plugin_manager.mark_started()
+            try:
+                await self._plugin_manager.start()
+            except BaseException:
+                await self._manager.stop()
+                raise
 
     async def stop(self) -> None:
-        """停止应用（停止所有事件源）."""
-        await self._manager.stop()
+        """停止插件生命周期回调和所有事件源."""
+        try:
+            if self._plugin_manager is not None:
+                await self._plugin_manager.stop()
+        finally:
+            await self._manager.stop()
 
     async def close(self) -> None:
         """关闭应用，释放所有资源.
 
         关闭顺序是固定的，且不能调换：
 
-        1. experimental ``PluginManager.aclose()``（若存在）— 逆依赖顺序撤销
-           Handler、close callback、插件 Source 和配置 registry；
+        1. experimental ``PluginManager.aclose()``（若存在）— 逆依赖执行
+           ``on_stop``，再撤销 Handler、close callback、插件 Source 和配置
+           registry；
         2. ``SourceManager.close()`` — 停止全部事件源并清空注册；
            先停源，总线才不会在排空期间又收到新事件。
         3. ``EventBus.close()`` — 排空正在执行的订阅回调（``close_timeout`` 超时后取消）；

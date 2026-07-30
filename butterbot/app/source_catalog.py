@@ -5,7 +5,7 @@ from uuid import UUID
 
 from butterbot.core.exceptions import SourceError
 from butterbot.core.source import BaseSource
-from butterbot.plugin.source_ref import SourceRef
+from butterbot.plugin.contracts.routing import SourceRef
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,13 +1,14 @@
 """示例文件的可执行契约测试."""
 
 import ast
+import inspect
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
 
 from butterbot.plugin import (
-    LocalPlugin,
+    ButterPlugin,
     LocalPluginSettings,
     PluginCatalog,
 )
@@ -84,4 +85,16 @@ def test_manager_example_is_an_auto_discovered_local_plugin() -> None:
 
     loaded = catalog.get("example.bilibili-manager")
     assert loaded is not None
-    assert isinstance(loaded.hooks, LocalPlugin)
+    assert isinstance(loaded.hooks, ButterPlugin)
+    for name in (
+        "handle_get_dynamic",
+        "handle_new_dynamic",
+        "handle_del_dynamic",
+        "handle_live_online",
+        "handle_live_status",
+        "handle_live_open",
+        "handle_live_close",
+        "on_start",
+        "on_stop",
+    ):
+        assert inspect.ismethod(getattr(loaded.hooks, name))
