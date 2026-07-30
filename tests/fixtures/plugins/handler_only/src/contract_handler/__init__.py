@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import os
 
-from butterbot.app.extensions.experimental import (
+from butterbot.plugin import (
+    Event,
     PluginBase,
     PluginDescriptor,
     PluginRegistrar,
+    SourceRef,
     SubscriptionSpec,
 )
-from butterbot.core.event import Event
-from butterbot.core.source import SourceRef
 
 RECEIVED: list[str] = []
 
@@ -39,8 +39,4 @@ class HandlerPlugin(PluginBase):
         )
 
 
-def create_plugin() -> HandlerPlugin:
-    return HandlerPlugin()
-
-
-__all__ = ["RECEIVED", "create_plugin"]
+__all__ = ["HandlerPlugin", "RECEIVED"]

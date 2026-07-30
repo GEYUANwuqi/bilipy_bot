@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from butterbot.app.extensions.experimental import (
+from butterbot.core.data import BaseDataMixin
+from butterbot.core.event import Event
+from butterbot.core.source import BaseSource
+from butterbot.core.types import BaseType
+from butterbot.plugin import (
     ConfigRegistrar,
     PluginBase,
     PluginDescriptor,
     PluginRegistrar,
+    SourceRef,
     SubscriptionSpec,
 )
-from butterbot.core.data import BaseDataMixin
-from butterbot.core.event import Event
-from butterbot.core.source import BaseSource, SourceRef
-from butterbot.core.types import BaseType
 
 RECEIVED: list[str] = []
 
@@ -68,8 +69,4 @@ class CombinedPlugin(PluginBase):
         )
 
 
-def create_plugin() -> CombinedPlugin:
-    return CombinedPlugin()
-
-
-__all__ = ["RECEIVED", "create_plugin"]
+__all__ = ["CombinedPlugin", "RECEIVED"]

@@ -11,13 +11,13 @@ from importlib.metadata import entry_points, version
 from pathlib import Path
 from typing import Iterator, cast
 
-from butterbot.app.extensions.experimental import (
+from butterbot.core.exceptions import SourceStartError
+from butterbot.plugin import (
     PluginBootstrap,
     PluginDiscoveryError,
     PluginRegistrationError,
     PluginState,
 )
-from butterbot.core.exceptions import SourceStartError
 
 PLUGIN_IDS = (
     "contract.combined",

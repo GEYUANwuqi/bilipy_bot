@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import os
 
-from butterbot.app.extensions.experimental import (
-    ConfigRegistrar,
-    PluginBase,
-    PluginDescriptor,
-)
 from butterbot.core.data import BaseDataMixin
 from butterbot.core.event import Event
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
+from butterbot.plugin import (
+    ConfigRegistrar,
+    PluginBase,
+    PluginDescriptor,
+)
 
 
 class ContractType(BaseType):
@@ -47,6 +47,10 @@ class SourcePlugin(PluginBase):
         provides=("contract.events",),
     )
 
+    def __init__(self) -> None:
+        if os.environ.get("BUTTERBOT_CONTRACT_FAIL_IMPORT"):
+            raise RuntimeError("external plugin import failed")
+
     def register_config(self, registrar: ConfigRegistrar) -> None:
         registrar.register_builder("contract", dict)
         registrar.register_factory(
@@ -56,10 +60,4 @@ class SourcePlugin(PluginBase):
         )
 
 
-def create_plugin() -> SourcePlugin:
-    if os.environ.get("BUTTERBOT_CONTRACT_FAIL_IMPORT"):
-        raise RuntimeError("external plugin import failed")
-    return SourcePlugin()
-
-
-__all__ = ["ContractData", "ContractSource", "ContractType", "create_plugin"]
+__all__ = ["ContractData", "ContractSource", "ContractType", "SourcePlugin"]

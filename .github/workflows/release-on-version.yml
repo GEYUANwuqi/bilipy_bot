@@ -127,6 +127,15 @@ jobs:
           "$GITHUB_WORKSPACE/.smoke-venv/bin/python" \
             "$GITHUB_WORKSPACE/scripts/smoke_plugins.py"
 
+      - name: Smoke test local directory and hybrid plugins
+        shell: bash
+        run: |
+          smoke_dir="$(mktemp -d)"
+          cd "$smoke_dir"
+          PYTHONDONTWRITEBYTECODE=1 \
+            "$GITHUB_WORKSPACE/.smoke-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/smoke_local_plugins.py"
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
