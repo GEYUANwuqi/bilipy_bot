@@ -14,10 +14,11 @@ from typing import Sequence
 import yaml
 
 from butterbot import __version__
-from butterbot.app import ConfigError, RuntimeConfig
+from butterbot.app import ConfigError
+from butterbot.app.extensions.experimental import PluginBootstrap, PluginError
 
 from .errors import CliError
-from .loader import load_app
+from .loader import load_app, load_app_factory, resolve_entrypoint
 from .state import RuntimeState, StateStore, is_process_alive
 
 _STATE_DIRECTORY = ".butterbot"
@@ -39,7 +40,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise
         print("错误: %s" % exc, file=sys.stderr)
         return exc.exit_code
-    except (ConfigError, FileNotFoundError, yaml.YAMLError) as exc:
+    except (ConfigError, PluginError, FileNotFoundError, yaml.YAMLError) as exc:
         if getattr(args, "debug", False):
             raise
         print("配置无效: %s" % exc, file=sys.stderr)
@@ -69,6 +70,11 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.set_defaults(handler=_run)
 
     check_parser = commands.add_parser("check", help="检查当前目录的 config.yaml")
+    check_parser.add_argument(
+        "entrypoint",
+        nargs="?",
+        help="插件模式应用 factory，格式为 module:attribute",
+    )
     check_parser.set_defaults(handler=_check_config)
 
     restart_parser = commands.add_parser("restart", help="完整重启应用")
@@ -86,9 +92,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _check_config(args: argparse.Namespace) -> int:
-    del args
     path = Path("config.yaml").resolve()
-    RuntimeConfig.from_yaml(path)
+    bootstrap = PluginBootstrap(path)
+    if args.entrypoint is None:
+        bootstrap.validate()
+    else:
+        bootstrap.validate(load_app_factory(args.entrypoint))
     print("配置有效: %s" % path)
     return 0
 
@@ -108,7 +117,13 @@ def _run(args: argparse.Namespace) -> int:
         print("ButterBot 已在后台启动（PID %s）" % pid)
         return 0
 
-    app = load_app(args.entrypoint)
+    # 先保持旧入口错误优先级；模块只解析一次，后续 import 会命中缓存。
+    resolve_entrypoint(args.entrypoint)
+    bootstrap = PluginBootstrap()
+    if bootstrap.settings.enabled:
+        app = bootstrap.build(load_app_factory(args.entrypoint))
+    else:
+        app = load_app(args.entrypoint)
     state = RuntimeState.running(
         pid=os.getpid(),
         entrypoint=args.entrypoint,

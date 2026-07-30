@@ -48,6 +48,30 @@ def test_check_config_failure(
     assert "配置无效" in capsys.readouterr().err
 
 
+def test_check_config_with_plugin_app_factory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    (tmp_path / "config.yaml").write_text("{}\n", encoding="utf-8")
+    (tmp_path / "checked_app.py").write_text(
+        "from butterbot.app import BotApp\n"
+        "def create_app(*, config, source_factory_registry):\n"
+        "    return BotApp(\n"
+        "        config,\n"
+        "        source_factory_registry=source_factory_registry,\n"
+        "    )\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    exit_code = main(["check", "checked_app:create_app"])
+
+    assert exit_code == 0
+    assert "配置有效" in capsys.readouterr().out
+
+
 def test_status_without_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -14,10 +14,11 @@ from butterbot.core.source import BaseSource, BaseSourceT, SourceRef
 from butterbot.core.types import BaseType
 
 if TYPE_CHECKING:
+    from butterbot.app.extensions.experimental.manager import PluginManager
     from butterbot.core.filter import BaseFilter
 
 from .config import RuntimeConfig
-from .source_factory import SourceFactory, SourceFactoryRegistry
+from .source_factory import SourceFactoryEntry, SourceFactoryRegistry
 from .source_manager import SourceManager
 
 _BotSourceP = ParamSpec("_BotSourceP")
@@ -76,6 +77,7 @@ class BotApp:
 
         # 事件源生命周期管理器
         self._manager = SourceManager(self._ctx)
+        self._plugin_manager: PluginManager | None = None
         self._add_configured_sources(source_factory_registry)
 
         self._close_timeout = close_timeout
@@ -85,7 +87,7 @@ class BotApp:
         registry: SourceFactoryRegistry | None,
     ) -> None:
         """注册 YAML ``kwarg`` 显式声明的 Source 实例."""
-        configured: list[tuple[str, str, SourceFactory, dict[str, Any]]] = []
+        configured: list[tuple[str, SourceFactoryEntry, dict[str, Any]]] = []
         definitions = tuple(self._config.source_definitions.values())
         if not any(definition.kwarg for definition in definitions):
             return
@@ -93,11 +95,11 @@ class BotApp:
         resolved_registry = registry or SourceFactoryRegistry.with_defaults()
         for definition in definitions:
             for factory_name, arguments in definition.kwarg.items():
-                factory = resolved_registry.get(
+                factory_entry = resolved_registry.resolve(
                     definition.source_name,
                     factory_name,
                 )
-                if factory is None:
+                if factory_entry is None:
                     available = ", ".join(
                         resolved_registry.names(definition.source_name)
                     )
@@ -116,19 +118,31 @@ class BotApp:
                 configured.append(
                     (
                         definition.config_key,
-                        factory_name,
-                        factory,
+                        factory_entry,
                         kwargs,
                     )
                 )
 
-        for config_key, factory_name, factory, kwargs in configured:
+        added_source_ids: list[UUID] = []
+        for config_key, factory_entry, kwargs in configured:
             try:
-                self._manager.add_source(factory, **kwargs)
-            except Exception as exc:
+                if factory_entry.owner_id is None:
+                    source = self._manager.add_source(factory_entry.factory, **kwargs)
+                else:
+                    source = self._manager.add_owned_source(
+                        factory_entry.owner_id,
+                        factory_entry.factory,
+                        **kwargs,
+                    )
+                added_source_ids.append(source.uuid)
+            except BaseException as exc:
+                for source_id in reversed(added_source_ids):
+                    self._manager.discard_unstarted_source(source_id)
+                if not isinstance(exc, Exception):
+                    raise
                 raise ConfigError(
                     "Source 配置 '%s' 自动实例化 '%s' 失败（%s）"
-                    % (config_key, factory_name, type(exc).__name__)
+                    % (config_key, factory_entry.factory_id, type(exc).__name__)
                 ) from exc
 
     # ============ 属性 ============ #
@@ -167,6 +181,17 @@ class BotApp:
         """检查是否已关闭."""
         return self._manager.closed
 
+    def _attach_plugin_manager(self, manager: "PluginManager") -> None:
+        """由 experimental bootstrap 绑定唯一插件控制面."""
+        if self._plugin_manager is not None:
+            raise RuntimeError("BotApp 已绑定 PluginManager")
+        self._plugin_manager = manager
+
+    async def _prepare_plugins(self) -> None:
+        """执行 experimental 插件运行阶段注册，不启动 Source."""
+        if self._plugin_manager is not None:
+            await self._plugin_manager.register()
+
     # ============ Source 管理（委托 SourceManager）============ #
 
     def add_source(
@@ -190,6 +215,21 @@ class BotApp:
             ``add_source`` → ``subscribe`` → ``await start_source(...)``。
         """
         return self._manager.add_source(source_cls, *args, **kwargs)
+
+    def _add_owned_source(
+        self,
+        owner_id: str,
+        source_cls: Callable[_BotSourceP, BaseSourceT],
+        *args: _BotSourceP.args,
+        **kwargs: _BotSourceP.kwargs,
+    ) -> BaseSourceT:
+        """由实验插件 registrar 为已校验 owner 注册 Source."""
+        return self._manager.add_owned_source(
+            owner_id,
+            source_cls,
+            *args,
+            **kwargs,
+        )
 
     async def remove_source(self, source_id: UUID) -> BaseSource | None:
         """移除事件源.
@@ -371,7 +411,16 @@ class BotApp:
             SourceStartError: 一个或多个事件源启动失败
                 （抛出前已回滚成功启动的事件源）
         """
-        await self._manager.start()
+        if self._plugin_manager is not None:
+            await self._plugin_manager.register()
+        try:
+            await self._manager.start()
+        except BaseException as exc:
+            if self._plugin_manager is not None:
+                await self._plugin_manager.fail_start(exc)
+            raise
+        if self._plugin_manager is not None:
+            self._plugin_manager.mark_started()
 
     async def stop(self) -> None:
         """停止应用（停止所有事件源）."""
@@ -382,21 +431,27 @@ class BotApp:
 
         关闭顺序是固定的，且不能调换：
 
-        1. ``SourceManager.close()`` — 停止全部事件源并清空注册；
+        1. experimental ``PluginManager.aclose()``（若存在）— 逆依赖顺序撤销
+           Handler、close callback、插件 Source 和配置 registry；
+        2. ``SourceManager.close()`` — 停止全部事件源并清空注册；
            先停源，总线才不会在排空期间又收到新事件。
-        2. ``EventBus.close()`` — 排空正在执行的订阅回调（``close_timeout`` 超时后取消）；
+        3. ``EventBus.close()`` — 排空正在执行的订阅回调（``close_timeout`` 超时后取消）；
            先排空回调，回调里才不会用到下一步已经关掉的 API。
-        3. ``ApiRegistry.aclose_all()`` — 释放各 API 持有的连接与后台任务。
+        4. ``ApiRegistry.aclose_all()`` — 释放各 API 持有的连接与后台任务。
 
         任一步因取消而抛出时，后续步骤仍会通过嵌套 ``finally`` 获得清理机会。
         """
         try:
-            await self._manager.close()
+            if self._plugin_manager is not None:
+                await self._plugin_manager.aclose()
         finally:
             try:
-                await self.bus.close(timeout=self._close_timeout)
+                await self._manager.close()
             finally:
-                await self.api_ctx.aclose_all()
+                try:
+                    await self.bus.close(timeout=self._close_timeout)
+                finally:
+                    await self.api_ctx.aclose_all()
 
     # ============ 阻塞式入口 ============ #
 

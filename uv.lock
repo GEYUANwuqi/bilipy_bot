@@ -235,6 +235,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "bilibili-api-python" },
+    { name = "packaging" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -256,6 +257,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.1" },
     { name = "bilibili-api-python", specifier = ">=17.4.2" },
+    { name = "packaging", specifier = ">=24" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "pyyaml", specifier = ">=6.0" },

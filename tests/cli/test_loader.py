@@ -9,7 +9,7 @@ import pytest
 
 from butterbot.app import BotApp
 from butterbot.cli.errors import CliError
-from butterbot.cli.loader import load_app
+from butterbot.cli.loader import load_app, load_app_factory
 
 
 def _write_module(tmp_path: Path, content: str) -> str:
@@ -35,6 +35,54 @@ def test_load_bot_app_object(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     app = load_app(f"{module}:app")
 
     assert isinstance(app, BotApp)
+
+
+def test_load_zero_argument_app_factory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _write_module(
+        tmp_path,
+        "from butterbot.app import BotApp, RuntimeConfig\n"
+        "def create_app():\n"
+        "    return BotApp(RuntimeConfig())\n",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    app = load_app(f"{module}:create_app")
+
+    assert isinstance(app, BotApp)
+
+
+def test_load_plugin_app_factory_without_calling_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _write_module(
+        tmp_path,
+        "def create_app(*, config, source_factory_registry):\n"
+        "    raise AssertionError('loader 不应调用 factory')\n",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    factory = load_app_factory(f"{module}:create_app")
+
+    assert callable(factory)
+
+
+def test_plugin_mode_rejects_constructed_app(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _write_module(
+        tmp_path,
+        "from butterbot.app import BotApp, RuntimeConfig\n"
+        "app = BotApp(RuntimeConfig())\n",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with pytest.raises(CliError, match="必须是 factory"):
+        load_app_factory(f"{module}:app")
 
 
 @pytest.mark.parametrize(
