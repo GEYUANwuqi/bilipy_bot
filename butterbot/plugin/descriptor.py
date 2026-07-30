@@ -19,7 +19,7 @@ _DESCRIPTOR_SCHEMA_VERSION = 1
 
 @dataclass(frozen=True, slots=True)
 class PluginDescriptor:
-    """实验插件的最小身份、兼容和依赖描述."""
+    """插件的最小身份、兼容和依赖描述."""
 
     plugin_id: str
     version: str
@@ -77,16 +77,21 @@ class PluginDescriptor:
 
 
 @runtime_checkable
-class Plugin(Protocol):
-    """可信、启动期实验插件协议."""
-
-    descriptor: PluginDescriptor
+class PluginHooks(Protocol):
+    """两种插件来源共享的启动期注册 hook."""
 
     def register_config(self, registrar: "ConfigRegistrar") -> None:
         """登记配置 builder 和 Source factory，不产生运行时任务."""
 
     async def register(self, registrar: "PluginRegistrar") -> None:
         """登记 Source、Handler 和清理回调."""
+
+
+@runtime_checkable
+class Plugin(PluginHooks, Protocol):
+    """由 distribution entry point 返回的完整插件协议."""
+
+    descriptor: PluginDescriptor
 
 
 class PluginBase:
@@ -99,6 +104,23 @@ class PluginBase:
 
     async def register(self, registrar: "PluginRegistrar") -> None:
         del registrar
+
+
+class LocalPlugin:
+    """本地目录入口模块中可被自动发现的插件基类."""
+
+    def register_config(self, registrar: "ConfigRegistrar") -> None:
+        del registrar
+
+    async def register(self, registrar: "PluginRegistrar") -> None:
+        del registrar
+
+
+def validate_plugin_id(value: object) -> str:
+    """校验并返回跨来源稳定 plugin ID."""
+    _validate_identifier(value, "plugin_id", _PLUGIN_ID_PATTERN)
+    assert isinstance(value, str)
+    return value
 
 
 def _validate_identifier(
@@ -131,4 +153,7 @@ __all__ = [
     "Plugin",
     "PluginBase",
     "PluginDescriptor",
+    "PluginHooks",
+    "LocalPlugin",
+    "validate_plugin_id",
 ]

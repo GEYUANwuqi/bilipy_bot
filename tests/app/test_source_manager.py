@@ -9,8 +9,9 @@ from butterbot.app.config import RuntimeConfig
 from butterbot.app.source_manager import SourceManager
 from butterbot.core.context import AppContext
 from butterbot.core.exceptions import LifecycleError, SourceError, SourceStartError
-from butterbot.core.source import BaseSource, SourceRef
+from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
+from butterbot.plugin import SourceRef
 
 
 class StubType(BaseType):

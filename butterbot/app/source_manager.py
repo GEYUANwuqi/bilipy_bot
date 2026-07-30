@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, Callable, ParamSpec, overload
 from uuid import UUID
 
 from butterbot.core.exceptions import LifecycleError, SourceError, SourceStartError
-from butterbot.core.source import BaseSource, BaseSourceT, SourceRef
+from butterbot.core.source import BaseSource, BaseSourceT
+from butterbot.plugin.source_ref import SourceRef
 
 from .source_catalog import SourceCatalog
 

@@ -1,4 +1,4 @@
-"""实验插件控制面的异常类型."""
+"""插件控制面的异常类型."""
 
 from __future__ import annotations
 

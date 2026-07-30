@@ -72,6 +72,43 @@ def test_check_config_with_plugin_app_factory(
     assert "配置有效" in capsys.readouterr().out
 
 
+def test_plugins_init_list_and_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["plugins", "init", "local.created"]) == 0
+    plugin_root = tmp_path / "plugins" / "local.created"
+    assert plugin_root.joinpath("plugin.toml").is_file()
+    assert plugin_root.joinpath("plugin.py").is_file()
+    assert 'entry = "plugin.py"' in plugin_root.joinpath("plugin.toml").read_text(
+        encoding="utf-8"
+    )
+    assert "LocalPlugin" in plugin_root.joinpath("plugin.py").read_text(
+        encoding="utf-8"
+    )
+    assert "create_plugin" not in plugin_root.joinpath("plugin.py").read_text(
+        encoding="utf-8"
+    )
+    assert main(["plugins", "init", "local.created"]) == 1
+    assert "拒绝覆盖" in capsys.readouterr().err
+
+    (tmp_path / "config.yaml").write_text(
+        "plugins:\n  enabled: [local.created]\n  local: {}\n",
+        encoding="utf-8",
+    )
+    assert main(["plugins", "list"]) == 0
+    output = capsys.readouterr().out
+    assert "local.created" in output
+    assert "directory" in output
+    assert "yes" in output
+
+    assert main(["plugins", "check"]) == 0
+    assert "配置有效" in capsys.readouterr().out
+
+
 def test_status_without_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -6,7 +6,7 @@ import importlib
 from typing import Any, cast
 
 from butterbot.app import BotApp
-from butterbot.app.extensions.experimental import BotAppFactory
+from butterbot.plugin import BotAppFactory
 
 from .errors import CliError
 

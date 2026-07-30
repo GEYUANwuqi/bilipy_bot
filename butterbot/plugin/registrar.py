@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from logging import getLogger
+from pathlib import Path
+from types import MappingProxyType
 from typing import Any, ParamSpec
 from uuid import UUID
 
@@ -22,7 +24,7 @@ from butterbot.core.event import SubscriptionHandle
 from butterbot.core.exceptions import LifecycleError, SourceError
 from butterbot.core.source import BaseSourceT
 
-from ..registrar import ExtensionRegistrar, SubscriptionSpec
+from .extension import ExtensionRegistrar, SubscriptionSpec
 
 _SourceP = ParamSpec("_SourceP")
 _log = getLogger(__name__)
@@ -60,11 +62,20 @@ class ConfigRegistrar:
         owner_id: str,
         builder_registry: ConfigBuilderRegistry,
         factory_registry: SourceFactoryRegistry,
+        *,
+        settings: Mapping[str, object] | None = None,
+        resource_root: Path | None = None,
     ) -> None:
         _validate_owner(owner_id)
         self._owner_id = owner_id
         self._builder_registry = builder_registry
         self._factory_registry = factory_registry
+        self._settings = (
+            MappingProxyType({})
+            if settings is None
+            else MappingProxyType(dict(settings))
+        )
+        self._resource_root = resource_root
         self._builders: list[BuilderRegistration] = []
         self._factories: list[FactoryRegistration] = []
         self._undo: list[Callable[[], bool]] = []
@@ -74,6 +85,16 @@ class ConfigRegistrar:
     @property
     def owner_id(self) -> str:
         return self._owner_id
+
+    @property
+    def settings(self) -> Mapping[str, object]:
+        """返回当前插件隔离且只读的配置 namespace."""
+        return self._settings
+
+    @property
+    def resource_root(self) -> Path | None:
+        """返回本地插件资源根；distribution 插件使用 importlib.resources."""
+        return self._resource_root
 
     @property
     def builders(self) -> tuple[BuilderRegistration, ...]:
@@ -157,8 +178,16 @@ class PluginRegistrar(ExtensionRegistrar):
         owner_id: str,
         *,
         drain_timeout: float = 5.0,
+        settings: Mapping[str, object] | None = None,
+        resource_root: Path | None = None,
     ) -> None:
         super().__init__(app, owner_id, drain_timeout=drain_timeout)
+        self._settings = (
+            MappingProxyType({})
+            if settings is None
+            else MappingProxyType(dict(settings))
+        )
+        self._resource_root = resource_root
         self._cleanups: list[tuple[object, Callable[[], Awaitable[None] | None]]] = []
         self._cleanup_registrations: list[CleanupRegistration] = []
 
@@ -166,6 +195,16 @@ class PluginRegistrar(ExtensionRegistrar):
     def cleanups(self) -> tuple[CleanupRegistration, ...]:
         """返回当前仍登记的 close callback 收据快照."""
         return tuple(self._cleanup_registrations)
+
+    @property
+    def settings(self) -> Mapping[str, object]:
+        """返回与配置阶段相同的只读私有配置."""
+        return self._settings
+
+    @property
+    def resource_root(self) -> Path | None:
+        """返回本地插件根目录，供读取模板和静态资源."""
+        return self._resource_root
 
     def add_source(
         self,

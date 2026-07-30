@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
 
 
 class PluginState(StrEnum):
-    """实验插件从发现到关闭的控制面状态."""
+    """插件从发现到关闭的控制面状态."""
 
     VALIDATED = "validated"
     CONFIGURING = "configuring"
@@ -44,6 +45,9 @@ class PluginStatus:
     plugin_id: str
     version: str
     state: PluginState
+    origin_kind: str
+    origin: str
+    fingerprint: str | None
     error: str | None = None
 
 
@@ -66,10 +70,13 @@ class PluginManager:
         catalog: PluginCatalog,
         builder_registry: "ConfigBuilderRegistry",
         factory_registry: "SourceFactoryRegistry",
+        *,
+        plugin_settings: Mapping[str, Mapping[str, object]] | None = None,
     ) -> None:
         self._catalog = catalog
         self._builder_registry = builder_registry
         self._factory_registry = factory_registry
+        self._plugin_settings = plugin_settings or {}
         self._records = {
             item.descriptor.plugin_id: _PluginRecord(item) for item in catalog.plugins
         }
@@ -91,6 +98,9 @@ class PluginManager:
                 plugin_id=record.plugin_id,
                 version=record.loaded.descriptor.version,
                 state=record.state,
+                origin_kind=record.loaded.origin.kind,
+                origin=record.loaded.origin.location,
+                fingerprint=record.loaded.origin.fingerprint,
                 error=record.error,
             )
             for record in self._ordered_records()
@@ -124,11 +134,13 @@ class PluginManager:
                 plugin_id,
                 self._builder_registry,
                 self._factory_registry,
+                settings=self._plugin_settings.get(plugin_id),
+                resource_root=record.loaded.origin.resource_root,
             )
             self._config_registrars[plugin_id] = registrar
             record.state = PluginState.CONFIGURING
             try:
-                result = record.loaded.plugin.register_config(registrar)
+                result = record.loaded.hooks.register_config(registrar)
                 if inspect.isawaitable(result):
                     if inspect.iscoroutine(result):
                         result.close()
@@ -162,7 +174,13 @@ class PluginManager:
         self._app = app
         try:
             for plugin_id in self.plugin_ids:
-                registrar = PluginRegistrar(app, plugin_id)
+                loaded = self._records[plugin_id].loaded
+                registrar = PluginRegistrar(
+                    app,
+                    plugin_id,
+                    settings=self._plugin_settings.get(plugin_id),
+                    resource_root=loaded.origin.resource_root,
+                )
                 self._runtime_registrars[plugin_id] = registrar
                 for entry in app.manager.source_catalog.by_owner(plugin_id):
                     registrar.adopt_source(entry.source_id)
@@ -199,7 +217,7 @@ class PluginManager:
             registrar = self._runtime_registrars[plugin_id]
             record.state = PluginState.REGISTERING
             try:
-                result = record.loaded.plugin.register(registrar)
+                result = record.loaded.hooks.register(registrar)
                 if not inspect.isawaitable(result):
                     raise TypeError("register 必须是 async 函数")
                 await result
@@ -283,7 +301,7 @@ class PluginManager:
     def _mark_failure(self, failed_id: str, cause: BaseException) -> None:
         failed = self._records[failed_id]
         failed.state = PluginState.FAILED
-        failed.error = "%s: %s" % (type(cause).__name__, cause)
+        failed.error = type(cause).__name__
         for record in self._ordered_records():
             if record.plugin_id == failed_id:
                 continue

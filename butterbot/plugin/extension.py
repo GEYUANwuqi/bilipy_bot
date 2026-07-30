@@ -9,8 +9,10 @@ from uuid import UUID
 
 from butterbot.core.event import Event, SubscriptionHandle
 from butterbot.core.exceptions import LifecycleError, SourceError
-from butterbot.core.source import BaseSourceT, SourceRef
+from butterbot.core.source import BaseSourceT
 from butterbot.core.types import BaseType
+
+from .source_ref import SourceRef
 
 if TYPE_CHECKING:
     from butterbot.app.bot_app import BotApp

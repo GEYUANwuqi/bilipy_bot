@@ -23,7 +23,6 @@ from .config import (
     SourceDefinition,
     register_builder,
 )
-from .extensions import ExtensionRegistrar, SubscriptionSpec
 from .source_catalog import SourceCatalog, SourceCatalogEntry
 from .source_factory import (
     FactoryRegistration,
@@ -39,7 +38,6 @@ __all__ = [
     # 配置
     "BuilderRegistration",
     "ConfigBuilderRegistry",
-    "ExtensionRegistrar",
     "FactoryRegistration",
     "RuntimeConfig",
     "SourceDefinition",
@@ -47,7 +45,6 @@ __all__ = [
     "SourceCatalogEntry",
     "SourceFactoryEntry",
     "SourceFactoryRegistry",
-    "SubscriptionSpec",
     "register_builder",
     # 过滤器
     "AndFilter",

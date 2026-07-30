@@ -15,7 +15,11 @@ import yaml
 
 from butterbot import __version__
 from butterbot.app import ConfigError
-from butterbot.app.extensions.experimental import PluginBootstrap, PluginError
+from butterbot.plugin import (
+    PluginBootstrap,
+    PluginDescriptor,
+    PluginError,
+)
 
 from .errors import CliError
 from .loader import load_app, load_app_factory, resolve_entrypoint
@@ -88,6 +92,37 @@ def _build_parser() -> argparse.ArgumentParser:
 
     status_parser = commands.add_parser("status", help="显示应用运行状态")
     status_parser.set_defaults(handler=_status)
+
+    plugins_parser = commands.add_parser("plugins", help="管理启动期插件")
+    plugin_commands = plugins_parser.add_subparsers(
+        dest="plugin_command",
+        required=True,
+    )
+    plugins_list_parser = plugin_commands.add_parser("list", help="列出已发现插件")
+    plugins_list_parser.set_defaults(handler=_plugins_list)
+
+    plugins_check_parser = plugin_commands.add_parser(
+        "check",
+        help="检查插件发现、导入和注册",
+    )
+    plugins_check_parser.add_argument(
+        "entrypoint",
+        nargs="?",
+        help="插件模式应用 factory，格式为 module:attribute",
+    )
+    plugins_check_parser.set_defaults(handler=_check_config)
+
+    plugins_init_parser = plugin_commands.add_parser(
+        "init",
+        help="创建最小本地目录插件",
+    )
+    plugins_init_parser.add_argument("plugin_id", help="全局稳定插件 ID")
+    plugins_init_parser.add_argument(
+        "--path",
+        default="./plugins",
+        help="本地插件根目录，默认 ./plugins",
+    )
+    plugins_init_parser.set_defaults(handler=_plugins_init)
     return parser
 
 
@@ -99,6 +134,98 @@ def _check_config(args: argparse.Namespace) -> int:
     else:
         bootstrap.validate(load_app_factory(args.entrypoint))
     print("配置有效: %s" % path)
+    return 0
+
+
+def _plugins_list(args: argparse.Namespace) -> int:
+    del args
+    bootstrap = PluginBootstrap(Path("config.yaml").resolve())
+    catalog = bootstrap.discover()
+    candidates = catalog.candidates
+    settings = bootstrap.settings
+    loaded = {item.descriptor.plugin_id: item for item in catalog.plugins}
+    selected = set(settings.enabled)
+    if settings.local is not None and settings.local.auto_enable:
+        selected.update(
+            candidate.plugin_id
+            for candidate in candidates
+            if candidate.origin.kind == "directory"
+        )
+
+    print("ID\tVERSION\tORIGIN\tSELECTED\tCORE\tDEPENDENCIES\tLOCATION")
+    for candidate in candidates:
+        loaded_plugin = loaded.get(candidate.plugin_id)
+        descriptor = (
+            loaded_plugin.descriptor
+            if loaded_plugin is not None
+            else candidate.descriptor
+        )
+        version = descriptor.version if descriptor is not None else "<load required>"
+        if loaded_plugin is not None:
+            core_compatibility = "compatible"
+            dependencies = "ready"
+        elif descriptor is not None:
+            core_compatibility = (
+                "compatible"
+                if descriptor.supports_core(__version__)
+                else "incompatible"
+            )
+            dependencies = "unselected"
+        else:
+            core_compatibility = "deferred"
+            dependencies = "deferred"
+        print(
+            "%s\t%s\t%s\t%s\t%s\t%s\t%s"
+            % (
+                candidate.plugin_id,
+                version,
+                candidate.origin.kind,
+                "yes" if candidate.plugin_id in selected else "no",
+                core_compatibility,
+                dependencies,
+                candidate.origin.location,
+            )
+        )
+    return 0
+
+
+def _plugins_init(args: argparse.Namespace) -> int:
+    descriptor = PluginDescriptor(
+        plugin_id=args.plugin_id,
+        version="0.1.0",
+        requires_core=">=3.1.0.dev2,<4",
+    )
+    plugin_root = Path(args.path).resolve()
+    target = plugin_root / descriptor.plugin_id
+    if target.exists():
+        raise CliError("插件目录已存在，拒绝覆盖: %s" % target)
+
+    target.mkdir(parents=True)
+    (target / "plugin.toml").write_text(
+        "schema_version = 1\n"
+        f'plugin_id = "{descriptor.plugin_id}"\n'
+        f'version = "{descriptor.version}"\n'
+        f'requires_core = "{descriptor.requires_core}"\n'
+        'entry = "plugin.py"\n'
+        "requires_plugins = []\n"
+        "provides = []\n"
+        "requires_distributions = []\n",
+        encoding="utf-8",
+    )
+    (target / "plugin.py").write_text(
+        "from butterbot.plugin import LocalPlugin\n"
+        "\n"
+        "\n"
+        "class Plugin(LocalPlugin):\n"
+        "    def register_config(self, registrar) -> None:\n"
+        "        pass\n"
+        "\n"
+        "    async def register(self, registrar) -> None:\n"
+        "        pass\n"
+        "\n",
+        encoding="utf-8",
+    )
+    print("已创建本地插件: %s" % target)
     return 0
 
 
@@ -120,7 +247,7 @@ def _run(args: argparse.Namespace) -> int:
     # 先保持旧入口错误优先级；模块只解析一次，后续 import 会命中缓存。
     resolve_entrypoint(args.entrypoint)
     bootstrap = PluginBootstrap()
-    if bootstrap.settings.enabled:
+    if bootstrap.settings.requires_plugin_bootstrap:
         app = bootstrap.build(load_app_factory(args.entrypoint))
     else:
         app = load_app(args.entrypoint)

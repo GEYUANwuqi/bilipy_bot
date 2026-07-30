@@ -1,3 +1,5 @@
+"""插件 bootstrap 集成测试."""
+
 from __future__ import annotations
 
 import asyncio
@@ -8,20 +10,21 @@ from typing import Any, ClassVar
 import pytest
 
 from butterbot.app import BotApp
-from butterbot.app.extensions.experimental import (
+from butterbot.core.data import BaseDataMixin
+from butterbot.core.exceptions import ConfigError, SourceError, SourceStartError
+from butterbot.core.source import BaseSource
+from butterbot.core.types import BaseType
+from butterbot.plugin import (
+    Event,
     PluginBase,
     PluginDescriptor,
     PluginRegistrationError,
     PluginState,
+    SourceRef,
     SubscriptionSpec,
     bootstrap_app,
     validate_plugin_config,
 )
-from butterbot.core.data import BaseDataMixin
-from butterbot.core.event import Event
-from butterbot.core.exceptions import ConfigError, SourceError, SourceStartError
-from butterbot.core.source import BaseSource, SourceRef
-from butterbot.core.types import BaseType
 
 CORE_VERSION = "3.1.0.dev2"
 
@@ -62,7 +65,7 @@ class PluginSource(BaseSource):
 class FakeEntryPoint:
     name: str
     target: Any
-    value: str = "tests.fake:create_plugin"
+    value: str = "tests.fake:Plugin"
 
     def load(self) -> Any:
         return self.target

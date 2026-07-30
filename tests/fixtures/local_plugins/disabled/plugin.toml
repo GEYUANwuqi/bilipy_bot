@@ -1,0 +1,8 @@
+schema_version = 1
+plugin_id = "local.contract.disabled"
+version = "0.1.0"
+requires_core = ">=3.1.0.dev2,<4"
+entry = "plugin.py"
+requires_plugins = []
+provides = []
+requires_distributions = []

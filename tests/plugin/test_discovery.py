@@ -1,3 +1,5 @@
+"""插件发现测试."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -5,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from butterbot.app.extensions.experimental import (
+from butterbot.plugin import (
     PluginBase,
     PluginCatalog,
     PluginCompatibilityError,
@@ -21,7 +23,7 @@ CORE_VERSION = "3.1.0.dev2"
 class FakeEntryPoint:
     name: str
     target: Any
-    value: str = "tests.fake:create_plugin"
+    value: str = "tests.fake:Plugin"
     loads: int = 0
 
     def load(self) -> Any:

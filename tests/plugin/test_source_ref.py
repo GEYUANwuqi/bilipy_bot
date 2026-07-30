@@ -1,6 +1,6 @@
 import pytest
 
-from butterbot.core.source import SourceRef
+from butterbot.plugin import SourceRef
 
 
 def test_source_ref_is_hashable() -> None:

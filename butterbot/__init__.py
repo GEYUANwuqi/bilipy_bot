@@ -1,8 +1,12 @@
 """butterbot — 事件驱动的机器人框架.
 
-用户代码请从 :mod:`butterbot.app` 导入公开 API::
+应用代码请从 :mod:`butterbot.app` 导入公开 API::
 
     from butterbot.app import BotApp, Event, RuntimeConfig
+
+插件代码请从 :mod:`butterbot.plugin` 导入插件契约::
+
+    from butterbot.plugin import LocalPlugin, PluginRegistrar
 """
 
 from importlib.metadata import PackageNotFoundError, version

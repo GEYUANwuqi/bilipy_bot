@@ -15,7 +15,7 @@ from butterbot.app.config import (
 from butterbot.app.source_factory import SourceFactoryRegistry
 from butterbot.core.exceptions import ConfigError
 
-from .discovery import PluginCatalog, PluginEntryPoint
+from .discovery import PluginCandidate, PluginCatalog, PluginEntryPoint
 from .errors import PluginRegistrationError
 from .manager import PluginManager
 from .settings import PluginSettings
@@ -56,17 +56,41 @@ class PluginBootstrap:
         """返回最近一次 build 创建的诊断控制面（尚未 build 时为 None）."""
         return self._manager
 
+    def inspect_candidates(self) -> tuple[PluginCandidate, ...]:
+        """只读索引所有来源，不导入任何插件代码."""
+        _, settings = self._load()
+        return PluginCatalog.index_candidates(
+            entry_points=self._entry_points,
+            local=settings.local,
+            config_root=self._path.resolve().parent,
+        )
+
+    def discover(self) -> PluginCatalog:
+        """执行与 build 相同的候选选择、导入和依赖校验."""
+        _, settings = self._load()
+        catalog = PluginCatalog.discover(
+            settings.enabled,
+            entry_points=self._entry_points,
+            local=settings.local,
+            config_root=self._path.resolve().parent,
+            core_version=self._core_version,
+        )
+        configured_ids = set(settings.config_by_plugin)
+        candidate_ids = {candidate.plugin_id for candidate in catalog.candidates}
+        unknown = sorted(configured_ids - candidate_ids)
+        if unknown:
+            raise ConfigError(
+                "plugins.config 引用了未发现的插件: %s" % ", ".join(unknown)
+            )
+        return catalog
+
     def build(
         self,
         app_factory: BotAppFactory = BotApp,
     ) -> BotApp:
         """发现插件、构建配置和应用；运行阶段 hook 延迟到 app.start()."""
         resolved_data, settings = self._load()
-        catalog = PluginCatalog.discover(
-            settings.enabled,
-            entry_points=self._entry_points,
-            core_version=self._core_version,
-        )
+        catalog = self.discover()
 
         builder_registry = ConfigBuilderRegistry.with_defaults()
         factory_registry = SourceFactoryRegistry.with_defaults()
@@ -74,6 +98,7 @@ class PluginBootstrap:
             catalog,
             builder_registry,
             factory_registry,
+            plugin_settings=settings.config_by_plugin,
         )
         self._manager = manager
         manager.configure()

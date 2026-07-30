@@ -10,12 +10,13 @@ from butterbot.core.api import BaseApiT
 from butterbot.core.context import ApiRegistry, AppContext
 from butterbot.core.event import Event, EventBus, SubscriptionHandle
 from butterbot.core.exceptions import ConfigError
-from butterbot.core.source import BaseSource, BaseSourceT, SourceRef
+from butterbot.core.source import BaseSource, BaseSourceT
 from butterbot.core.types import BaseType
+from butterbot.plugin.source_ref import SourceRef
 
 if TYPE_CHECKING:
-    from butterbot.app.extensions.experimental.manager import PluginManager
     from butterbot.core.filter import BaseFilter
+    from butterbot.plugin.manager import PluginManager
 
 from .config import RuntimeConfig
 from .source_factory import SourceFactoryEntry, SourceFactoryRegistry
@@ -182,13 +183,13 @@ class BotApp:
         return self._manager.closed
 
     def _attach_plugin_manager(self, manager: "PluginManager") -> None:
-        """由 experimental bootstrap 绑定唯一插件控制面."""
+        """由插件 bootstrap 绑定唯一插件控制面."""
         if self._plugin_manager is not None:
             raise RuntimeError("BotApp 已绑定 PluginManager")
         self._plugin_manager = manager
 
     async def _prepare_plugins(self) -> None:
-        """执行 experimental 插件运行阶段注册，不启动 Source."""
+        """执行插件运行阶段注册，不启动 Source."""
         if self._plugin_manager is not None:
             await self._plugin_manager.register()
 
@@ -223,7 +224,7 @@ class BotApp:
         *args: _BotSourceP.args,
         **kwargs: _BotSourceP.kwargs,
     ) -> BaseSourceT:
-        """由实验插件 registrar 为已校验 owner 注册 Source."""
+        """由插件 registrar 为已校验 owner 注册 Source."""
         return self._manager.add_owned_source(
             owner_id,
             source_cls,
