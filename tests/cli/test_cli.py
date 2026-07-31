@@ -15,6 +15,7 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
+from butterbot import __version__
 from butterbot.app import BotApp
 from butterbot.cli.errors import CliError
 from butterbot.cli.main import cli, main
@@ -61,6 +62,13 @@ def test_init_creates_complete_runnable_project(
 
     assert main(["init"]) == 1
     assert "拒绝覆盖" in capsys.readouterr().err
+
+
+def test_version_prints_exact_installed_version() -> None:
+    result = CliRunner().invoke(cli, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == __version__
 
 
 def test_run_defaults_to_app_app_and_current_config(

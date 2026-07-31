@@ -36,7 +36,11 @@ _CONFIG_PATH_TYPE = click.Path(
     invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
-@click.version_option(version=__version__, prog_name="ButterBot")
+@click.version_option(
+    version=__version__,
+    prog_name="ButterBot",
+    message="%(version)s",
+)
 @click.pass_context
 def cli(ctx: click.Context) -> None:
     """运行和管理 ButterBot 应用."""
