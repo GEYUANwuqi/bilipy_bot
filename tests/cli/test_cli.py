@@ -10,12 +10,14 @@ import sys
 import time
 from pathlib import Path
 
+import click
 import pytest
 import yaml
+from click.testing import CliRunner
 
 from butterbot.app import BotApp
 from butterbot.cli.errors import CliError
-from butterbot.cli.main import main
+from butterbot.cli.main import cli, main
 from butterbot.cli.state import StateStore, is_process_alive
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -210,10 +212,9 @@ def test_plugin_check_reports_missing_selected_plugin(
     assert "发现错误" in captured.err
 
 
-def test_plugin_command_interactively_writes_all_plugin_settings(
+def test_plugin_command_fallback_writes_all_plugin_settings(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ):
     plugin_root = tmp_path / "plugins"
     _write_plugin(plugin_root, "local.hello", "HelloPlugin")
@@ -228,12 +229,15 @@ def test_plugin_command_interactively_writes_all_plugin_settings(
         "sources": {"keep": {"source_name": "demo"}},
     }
     config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    answers = iter(["1", "2", "e", "l", "1", "2", "3", "4", "s"])
-    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
     monkeypatch.chdir(tmp_path.parent)
 
-    assert main(["plugin", "-config", str(config)]) == 0
+    result = CliRunner().invoke(
+        cli,
+        ["plugin", "-config", str(config)],
+        input="y\n\n1\ny\n1\n2\n3\n4\ny\n",
+    )
 
+    assert result.exit_code == 0, result.output
     written = yaml.safe_load(config.read_text(encoding="utf-8"))
     assert written["plugins"]["enabled"] is True
     assert written["plugins"]["plugin_list"] == ["HelloPlugin"]
@@ -246,13 +250,51 @@ def test_plugin_command_interactively_writes_all_plugin_settings(
     }
     assert written["plugins"]["config"] == {"local.keep": {"value": 1}}
     assert written["sources"] == {"keep": {"source_name": "demo"}}
-    assert str(plugin_root / "local.hello") in capsys.readouterr().out
+    assert str(plugin_root / "local.hello") in result.output
 
 
-def test_config_command_only_changes_plugin_switch(
+def test_plugin_command_uses_full_screen_key_navigation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+):
+    plugin_root = tmp_path / "plugins"
+    _write_plugin(plugin_root, "local.hello", "HelloPlugin")
+    config = tmp_path / "config.yaml"
+    _write_config(
+        config,
+        enabled=False,
+        plugin_list=["MissingPlugin"],
+        plugin_path="./plugins",
+    )
+    keys = iter(["enter", "down", "down", "down", "enter", "down", "enter", "q"])
+    monkeypatch.setattr(
+        "butterbot.cli.configurator.is_interactive_terminal",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "butterbot.cli.terminal.is_interactive_terminal",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "butterbot.cli.configurator.read_key",
+        lambda: next(keys),
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["plugin"]) == 0
+
+    written = yaml.safe_load(config.read_text(encoding="utf-8"))
+    assert written["plugins"]["enabled"] is True
+    assert written["plugins"]["plugin_list"] == ["HelloPlugin"]
+    output = capsys.readouterr().out
+    assert "\x1b[?1049h" in output
+    assert "\x1b[?1049l" in output
+    assert str(plugin_root / "local.hello") in output
+
+
+def test_config_command_fallback_only_changes_plugin_switch(
+    tmp_path: Path,
 ):
     config = tmp_path / "project.yaml"
     original = {
@@ -264,11 +306,13 @@ def test_config_command_only_changes_plugin_switch(
         "sources": {"keep": {"source_name": "demo"}},
     }
     config.write_text(yaml.safe_dump(original, sort_keys=False), encoding="utf-8")
-    answers = iter(["e", "1", "s"])
-    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+    result = CliRunner().invoke(
+        cli,
+        ["config", "-config", str(config)],
+        input="y\ny\n",
+    )
 
-    assert main(["config", "-config", str(config)]) == 0
-
+    assert result.exit_code == 0, result.output
     written = yaml.safe_load(config.read_text(encoding="utf-8"))
     assert written["plugins"] == {
         "enabled": True,
@@ -276,14 +320,23 @@ def test_config_command_only_changes_plugin_switch(
         "plugin_path": "./custom",
     }
     assert written["sources"] == original["sources"]
-    assert "Sources 配置暂为占位" in capsys.readouterr().out
+    assert "Sources: 自动发现" in result.output
+
+
+def test_click_command_tree_and_help():
+    assert isinstance(cli, click.Group)
+
+    result = CliRunner().invoke(cli, ["--help"])
+
+    assert result.exit_code == 0
+    assert "Commands:" in result.output
+    assert "plugin" in result.output
+    assert "run" in result.output
 
 
 def test_removed_commands_are_rejected():
-    with pytest.raises(SystemExit, match="2"):
-        main(["check"])
-    with pytest.raises(SystemExit, match="2"):
-        main(["plugins"])
+    assert main(["check"]) == 2
+    assert main(["plugins"]) == 2
 
 
 def test_status_without_state(

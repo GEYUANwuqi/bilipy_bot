@@ -1,5 +1,5 @@
 """ButterBot 命令行接口."""
 
-from .main import main
+from .main import cli, main
 
-__all__ = ["main"]
+__all__ = ["cli", "main"]
