@@ -90,9 +90,10 @@ butterbot config
 butterbot config -config ./deploy/config.production.yaml
 ```
 
-这是行式交互终端。目前可以切换插件系统总开关；`Sources` 单独占位，等待后续接入
-Source 自动发现和配置。选择保存后会把完整结果原子写回 YAML，未操作的插件列表、
-插件私有配置、Source 和其他字段保持不变。
+这是基于 Click 的全副屏交互终端。目前可以切换插件系统总开关；`Sources` 单独
+占位，等待后续接入 Source 自动发现和配置。使用方向键或 `j/k` 移动，在总开关上
+按空格或 Enter 切换，按 `q` 保存，按 Esc 取消。保存时会把完整结果原子写回 YAML，
+未操作的插件列表、插件私有配置、Source 和其他字段保持不变。
 
 ## 插件配置界面
 
@@ -101,18 +102,21 @@ butterbot plugin
 butterbot plugin -config ./deploy/config.production.yaml
 ```
 
-界面会列出当前环境和 `plugins.plugin_path` 中发现的全部插件，并显示每个插件的
-distribution 或目录来源位置。输入插件编号并按 Enter 可独立切换是否写入
-`plugin_list`。
+界面使用备用屏幕整屏重绘，退出后恢复原终端内容。它会列出当前环境和
+`plugins.plugin_path` 中发现的全部插件，并显示每个插件的 distribution 或目录
+来源位置。
 
 插件系统总开关、候选选择、检索目录和生命周期参数分开配置：
 
-- `E`：切换 `plugins.enabled`；
-- 插件编号：切换 `plugins.plugin_list` 中的名称；
-- `P`：修改 `plugins.plugin_path`；
-- `L`：修改 start、stop、cleanup、drain 超时；
-- `S` 或直接 Enter：保存全部修改；
-- `Q`：取消且不写文件。
+- 方向键或 `j/k`：移动光标；
+- 空格或 Enter：切换总开关或当前插件；
+- 在检索目录上按 Enter：修改 `plugins.plugin_path`；
+- 在生命周期栏按 Enter：修改 start、stop、cleanup、drain 超时；
+- `q` 或 `s`：保存全部修改；
+- Esc：取消且不写文件。
+
+stdin/stdout 不是真实终端时，例如 CI 或管道环境，界面自动降级为 Click 的编号与
+确认提示，不输出 ANSI 控制序列。
 
 关闭总开关不会清空已经选择的插件；因此可以先完成插件列表配置，再决定是否让
 `butterbot run` 启动插件系统。YAML 的 `plugins.enabled` 是运行时唯一总开关，

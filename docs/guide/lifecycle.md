@@ -73,7 +73,7 @@ if __name__ == "__main__":
 | ASGI/Jupyter/现有 asyncio 应用 | `async with app` 或手动 `start()`/`close()` |
 
 CLI 的 `stop` 是操作系统级进程暂停，不调用 `BotApp.stop()`。两者的资源和恢复语义
-不同，详见[命令行的暂停与恢复](./cli.md#暂停与恢复)。
+不同，详见[命令行的状态、暂停和恢复](./cli.md#状态、暂停和恢复)。
 
 传入 `duration` 可以在指定秒数后正常关闭：
 
