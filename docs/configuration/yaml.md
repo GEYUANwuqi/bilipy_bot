@@ -22,10 +22,10 @@ config = RuntimeConfig.from_yaml("config.yaml")
 5. 分离可选的 `kwarg`，再按 `source_name` 调用配置 builder；
 6. `BotApp` 按 `kwarg` 中出现的 Source 类名自动实例化并注册事件源。
 
-实验插件模式必须改用 `PluginBootstrap`。它先读取同一份已合并配置中的
-`plugins.enabled`、`plugins.local` 和插件私有配置，在第 5 步前登记插件
-builder、在第 6 步前登记插件 factory，随后才执行运行阶段注册。
-`RuntimeConfig.from_yaml()` 本身不会发现或导入插件。
+CLI 始终通过 `PluginBootstrap` 构造应用。它先读取同一份已合并配置中的
+`plugins.enabled`、`plugins.plugin_list`、`plugins.plugin_path` 和插件私有配置，
+在第 5 步前登记插件 builder、在第 6 步前登记插件 Source factory，随后才执行
+运行阶段注册。`RuntimeConfig.from_yaml()` 本身不会发现或导入插件。
 
 ## 实验插件设置
 
@@ -34,37 +34,56 @@ builder、在第 6 步前登记插件 factory，随后才执行运行阶段注�
 
 ```yaml
 plugins:
-  enabled:
-    - local.hello
-    - example.feed
-    - example.handler
-
-  local:
-    path: "./plugins"
-    auto_enable: false
+  enabled: true
+  plugin_list:
+    - HelloPlugin
+    - ExampleFeedPlugin
+    - ExampleHandlerPlugin
+  plugin_path: "./plugins"
 
   config:
     local.hello:
       greeting: "${HELLO_GREETING:-hello}"
+
+  lifecycle:
+    start_timeout: 30
+    stop_timeout: 10
+    cleanup_timeout: 10
+    drain_timeout: 5
 ```
 
 候选可来自已安装的 `butterbot.plugins` entry point，或本地
-`plugins/<folder>/plugin.toml`。默认只导入 `enabled` 中的候选；
-`local.auto_enable: true` 会显式选择本地目录中的全部合法候选。
+`plugin_path/<folder>/plugin.toml`。`enabled` 是插件系统总开关；关闭时 run 不会
+扫描或导入插件。开启后，框架只加载 `plugin_list` 中的名称；manifest 不包含启用
+开关，也不参与授权。
 
-相对 `local.path` 以配置文件父目录为基准。本地目录不存在且没有自动启用时视为空；
-存在的无效 manifest 即使未启用也会使 `check` 和 `run` 失败。框架不修改
+`plugins.plugin_list` 使用唯一的 `plugin_name`。本地候选从 manifest 读取名称；
+distribution 候选使用 entry point 名称。名称必须是合法 Python 类名；启动加载后
+还必须与 `type(instance).__name__` 完全一致。`requires_plugins` 和
+`plugins.config` 仍使用稳定 `plugin_id`：本地 ID 是目录名，distribution ID 由
+descriptor 声明。
+
+省略 `plugin_list` 与配置 `plugin_list: []` 含义相同：不启用任何插件。列表中的
+名称找不到候选时直接报错，不会回退到加载整个目录。
+
+相对 `plugin_path` 以配置文件父目录为基准；不存在时视为空。插件系统开启后，
+路径中存在的无效 manifest 即使未被选择也会使 `check` 和 `run` 失败。框架不修改
 `sys.path`，不跟随符号链接，也不自动安装依赖。
 
 `plugins.config` 的每个值必须是 mapping，只读注入对应插件，不进入
-`RuntimeConfig`。引用未发现 plugin ID 的私有配置会直接报错。未知字段、重复 ID、
-缺失候选、版本不兼容和依赖错误都会使配置无效。分层环境覆盖同样适用：
+`RuntimeConfig`。引用未启用 plugin ID 的私有配置会直接报错。未知字段、重复名称或
+ID、缺失候选、版本不兼容和依赖错误都会使配置无效。分层环境覆盖同样适用：
 
 ```bash
-export BUTTERBOT__PLUGINS__ENABLED='[example.feed, example.handler]'
+export BUTTERBOT__PLUGINS__ENABLED=true
+export BUTTERBOT__PLUGINS__PLUGIN_LIST='[HelloPlugin, ExampleHandlerPlugin]'
 ```
 
-完整的打包、应用 factory 和信任边界见
+插件声明 `PluginConfig` schema 时，私有配置会在应用构造前进一步校验并形成
+不可变模型。`plugins.lifecycle` 的四个值是单个插件各阶段的秒数上限，必须为
+大于零的有限数字；省略时分别为 30、10、10、5 秒。
+
+完整的打包、应用入口和信任边界见
 [实验性插件系统](/extensions/plugins.html)。
 
 ## 命名 Source 配置

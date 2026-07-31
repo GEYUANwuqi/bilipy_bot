@@ -25,12 +25,13 @@ API 位于 `butterbot.plugin`；它仍可能在 3.x 开发版本中
 
 ## 来源、发现与授权
 
-框架会自动索引已配置来源，但默认只导入和注册 `plugins.enabled` 明确选择的代码。
-本地目录还可用 `auto_enable: true` 显式授权目录中的全部合法候选。自动发现不等于
-默认执行。
+`plugins.enabled` 是插件系统总开关。开启后，框架会索引已配置来源，但只导入和
+注册 `plugins.plugin_list` 明确选择的代码。manifest 不参与启用决策，自动发现
+不等于默认执行。
 
-同一 plugin ID 同时出现在 distribution、另一个 entry point 或本地目录时会直接
-报错，不存在“本地覆盖已安装版本”的隐式优先级。
+`plugins.plugin_list` 使用唯一的 `plugin_name`。同名候选会在导入前直接报错；两个已
+选择候选若返回相同 `plugin_id`，也会在注册前失败。不存在“本地覆盖已安装版本”
+的隐式优先级。
 
 ### Distribution entry point
 
@@ -44,17 +45,18 @@ version = "1.0.0"
 dependencies = ["butterbot-python>=3.1.0.dev2,<4"]
 
 [project.entry-points."butterbot.plugins"]
-"example.feed" = "example_plugin:ExamplePlugin"
+"ExampleFeedPlugin" = "example_plugin:ExampleFeedPlugin"
 ```
 
-entry point 名必须和 `PluginDescriptor.plugin_id` 完全一致。ID 使用稳定的小写标识，
-不要使用可变的类名或展示名称。
+entry point 名是无需导入代码即可读取的 `plugin_name`，必须和
+实际插件类名完全一致。`plugin_id` 是依赖和私有配置使用的稳定小写标识。启动加载
+时框架会再次比较 entry point 名和 `type(instance).__name__`，不一致会在注册前失败。
 
 ```python
 from butterbot.plugin import ButterPlugin, PluginDescriptor
 
 
-class ExamplePlugin(ButterPlugin):
+class ExampleFeedPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="example.feed",
         version="1.0.0",
@@ -73,7 +75,7 @@ project/
 ├── config.yaml
 ├── app.py
 └── plugins/
-    └── hello/
+    └── local.hello/
         ├── plugin.toml
         ├── plugin.py
         ├── helpers.py
@@ -84,15 +86,20 @@ project/
 `plugin.toml` 是本地插件 descriptor 的唯一事实来源：
 
 ```toml
-schema_version = 1
-plugin_id = "local.hello"
+schema_version = 2
+plugin_name = "HelloPlugin"
 version = "0.1.0"
 requires_core = ">=3.1.0.dev2,<4"
 entry = "plugin.py"
 requires_plugins = []
-provides = ["local.hello.handler"]
 requires_distributions = []
 ```
+
+本地插件 ID 直接取插件目录名，因此 `plugins/local.hello/` 的稳定 ID 是
+`local.hello`；`plugins.plugin_list` 使用 `HelloPlugin`，`requires_plugins` 和
+`plugins.config` 使用 `local.hello`。目录名必须符合 plugin ID 的小写稳定标识
+规则。`plugin_name` 必须是合法 Python 类名、与入口模块中的实现类完全一致，并在
+所有候选中保持唯一。
 
 入口只允许插件根目录的直接 `.py` 子文件。该模块必须且只能定义一个
 `ButterPlugin` 子类，loader 会自动实例化；插件代码不重复声明 descriptor，也不需要
@@ -122,13 +129,15 @@ import 前被拒绝。未启用本地插件只读取 manifest 和用于 fingerpr
 `requires_distributions` 使用标准 Python distribution requirement，只在 import 前
 检查当前环境，不会调用 pip/uv，也不会修改 lockfile。
 
-两种来源在启动前统一检查重复 ID、核心版本、必需插件、依赖循环和 capability
-冲突，并按确定的拓扑顺序注册。目录插件可以依赖 distribution 插件，反向依赖也
-使用同一个 plugin ID 图。
+两种来源在启动前统一检查重复 ID、核心版本、必需插件和依赖循环，并按确定的拓扑
+顺序注册。目录插件可以依赖 distribution 插件，反向依赖也使用同一个 plugin ID
+图。目录 manifest 不再声明 `provides`；实际 Source 能力和冲突由 owner-aware
+注册结果校验，避免清单声明与代码行为漂移。distribution descriptor 暂时仍可声明
+静态 capability。
 
-当前仅支持 manifest `schema_version = 1`，未知字段和未知 schema 都会被拒绝，
+当前仅支持 manifest `schema_version = 2`，未知字段和未知 schema 都会被拒绝，
 避免拼写错误被静默忽略。experimental 阶段若需要不兼容 schema，会增加新的整数
-版本并在发行说明中给出迁移方式；在插件 API 稳定前，不承诺跨核心小版本永久兼容。
+版本；当前不包含 schema 1 兼容解析分支。
 
 ## 两阶段注册
 
@@ -201,24 +210,39 @@ class HandlerPlugin(ButterPlugin):
 依赖逆序执行。长期连接通常仍应由 Source 的生命周期管理，Handler task 由
 EventBus 管理。
 
-## 配置与应用 factory
+插件自己创建的短期后台任务和客户端资源交给运行上下文托管：
+
+```python
+async def on_start(self) -> None:
+    self.context.spawn(self.worker(), name="example.worker")
+    self.context.add_cleanup(self.client.aclose)
+```
+
+停止时框架先执行 `on_stop()`，再取消并等待托管任务，最后逆序执行清理回调。启动
+到一半失败也会执行这条清理链。
+
+## 配置与应用入口
 
 只启用明确需要的插件，并显式配置本地来源：
 
 ```yaml
 plugins:
-  enabled:
-    - local.hello
-    - example.feed
-    - example.handler
-
-  local:
-    path: "./plugins"
-    auto_enable: false
+  enabled: true
+  plugin_list:
+    - HelloPlugin
+    - ExampleFeedPlugin
+    - ExampleHandlerPlugin
+  plugin_path: "./plugins"
 
   config:
     local.hello:
       greeting: "${HELLO_GREETING:-hello}"
+
+  lifecycle:
+    start_timeout: 30
+    stop_timeout: 10
+    cleanup_timeout: 10
+    drain_timeout: 5
 
 sources:
   primary:
@@ -227,26 +251,30 @@ sources:
       source: {}
 ```
 
-相对 `plugins.local.path` 以 `config.yaml` 所在目录为基准，而不是调用方临时
-cwd。`auto_enable` 默认关闭；设为 `true` 表示显式授权全部本地 manifest，
-选择结果与 `enabled` 取并集。
+相对 `plugins.plugin_path` 以 `config.yaml` 所在目录为基准，而不是调用方临时
+cwd。`plugin_list` 是唯一插件白名单；没有写或显式写成空列表时都不会加载插件。
+总开关为 `false` 时也不会扫描或执行插件。
 
 `plugins.config.<plugin-id>` 只会作为不可变 mapping 注入该插件的
 `ButterPlugin.settings` 和配置 registrar。插件不能看到其他插件 namespace；状态、
 收据和默认错误不会保存配置值。本地插件的 `resource_root` 是 `plugin.toml`
 所在目录，distribution 插件为 `None` 并应使用 `importlib.resources`。
 
-`plugins` 是 bootstrap 保留段，不会进入 `RuntimeConfig.get_config()`。可以使用
-`BUTTERBOT__PLUGINS__ENABLED='[example.feed, example.handler]'` 覆盖启用列表。
+插件可以把 `PluginConfig` 子类赋给 `config_model`，让私有配置在应用构造前完成
+类型、必填字段和未知字段校验，再通过 `self.config` 读取不可变模型。未声明 schema
+时保留 `settings` mapping 行为。
 
-插件模式需要一个同步应用 factory，让 bootstrap 在解析配置前注入插件 builder，
-并在构造 Source 前注入插件 factory：
+`plugins` 是 bootstrap 保留段，不会进入 `RuntimeConfig.get_config()`。可以使用
+`BUTTERBOT__PLUGINS__PLUGIN_LIST='[HelloPlugin, ExampleHandlerPlugin]'` 覆盖插件列表。
+
+CLI 使用同步应用入口，让 bootstrap 在解析配置前注入插件 builder，并在构造
+Source 前注入插件 Source factory。`butterbot init` 已生成这个入口：
 
 ```python
 from butterbot.app import BotApp, RuntimeConfig, SourceFactoryRegistry
 
 
-def create_app(
+def app(
     *,
     config: RuntimeConfig,
     source_factory_registry: SourceFactoryRegistry,
@@ -257,42 +285,42 @@ def create_app(
     )
 ```
 
-先校验再运行：
+查看候选、模拟导入并运行：
 
 ```bash
-butterbot check mybot.app:create_app
-butterbot plugins check mybot.app:create_app
-butterbot plugins list
-butterbot run mybot.app:create_app
+butterbot plugin list
+butterbot plugin check
+butterbot run
 ```
 
-`check` 执行与 `run` 相同的发现、配置解析、应用构造和插件注册，但不会启动外部
-Source。省略 check 的 entry point 时使用默认 `BotApp` factory。
+`plugin list` 只读取候选元数据；`plugin check` 按 YAML 模拟导入，并分别报告成功
+加载和被配置拦截的插件。真正的配置解析、应用构造和运行阶段注册由 `run` 完成。
 
 代码内也可显式拥有 bootstrap：
 
 ```python
 from butterbot.plugin import PluginBootstrap
+from mybot.application import app as application_entry
 
 bootstrap = PluginBootstrap("config.yaml")
-app = bootstrap.build(create_app)
+application = bootstrap.build(application_entry)
 manager = bootstrap.manager
 assert manager is not None
 ```
 
-不要在插件模式中先构造全局 `BotApp` 对象；那会早于插件 builder/factory 注册。
-配置了 `plugins.local` 时，即使显式列表为空，CLI 也会经过插件 bootstrap，以保证
-无效 manifest 在 `check` 和 `run` 中行为一致。完全没有插件设置时，原有
-`BotApp()`、手工装配和零参数应用 factory 保持可用。
+不要在模块导入时先构造全局 `BotApp` 对象；那会早于插件 builder 和 Source
+factory 注册。CLI 始终走同一个 bootstrap，只有 `plugins.enabled: true` 才会导入
+和注册 `plugin_list` 中的插件。关闭总开关时可以继续保留插件选择、检索路径和
+私有配置；`plugin list` 和交互配置仍会索引路径以展示候选。
 
-创建一个不含 Python 包元数据的模板：
+创建包含示例插件的完整项目模板：
 
 ```bash
-butterbot plugins init local.hello
+butterbot init
 ```
 
-命令创建 `plugins/local.hello/plugin.toml` 和 `plugin.py`，不会改配置、自动启用、
-安装依赖或覆盖已有目录。
+命令创建 `config.yaml`、`app.py` 和 `plugins/example.hello/`，不会安装依赖或覆盖
+已有目标。之后可用裸 `butterbot plugin` 交互选择插件并写回 YAML。
 
 ## 生命周期、回滚与诊断
 
@@ -301,7 +329,7 @@ butterbot plugins init local.hello
 ```text
 静态索引 distribution entry point 和本地 manifest
 -> 检查来源冲突
--> 应用 enabled / local.auto_enable
+-> 按 plugin_name 应用 plugin_list 白名单
 -> 只导入已选择候选
 -> descriptor/依赖校验
 -> @configure（依赖顺序）
@@ -322,11 +350,19 @@ builder、factory、Source、Handler 和 close callback 都有 owner 与撤销�
 跳过其余插件和 Source 的清理。`SourceRef` 缺失、重复或歧义在 Source 启动前
 报告。
 
+`plugins.lifecycle` 控制单个插件的 start、stop、资源清理和 Handler 排空超时。
+超时或普通清理错误只影响对应插件，管理器仍会处理逆依赖序列中的其余插件。
+
 `PluginBootstrap.manager.statuses` 返回不含配置值和 secret 的诊断快照，并带有
-`origin_kind`、`origin` 和本地 SHA-256 `fingerprint`。状态包括
+稳定 `plugin_id`、实现类 `plugin_name`、`origin_kind`、`origin` 和本地 SHA-256
+`fingerprint`。状态包括
 `validated`、`configuring`、`configured`、`registering`、`registered`、
 `started`、`failed`、`blocked` 和 `closed`。注册异常还提供
 `PluginRegistrationError.plugin_id`、`phase` 和 `cause`。
+
+每个状态的 `failures` 是不含异常消息和配置值的结构化记录，字段包括阶段、异常
+类型、是否超时和是否取消；`healthy` 表示是否没有记录。后台托管任务失败会登记为
+`background`，但不会擅自停止整个应用。
 
 ## 发布前验证
 

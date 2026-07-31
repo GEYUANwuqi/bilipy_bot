@@ -34,6 +34,9 @@ class HandlerPlugin(ButterPlugin):
 
 ```python
 self.settings       # 当前插件只读私有配置
+self.config         # 声明 config_model 后得到的只读类型化配置
+self.context        # 受控的 Source/API 查询和资源作用域
+self.context.plugin_name  # manifest/entry point 与实现类共用的名称
 self.resource_root  # 本地插件资源根；distribution 插件为 None
 self.config_key     # settings["config_key"]；未配置时为 None
 self.source_ref("example.events")
@@ -44,6 +47,39 @@ self.source_ref("example.events")
 `plugins.config.<plugin-id>.config_key` 显式指定一次即可。同一插件的所有
 `@register` 声明使用同一个解析结果。需要更特殊的路由策略时，可以覆盖
 `source_ref()`。
+
+运行阶段不需要导入 `BotApp`。基类绑定的窄化上下文只提供当前插件需要的查询：
+
+```python
+source = self.context.get_source("example.events")
+api = self.context.get_api(ExampleApi)  # 默认复用插件级 config_key
+```
+
+上下文不会暴露 dispatcher、loader 或其他插件实例。`get_source()` 仍遵守
+`SourceRef` 的唯一匹配规则；需要覆盖插件级路由时可显式传入 `config_key`。
+
+## 类型化私有配置
+
+需要强校验时声明 `PluginConfig`。校验发生在应用构造和外部 Source 启动之前：
+
+```python
+from butterbot.plugin import ButterPlugin, PluginConfig
+
+
+class HandlerConfig(PluginConfig):
+    config_key: str | None = None
+    retry_limit: int = 3
+
+
+class HandlerPlugin(ButterPlugin[HandlerConfig]):
+    config_model = HandlerConfig
+
+    async def on_start(self) -> None:
+        assert self.config.retry_limit >= 0
+```
+
+`PluginConfig` 默认拒绝未知字段且实例不可修改。未声明 `config_model` 的旧插件继续
+使用只读 `settings` mapping，不会被强制迁移。
 
 ## register
 
@@ -95,17 +131,38 @@ class SourcePlugin(ButterPlugin):
 ```python
 class HandlerPlugin(ButterPlugin):
     async def on_start(self) -> None:
-        ...
+        self.context.spawn(self.consume(), name="handler.consume")
+        self.context.add_cleanup(self.close_client)
 
     async def on_stop(self) -> None:
-        ...
+        # 只保留有业务停止顺序要求的逻辑；托管资源由框架兜底。
+        await self.flush()
 ```
 
 全部 Source 启动成功后，`on_start()` 按插件依赖顺序执行；停止 Source 前，
 `on_stop()` 按依赖逆序执行。启动失败时，已进入启动阶段的插件也会逆序执行
 `on_stop()`，随后撤销本轮注册。回调必须是异步方法；不需要生命周期工作的插件
-无需覆盖。依赖 `settings` 或已启动 Source 的实例初始化可以放进 `on_start()`，
-对应资源在 `on_stop()` 释放。
+无需覆盖。
+
+`context.spawn()` 创建的后台任务和 `context.add_cleanup()` 登记的同步或异步回调
+属于当前启动周期。框架在 `on_stop()` 之后自动取消并等待任务，再逆序执行清理
+回调；`on_start()` 部分初始化后失败时也走同一清理链。后台任务异常会被消费并
+写入插件失败记录，不会产生无人读取的 task exception；它不会自动停止整个应用。
+
+生命周期超时由配置统一控制：
+
+```yaml
+plugins:
+  lifecycle:
+    start_timeout: 30
+    stop_timeout: 10
+    cleanup_timeout: 10
+    drain_timeout: 5
+```
+
+超时值必须是大于零的有限秒数。回调超时后框架会请求取消并继续处理其他插件；
+忽略 `CancelledError` 的插件任务无法被 Python 强制终止，因此会作为 cleaning
+失败保留在诊断信息中。
 
 订阅会在 Source 启动前从 `@register` 声明构造，因此不能等到 `on_start()` 再决定
 基础路由。长期连接通常仍应实现为 Source，Handler task 由 EventBus 管理。
@@ -113,7 +170,10 @@ class HandlerPlugin(ButterPlugin):
 ## 身份与低层原语
 
 - `ButterPlugin`：本地目录和 distribution 共用的唯一插件基类。
-- `PluginDescriptor`：distribution 插件的身份、版本、依赖和 capability。
+- `PluginConfig`：可选的只读私有配置 schema。
+- `PluginContext`、`PluginScope`：框架绑定的窄化能力和资源所有权。
+- `PluginDescriptor`：插件的稳定 ID、版本、依赖和 capability；本地插件 ID 由
+  目录名生成。
 - `SourceRef`、`SubscriptionSpec`：应用和手工扩展使用的低层路由声明。
 - `PluginRegistrar`、`ExtensionRegistrar`：框架控制面和手工事务扩展使用。
 
@@ -129,3 +189,9 @@ class HandlerPlugin(ButterPlugin):
 `PluginBootstrap`、`PluginCatalog`、`PluginManager`、来源模型、状态模型和插件异常
 目前仍从同一包导出。它们是 3.x provisional API，不代表热重载、安全沙箱或运行期
 安装。
+
+`PluginStatus.failures` 和 `PluginManager.failures` 返回不包含异常消息及配置值的
+结构化失败记录：`plugin_id`、`phase`、`error_type`、`timed_out` 和
+`cancelled`。`PluginStatus.healthy` 表示记录是否为空。停止阶段失败会继续清理；
+状态会变为 `failed`，并拒绝在同一进程内再次启动，避免在未完整停止的资源上重复
+初始化。

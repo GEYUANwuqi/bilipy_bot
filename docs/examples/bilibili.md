@@ -7,13 +7,13 @@ title: Bilibili 示例
 ## 动态与直播状态
 
 源码：
-[`examples/plugins/manager_example/`](https://github.com/GEYUANwuqi/ButterBot/tree/dev_main/examples/plugins/manager_example)
+[`examples/plugins/example.bilibili-manager/`](https://github.com/GEYUANwuqi/ButterBot/tree/dev_main/examples/plugins/example.bilibili-manager)
 
 ```bash
 cp examples/config.example.yaml config.yaml
-uv run butterbot plugins list
-uv run butterbot plugins check examples.plugin_app:create_app
-uv run butterbot run examples.plugin_app:create_app
+uv run butterbot plugin list
+uv run butterbot plugin check
+uv run butterbot run examples.plugin_app.app
 ```
 
 按目录内 README 启用插件，并让 YAML 创建 `BiliDynamicSource` 和

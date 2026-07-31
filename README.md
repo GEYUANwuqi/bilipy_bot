@@ -41,24 +41,29 @@ cp examples/config.example.yaml config.yaml
 
 `config.yaml` 可能包含凭证，已被 Git 忽略，不要提交或公开。
 
-使用 CLI 检查配置并运行应用对象：
+使用 CLI 创建、配置并运行项目：
 
 ```bash
-uv run butterbot check
-uv run butterbot run mybot.app:app --background
+uv run butterbot init
+uv run butterbot plugin
+uv run butterbot plugin check
+uv run butterbot run --background
 uv run butterbot status
 uv run butterbot stop
-uv run butterbot run mybot.app:app --background  # 恢复暂停的同一进程
+uv run butterbot run --background  # 恢复暂停的同一进程
 uv run butterbot close
 ```
 
-使用 CLI 时，应用模块只定义 `app = BotApp()`、Source 和 Handler，不要在模块
-顶层调用 `app.run()`。若还要支持 `uv run app.py`，必须写成：
+`run` 默认加载 `app.app` 和当前目录的 `config.yaml`。可以用位置参数或
+`-path` 指定其他应用入口，用 `-config` 指定其他 YAML：
 
-```python
-if __name__ == "__main__":
-    app.run()
+```bash
+uv run butterbot run mybot.application.app -config ./deploy/config.yaml
+uv run butterbot run -path mybot.application.app -config ./deploy/config.yaml
 ```
+
+应用入口只负责接收 CLI 已解析的配置并返回 `BotApp`，不要在模块导入时调用
+`app.run()`。
 
 后台运行和重启语义见[命令行指南](docs/guide/cli.md)。
 

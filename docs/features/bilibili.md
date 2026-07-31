@@ -102,5 +102,5 @@ async def on_danmaku(event: Event[DanmakuMsgData]) -> None:
 
 完整示例：
 
-- [`examples/plugins/manager_example/`](https://github.com/GEYUANwuqi/ButterBot/tree/dev_main/examples/plugins/manager_example)
+- [`examples/plugins/example.bilibili-manager/`](https://github.com/GEYUANwuqi/ButterBot/tree/dev_main/examples/plugins/example.bilibili-manager)
 - [`examples/live_danmaku_example.py`](https://github.com/GEYUANwuqi/ButterBot/blob/dev_main/examples/live_danmaku_example.py)

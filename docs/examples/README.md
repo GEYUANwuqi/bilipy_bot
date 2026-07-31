@@ -10,7 +10,7 @@ title: 示例与最佳实践
 | --- | --- | --- |
 | `minimal_source_example.py` | 可直接执行的完整示例 | 子进程运行并断言退出 |
 | `napcat_example.py` | 需要外部服务的完整示例 | 语法与静态契约 |
-| `plugins/manager_example/` | Bilibili 本地目录插件 | 自动发现与静态契约 |
+| `plugins/example.bilibili-manager/` | Bilibili 本地目录插件 | 自动发现与静态契约 |
 | `live_danmaku_example.py` | 需要外部服务的完整示例 | 语法与静态契约 |
 
 - [无外部依赖的最小示例](./minimal.md)
@@ -19,4 +19,4 @@ title: 示例与最佳实践
 
 “完整示例”表示文件具备入口和关闭路径，不表示仓库 CI 能访问第三方平台。
 需要外部服务的示例不会被标记为已端到端验证。插件示例由
-`examples/plugin_app.py` 提供最小 BotApp factory。
+`examples/plugin_app.py` 提供最小 CLI 应用入口。

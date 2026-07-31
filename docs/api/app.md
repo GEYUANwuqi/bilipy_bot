@@ -214,9 +214,13 @@ bootstrap、依赖状态机和统一回滚都位于独立的 `butterbot.plugin` 
 loader 自动实例化，不需要 factory。两种来源最终都实例化为 `ButterPlugin` 并进入
 同一个 manager。
 
+候选索引总能静态取得 `plugin_name`；本地候选同时暴露目录生成的 `plugin_id`，
+distribution 候选则要到被名称选中并加载 descriptor 后才能取得稳定 ID。
+
 `ButterPlugin.settings` 提供当前 owner 隔离的只读私有配置；`resource_root` 对
 本地目录插件是 manifest 所在目录，对 distribution 插件为 `None`。
-`PluginStatus` 提供来源类型、来源位置和可选 fingerprint，但不保存插件私有配置。
+`PluginStatus` 提供稳定 `plugin_id`、与实现类一致的 `plugin_name`、来源类型、来源位置、
+可选 fingerprint、`healthy` 和结构化 `failures`，但不保存插件私有配置或异常消息。
 
 ## 门面中的其他导出
 

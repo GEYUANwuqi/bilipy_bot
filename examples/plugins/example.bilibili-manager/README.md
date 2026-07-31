@@ -15,11 +15,10 @@ cp examples/config.example.yaml config.yaml
 
 ```yaml
 plugins:
-  enabled:
-    - example.bilibili-manager
-  local:
-    path: "./examples/plugins"
-    auto_enable: false
+  enabled: true
+  plugin_list:
+    - BilibiliManagerPlugin
+  plugin_path: "./examples/plugins"
 ```
 
 并让同一个 `bili_account` 创建动态和直播 Source：
@@ -43,12 +42,14 @@ sources:
 检查并运行：
 
 ```bash
-uv run butterbot plugins list
-uv run butterbot plugins check examples.plugin_app:create_app
-uv run butterbot run examples.plugin_app:create_app
+uv run butterbot plugin list
+uv run butterbot plugin check
+uv run butterbot run examples.plugin_app.app
 ```
 
 插件只声明 Handler；Bilibili Source 仍由 YAML 和内置 factory 创建。基类自动
 构造 `SourceRef` 和 `SubscriptionSpec`，`PluginManager` 按 owner 自动注册和撤销
 Handler。每种 `source_kind` 只有一个实例，不需要插件 `config_key`；只有同类
 Source 存在多个实例时，才在 `plugins.config.<plugin-id>.config_key` 中显式消歧。
+`plugin_list` 使用与实现类同名的 `BilibiliManagerPlugin`；私有配置仍使用目录产生的
+稳定 ID `example.bilibili-manager`。

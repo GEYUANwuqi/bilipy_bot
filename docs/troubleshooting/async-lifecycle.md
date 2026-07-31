@@ -22,12 +22,13 @@ async with app:
 可能原因：
 
 - Source 创建 task 后未保存；
-- `on_stop()` 只 cancel 没有 await；
+- 非插件代码创建 task 后没有明确所有者；
 - 没有调用 `app.close()`；
-- 用户自己创建的 task 不属于 EventBus，未在 finally 清理。
+- 插件直接调用 `asyncio.create_task()`，绕过了 `PluginScope`。
 
-排查任务创建点 `asyncio.create_task()`，逐一确认所有权。优先使用
-`async with app`。
+插件后台任务改用 `self.context.spawn(coro)`，额外资源用
+`self.context.add_cleanup(callback)` 登记。Source 自己创建的 task 仍应在
+`on_stop()` 中 cancel 并 await。应用入口优先使用 `async with app`。
 
 ## 关闭超时
 
@@ -38,6 +39,8 @@ async with app:
 - Handler 不要执行无上限等待；
 - 网络操作设置 timeout；
 - 正确响应 `CancelledError`；
+- 根据 `PluginStatus.failures` 区分 starting、stopping、cleaning 和 Handler
+  drain；
 - 只在确有合理长任务时增大 `BotApp(close_timeout=...)`。
 
 ## Source 停止后仍有活动
