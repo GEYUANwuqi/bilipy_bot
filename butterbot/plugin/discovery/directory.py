@@ -99,7 +99,7 @@ def validate_distribution_requirements(
             )
 
 
-def load_local_hooks(manifest: LocalPluginManifest) -> ButterPlugin:
+def load_local_plugin(manifest: LocalPluginManifest) -> ButterPlugin:
     """在私有合成 package 中加载一个显式启用的本地插件入口."""
     origin = manifest.origin
     namespace_hash = hashlib.sha256(
@@ -200,6 +200,6 @@ def _has_namespace_children(name: str) -> bool:
 
 __all__ = [
     "index_local_manifests",
-    "load_local_hooks",
+    "load_local_plugin",
     "validate_distribution_requirements",
 ]

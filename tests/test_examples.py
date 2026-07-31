@@ -85,7 +85,7 @@ def test_manager_example_is_an_auto_discovered_local_plugin() -> None:
 
     loaded = catalog.get("example.bilibili-manager")
     assert loaded is not None
-    assert isinstance(loaded.hooks, ButterPlugin)
+    assert isinstance(loaded.instance, ButterPlugin)
     for name in (
         "handle_get_dynamic",
         "handle_new_dynamic",
@@ -94,7 +94,8 @@ def test_manager_example_is_an_auto_discovered_local_plugin() -> None:
         "handle_live_status",
         "handle_live_open",
         "handle_live_close",
-        "on_start",
-        "on_stop",
     ):
-        assert inspect.ismethod(getattr(loaded.hooks, name))
+        assert inspect.ismethod(getattr(loaded.instance, name))
+    specs = loaded.instance._subscription_specs()
+    assert len(specs) == 7
+    assert {spec.source.config_key for spec in specs} == {None}

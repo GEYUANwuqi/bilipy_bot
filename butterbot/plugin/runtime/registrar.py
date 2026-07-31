@@ -178,16 +178,8 @@ class PluginRegistrar(ExtensionRegistrar):
         owner_id: str,
         *,
         drain_timeout: float = 5.0,
-        settings: Mapping[str, object] | None = None,
-        resource_root: Path | None = None,
     ) -> None:
         super().__init__(app, owner_id, drain_timeout=drain_timeout)
-        self._settings = (
-            MappingProxyType({})
-            if settings is None
-            else MappingProxyType(dict(settings))
-        )
-        self._resource_root = resource_root
         self._cleanups: list[tuple[object, Callable[[], Awaitable[None] | None]]] = []
         self._cleanup_registrations: list[CleanupRegistration] = []
 
@@ -195,16 +187,6 @@ class PluginRegistrar(ExtensionRegistrar):
     def cleanups(self) -> tuple[CleanupRegistration, ...]:
         """返回当前仍登记的 close callback 收据快照."""
         return tuple(self._cleanup_registrations)
-
-    @property
-    def settings(self) -> Mapping[str, object]:
-        """返回与配置阶段相同的只读私有配置."""
-        return self._settings
-
-    @property
-    def resource_root(self) -> Path | None:
-        """返回本地插件根目录，供读取模板和静态资源."""
-        return self._resource_root
 
     def add_source(
         self,

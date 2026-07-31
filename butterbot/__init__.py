@@ -6,7 +6,7 @@
 
 插件代码请从 :mod:`butterbot.plugin` 导入插件契约::
 
-    from butterbot.plugin import ButterPlugin, PluginRegistrar
+    from butterbot.plugin import ButterPlugin, register
 """
 
 from importlib.metadata import PackageNotFoundError, version

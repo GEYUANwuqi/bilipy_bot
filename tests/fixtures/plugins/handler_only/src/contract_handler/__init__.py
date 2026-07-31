@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import os
 
+from butterbot.core.event import Event
 from butterbot.plugin import (
     ButterPlugin,
-    Event,
     PluginDescriptor,
-    PluginRegistrar,
-    SourceRef,
-    SubscriptionSpec,
+    register,
 )
 
 RECEIVED: list[str] = []
@@ -23,20 +21,14 @@ class HandlerPlugin(ButterPlugin):
         provides=("contract.handler",),
     )
 
-    async def register(self, registrar: PluginRegistrar) -> None:
+    def source_ref(self, source_kind: str):
         if os.environ.get("BUTTERBOT_CONTRACT_FAIL_REGISTER"):
             raise RuntimeError("external handler register failed")
+        return super().source_ref(source_kind)
 
-        async def handle(event: Event) -> None:
-            RECEIVED.append(str(event.data.value))
-
-        registrar.add_subscription(
-            SubscriptionSpec(
-                source=SourceRef("contract.events", "primary"),
-                status="contract.message",
-                callback=handle,
-            )
-        )
+    @register("contract.events", "contract.message")
+    async def handle(self, event: Event) -> None:
+        RECEIVED.append(str(event.data.value))
 
 
 __all__ = ["HandlerPlugin", "RECEIVED"]

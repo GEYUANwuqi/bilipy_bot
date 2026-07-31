@@ -9,6 +9,7 @@ from logging import getLogger
 from typing import TYPE_CHECKING
 
 from butterbot.core.exceptions import LifecycleError
+from butterbot.plugin.contracts.hooks import iter_configure_hooks
 from butterbot.plugin.discovery.catalog import LoadedPlugin, PluginCatalog
 from butterbot.plugin.errors import PluginRegistrationError
 
@@ -66,7 +67,7 @@ class _PluginRecord:
 
 
 class PluginManager:
-    """编排可信启动期插件的配置、注册、启动标记和逆序清理."""
+    """编排可信启动期插件的配置、注册、生命周期回调和逆序清理."""
 
     def __init__(
         self,
@@ -89,6 +90,11 @@ class PluginManager:
         self._configured = False
         self._registered = False
         self._closed = False
+        for record in self._records.values():
+            record.loaded.instance._bind_context(
+                self._plugin_settings.get(record.plugin_id),
+                record.loaded.origin.resource_root,
+            )
 
     @property
     def plugin_ids(self) -> tuple[str, ...]:
@@ -125,7 +131,7 @@ class PluginManager:
         return tuple(receipts)
 
     def configure(self) -> None:
-        """按依赖顺序执行无运行时副作用的配置 hook."""
+        """按依赖顺序执行无运行时副作用的 ``@configure`` 方法."""
         if self._closed:
             raise LifecycleError("PluginManager 已关闭")
         if self._configured:
@@ -143,11 +149,12 @@ class PluginManager:
             self._config_registrars[plugin_id] = registrar
             record.state = PluginState.CONFIGURING
             try:
-                result = record.loaded.hooks.register_config(registrar)
-                if inspect.isawaitable(result):
-                    if inspect.iscoroutine(result):
-                        result.close()
-                    raise TypeError("register_config 必须是同步函数")
+                for hook in iter_configure_hooks(record.loaded.instance):
+                    result = hook(registrar)
+                    if inspect.isawaitable(result):
+                        if inspect.iscoroutine(result):
+                            result.close()
+                        raise TypeError("@configure 方法必须是同步函数")
                 registrar.commit()
             except BaseException as exc:
                 registrar.rollback()
@@ -177,12 +184,9 @@ class PluginManager:
         self._app = app
         try:
             for plugin_id in self.plugin_ids:
-                loaded = self._records[plugin_id].loaded
                 registrar = PluginRegistrar(
                     app,
                     plugin_id,
-                    settings=self._plugin_settings.get(plugin_id),
-                    resource_root=loaded.origin.resource_root,
                 )
                 self._runtime_registrars[plugin_id] = registrar
                 for entry in app.manager.source_catalog.by_owner(plugin_id):
@@ -207,7 +211,7 @@ class PluginManager:
         self._closed = True
 
     async def register(self) -> None:
-        """按依赖顺序执行运行阶段 hook，失败时回滚本轮全部注册."""
+        """按依赖顺序登记 ``@register`` Handler，失败时回滚全部注册."""
         if self._closed:
             raise LifecycleError("PluginManager 已关闭")
         if self._registered:
@@ -220,10 +224,8 @@ class PluginManager:
             registrar = self._runtime_registrars[plugin_id]
             record.state = PluginState.REGISTERING
             try:
-                result = record.loaded.hooks.register(registrar)
-                if not inspect.isawaitable(result):
-                    raise TypeError("register 必须是 async 函数")
-                await result
+                for spec in record.loaded.instance._subscription_specs():
+                    registrar.add_subscription(spec)
                 registrar.commit()
             except BaseException as exc:
                 self._mark_failure(plugin_id, exc)
@@ -241,7 +243,7 @@ class PluginManager:
         self._registered = True
 
     async def start(self) -> None:
-        """Source 全部启动成功后按依赖顺序执行插件启动 hook."""
+        """Source 全部启动成功后按依赖顺序执行 ``on_start``."""
         if self._closed:
             raise LifecycleError("PluginManager 已关闭")
         if not self._registered:
@@ -257,12 +259,12 @@ class PluginManager:
                 continue
             plugin_id = record.plugin_id
             try:
-                result = record.loaded.hooks.on_start()
+                result = record.loaded.instance.on_start()
                 if not inspect.isawaitable(result):
                     raise TypeError("on_start 必须是 async 函数")
                 await result
             except BaseException as exc:
-                stop_cancelled = await self._run_stop_hooks(
+                stop_cancelled = await self._run_stop_callbacks(
                     tuple(reversed((*started_ids, plugin_id)))
                 )
                 self._mark_failure(plugin_id, exc)
@@ -282,15 +284,15 @@ class PluginManager:
             started_ids.append(plugin_id)
 
     async def stop(self) -> None:
-        """在 Source 停止前按依赖逆序执行已启动插件的停止 hook."""
+        """在 Source 停止前按依赖逆序执行 ``on_stop``."""
         if self._closed:
             return
-        started_ids = tuple(
+        plugin_ids = tuple(
             record.plugin_id
             for record in reversed(self._ordered_records())
             if record.state == PluginState.STARTED
         )
-        cancelled = await self._run_stop_hooks(started_ids)
+        cancelled = await self._run_stop_callbacks(plugin_ids)
         if cancelled is not None:
             raise cancelled
 
@@ -308,24 +310,24 @@ class PluginManager:
         """按依赖逆序关闭插件，并撤销配置 registry."""
         if self._closed:
             return
-        cancelled = await self._run_stop_hooks(
-            tuple(
-                record.plugin_id
-                for record in reversed(self._ordered_records())
-                if record.state == PluginState.STARTED
-            )
+        plugin_ids = tuple(
+            record.plugin_id
+            for record in reversed(self._ordered_records())
+            if record.state == PluginState.STARTED
         )
+        callback_cancelled = await self._run_stop_callbacks(plugin_ids)
         runtime_cancelled = await self._close_runtime()
-        cancelled = cancelled or runtime_cancelled
         self._rollback_config()
         self._closed = True
         for record in self._ordered_records():
             if record.state not in (PluginState.FAILED, PluginState.BLOCKED):
                 record.state = PluginState.CLOSED
-        if cancelled is not None:
-            raise cancelled
+        if callback_cancelled is not None:
+            raise callback_cancelled
+        if runtime_cancelled is not None:
+            raise runtime_cancelled
 
-    async def _run_stop_hooks(
+    async def _run_stop_callbacks(
         self,
         plugin_ids: tuple[str, ...],
     ) -> asyncio.CancelledError | None:
@@ -333,7 +335,7 @@ class PluginManager:
         for plugin_id in plugin_ids:
             record = self._records[plugin_id]
             try:
-                result = record.loaded.hooks.on_stop()
+                result = record.loaded.instance.on_stop()
                 if not inspect.isawaitable(result):
                     raise TypeError("on_stop 必须是 async 函数")
                 await result

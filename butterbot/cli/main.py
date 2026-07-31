@@ -217,10 +217,6 @@ def _plugins_init(args: argparse.Namespace) -> int:
         "\n"
         "\n"
         "class Plugin(ButterPlugin):\n"
-        "    def register_config(self, registrar) -> None:\n"
-        "        pass\n"
-        "\n"
-        "    async def register(self, registrar) -> None:\n"
         "        pass\n"
         "\n",
         encoding="utf-8",

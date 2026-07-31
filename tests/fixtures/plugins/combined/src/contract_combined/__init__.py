@@ -8,9 +8,8 @@ from butterbot.plugin import (
     ButterPlugin,
     ConfigRegistrar,
     PluginDescriptor,
-    PluginRegistrar,
-    SourceRef,
-    SubscriptionSpec,
+    configure,
+    register,
 )
 
 RECEIVED: list[str] = []
@@ -48,7 +47,8 @@ class CombinedPlugin(ButterPlugin):
         provides=("combined.events", "combined.handler"),
     )
 
-    def register_config(self, registrar: ConfigRegistrar) -> None:
+    @configure
+    def configure_source(self, registrar: ConfigRegistrar) -> None:
         registrar.register_builder("combined", dict)
         registrar.register_factory(
             "combined",
@@ -56,17 +56,9 @@ class CombinedPlugin(ButterPlugin):
             factory_id="source",
         )
 
-    async def register(self, registrar: PluginRegistrar) -> None:
-        async def handle(event: Event) -> None:
-            RECEIVED.append(str(event.data.value))
-
-        registrar.add_subscription(
-            SubscriptionSpec(
-                source=SourceRef("combined.events", "secondary"),
-                status="combined.message",
-                callback=handle,
-            )
-        )
+    @register("combined.events", "combined.message")
+    async def handle(self, event: Event) -> None:
+        RECEIVED.append(str(event.data.value))
 
 
 __all__ = ["CombinedPlugin", "RECEIVED"]

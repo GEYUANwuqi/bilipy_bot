@@ -9,9 +9,8 @@ from butterbot.core.types import BaseType
 from butterbot.plugin import (
     ButterPlugin,
     ConfigRegistrar,
-    PluginRegistrar,
-    SourceRef,
-    SubscriptionSpec,
+    configure,
+    register,
 )
 
 
@@ -40,7 +39,8 @@ class CombinedSource(BaseSource):
 
 
 class CombinedPlugin(ButterPlugin):
-    def register_config(self, registrar: ConfigRegistrar) -> None:
+    @configure
+    def configure_source(self, registrar: ConfigRegistrar) -> None:
         registrar.register_builder("local-combined", dict)
         registrar.register_factory(
             "local-combined",
@@ -48,16 +48,7 @@ class CombinedPlugin(ButterPlugin):
             factory_id="source",
         )
 
-    async def register(self, registrar: PluginRegistrar) -> None:
-        output = Path(str(registrar.settings["output"]))
-
-        async def handle(event: Event) -> None:
-            output.write_text(str(event.data.value), encoding="utf-8")
-
-        registrar.add_subscription(
-            SubscriptionSpec(
-                source=SourceRef("local-combined.events", "local-combined"),
-                status="local-combined.message",
-                callback=handle,
-            )
-        )
+    @register("local-combined.events", "local-combined.message")
+    async def handle(self, event: Event) -> None:
+        output = Path(str(self.settings["output"]))
+        output.write_text(str(event.data.value), encoding="utf-8")

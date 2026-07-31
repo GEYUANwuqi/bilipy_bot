@@ -4,10 +4,11 @@ import pytest
 
 from butterbot.app import BotApp, RuntimeConfig
 from butterbot.core.data import BaseDataMixin
+from butterbot.core.event import Event
 from butterbot.core.exceptions import LifecycleError, SourceError
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
-from butterbot.plugin import Event, ExtensionRegistrar, SourceRef, SubscriptionSpec
+from butterbot.plugin import ExtensionRegistrar, SourceRef, SubscriptionSpec
 
 
 class PrototypeType(BaseType):

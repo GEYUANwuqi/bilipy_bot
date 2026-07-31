@@ -19,6 +19,7 @@ from butterbot.plugin import (
     PluginDescriptor,
     PluginDiscoveryError,
     PluginRegistrationError,
+    configure,
 )
 
 CORE_VERSION = "3.1.0.dev2"
@@ -68,11 +69,7 @@ def write_plugin(
             "from butterbot.plugin import ButterPlugin\n"
             "\n"
             "class Hooks(ButterPlugin):\n"
-            "    def register_config(self, registrar) -> None:\n"
-            "        pass\n"
-            "\n"
-            "    async def register(self, registrar) -> None:\n"
-            "        pass\n"
+            "    pass\n"
         ),
         encoding="utf-8",
     )
@@ -209,10 +206,6 @@ def test_auto_enable_loads_local_plugins_without_sys_path_changes(tmp_path: Path
             "\n"
             "class Hooks(ButterPlugin):\n"
             "    value = VALUE\n"
-            "    def register_config(self, registrar) -> None:\n"
-            "        pass\n"
-            "    async def register(self, registrar) -> None:\n"
-            "        pass\n"
         ),
     )
     local.joinpath("helpers.py").write_text(
@@ -230,7 +223,7 @@ def test_auto_enable_loads_local_plugins_without_sys_path_changes(tmp_path: Path
 
     loaded = catalog.get("local.relative")
     assert loaded is not None
-    assert getattr(loaded.hooks, "value") == "workspace-one"
+    assert getattr(loaded.instance, "value") == "workspace-one"
     assert loaded.origin.kind == "directory"
     assert loaded.origin.fingerprint is not None
     assert tuple(sys.path) == original_path
@@ -310,10 +303,6 @@ def test_same_folder_and_module_names_are_isolated_across_workspaces(
                 "\n"
                 "class Hooks(ButterPlugin):\n"
                 "    value = VALUE\n"
-                "    def register_config(self, registrar) -> None:\n"
-                "        pass\n"
-                "    async def register(self, registrar) -> None:\n"
-                "        pass\n"
             ),
         )
         local.joinpath("helpers.py").write_text(
@@ -330,8 +319,8 @@ def test_same_folder_and_module_names_are_isolated_across_workspaces(
             )
         )
 
-    assert getattr(catalogs[0].plugins[0].hooks, "value") == "workspace-1"
-    assert getattr(catalogs[1].plugins[0].hooks, "value") == "workspace-2"
+    assert getattr(catalogs[0].plugins[0].instance, "value") == "workspace-1"
+    assert getattr(catalogs[1].plugins[0].instance, "value") == "workspace-2"
 
 
 def test_import_failure_removes_only_failed_synthetic_namespace(tmp_path: Path):
@@ -454,23 +443,22 @@ async def test_bootstrap_injects_read_only_settings_and_resource_root(
         tmp_path / "plugins",
         "local.context",
         code=(
-            "from butterbot.plugin import ButterPlugin\n"
+            "from butterbot.plugin import ButterPlugin, configure\n"
             "\n"
             "class Hooks(ButterPlugin):\n"
-            "    def _check(self, registrar) -> None:\n"
-            "        assert registrar.settings['greeting'] == 'hello'\n"
-            "        assert registrar.settings['nested']['value'] == 1\n"
-            "        assert (registrar.resource_root / 'asset.txt').read_text() == 'asset'\n"
+            "    def _check(self) -> None:\n"
+            "        assert self.settings['greeting'] == 'hello'\n"
+            "        assert self.settings['nested']['value'] == 1\n"
+            "        assert (self.resource_root / 'asset.txt').read_text() == 'asset'\n"
             "        try:\n"
-            "            registrar.settings['greeting'] = 'changed'\n"
+            "            self.settings['greeting'] = 'changed'\n"
             "        except TypeError:\n"
             "            pass\n"
             "        else:\n"
             "            raise AssertionError('settings must be immutable')\n"
-            "    def register_config(self, registrar) -> None:\n"
-            "        self._check(registrar)\n"
-            "    async def register(self, registrar) -> None:\n"
-            "        self._check(registrar)\n"
+            "    @configure\n"
+            "    def check_config(self, registrar) -> None:\n"
+            "        self._check()\n"
         ),
     )
     plugin_root.joinpath("asset.txt").write_text("asset", encoding="utf-8")
@@ -514,9 +502,11 @@ async def test_distribution_plugin_receives_same_private_settings(tmp_path: Path
             requires_core=">=3.1.0.dev2",
         )
 
-        def register_config(self, registrar) -> None:
-            assert registrar.settings["value"] == "installed"
-            assert registrar.resource_root is None
+        @configure
+        def check_settings(self, registrar) -> None:
+            del registrar
+            assert self.settings["value"] == "installed"
+            assert self.resource_root is None
 
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -547,14 +537,15 @@ async def test_local_runtime_failure_uses_existing_transaction_rollback(
         tmp_path / "plugins",
         "local.runtime-failure",
         code=(
-            "from butterbot.plugin import ButterPlugin\n"
+            "from butterbot.plugin import ButterPlugin, configure, register\n"
             "\n"
             "class Hooks(ButterPlugin):\n"
-            "    def register_config(self, registrar) -> None:\n"
+            "    @configure\n"
+            "    def configure_failure(self, registrar) -> None:\n"
             "        registrar.register_builder('local-failure', dict)\n"
-            "    async def register(self, registrar) -> None:\n"
-            "        registrar.on_close(lambda: None)\n"
-            "        raise RuntimeError('local runtime failure')\n"
+            "    @register('missing.events', 'missing.event')\n"
+            "    async def handle(self, event) -> None:\n"
+            "        pass\n"
         ),
     )
     config_path = tmp_path / "config.yaml"
@@ -600,13 +591,12 @@ def test_plugin_failure_status_does_not_leak_private_settings(tmp_path: Path):
         tmp_path / "plugins",
         "local.secret-failure",
         code=(
-            "from butterbot.plugin import ButterPlugin\n"
+            "from butterbot.plugin import ButterPlugin, configure\n"
             "\n"
             "class Hooks(ButterPlugin):\n"
-            "    def register_config(self, registrar) -> None:\n"
-            "        raise RuntimeError(str(registrar.settings))\n"
-            "    async def register(self, registrar) -> None:\n"
-            "        pass\n"
+            "    @configure\n"
+            "    def fail_config(self, registrar) -> None:\n"
+            "        raise RuntimeError(str(self.settings))\n"
         ),
     )
     config_path = tmp_path / "config.yaml"

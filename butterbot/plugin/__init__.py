@@ -9,14 +9,13 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
-from butterbot.core.event import Event
-from butterbot.core.filter import AndFilter, BaseFilter, OrFilter
-from butterbot.core.types import BaseType
 from butterbot.plugin.contracts import (
     ButterPlugin,
     PluginDescriptor,
     SourceRef,
     SubscriptionSpec,
+    configure,
+    register,
 )
 
 from .errors import (
@@ -123,9 +122,6 @@ def __dir__() -> list[str]:
 
 
 __all__ = [
-    "AndFilter",
-    "BaseFilter",
-    "BaseType",
     "BotAppFactory",
     "ButterPlugin",
     "CleanupRegistration",
@@ -133,11 +129,9 @@ __all__ = [
     "DirectoryPluginOrigin",
     "DistributionPluginOrigin",
     "ENTRY_POINT_GROUP",
-    "Event",
     "ExtensionRegistrar",
     "LocalPluginManifest",
     "LocalPluginSettings",
-    "OrFilter",
     "PluginBootstrap",
     "PluginCandidate",
     "PluginCatalog",
@@ -157,5 +151,7 @@ __all__ = [
     "SourceRef",
     "SubscriptionSpec",
     "bootstrap_app",
+    "configure",
+    "register",
     "validate_plugin_config",
 ]

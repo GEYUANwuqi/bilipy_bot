@@ -1,7 +1,7 @@
 """插件作者面对的稳定形状契约."""
 
 from .descriptor import PluginDescriptor
-from .hooks import ButterPlugin
+from .hooks import ButterPlugin, configure, register
 from .routing import SourceRef, SubscriptionSpec
 
 __all__ = [
@@ -9,4 +9,6 @@ __all__ = [
     "PluginDescriptor",
     "SourceRef",
     "SubscriptionSpec",
+    "configure",
+    "register",
 ]

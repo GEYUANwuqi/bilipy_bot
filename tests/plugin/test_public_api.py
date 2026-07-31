@@ -42,9 +42,10 @@ def test_app_and_plugin_public_api_import_in_fresh_process() -> None:
     """两种导入顺序都不能触发 plugin bootstrap 循环依赖."""
     plugin_import = "\n".join(
         (
+            "from butterbot.core import Event",
             "from butterbot.plugin import (",
-            "    Event, ButterPlugin, PluginBootstrap, PluginRegistrar,",
-            "    SourceRef, SubscriptionSpec,",
+            "    ButterPlugin, PluginBootstrap, PluginRegistrar,",
+            "    SourceRef, SubscriptionSpec, register,",
             ")",
         )
     )
@@ -72,6 +73,19 @@ def test_obsolete_plugin_base_names_are_not_exported() -> None:
 
     assert not hasattr(plugin, "LocalPlugin")
     assert not hasattr(plugin, "PluginBase")
+    assert not hasattr(plugin.ButterPlugin, "register_config")
+    assert not hasattr(plugin.ButterPlugin, "register")
+    assert not hasattr(plugin, "start")
+    assert not hasattr(plugin, "stop")
+    assert hasattr(plugin.ButterPlugin, "on_start")
+    assert hasattr(plugin.ButterPlugin, "on_stop")
+
+
+def test_core_types_are_not_exported_from_plugin() -> None:
+    import butterbot.plugin as plugin
+
+    for name in ("AndFilter", "BaseFilter", "BaseType", "Event", "OrFilter"):
+        assert not hasattr(plugin, name)
 
 
 def test_plugin_package_is_grouped_by_responsibility() -> None:
@@ -163,6 +177,11 @@ def test_core_does_not_import_plugin_package() -> None:
         ), path
 
 
-def test_handler_only_plugins_do_not_import_core() -> None:
+def test_handler_plugins_import_core_types_from_core() -> None:
     for path in HANDLER_PLUGIN_FILES:
-        assert "butterbot.core" not in path.read_text(encoding="utf-8"), path
+        source = path.read_text(encoding="utf-8")
+        assert "butterbot.core" in source, path
+        assert "    Event," not in source, path
+        assert "PluginRegistrar" not in source, path
+        assert "SourceRef" not in source, path
+        assert "SubscriptionSpec" not in source, path

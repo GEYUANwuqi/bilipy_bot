@@ -1,33 +1,179 @@
-"""目录插件与 distribution 插件共享的统一基类."""
+"""插件基类与声明式注册装饰器."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import inspect
+from collections.abc import Callable, Coroutine, Mapping
+from dataclasses import dataclass
+from pathlib import Path
+from types import MappingProxyType
+from typing import Any, TypeVar, cast
 
-if TYPE_CHECKING:
-    from butterbot.plugin.runtime.registrar import ConfigRegistrar, PluginRegistrar
+from .routing import SourceRef, SubscriptionSpec
+
+_ConfigureHook = Callable[..., object]
+_Handler = Callable[..., Coroutine[Any, Any, None]]
+_HookT = TypeVar("_HookT", bound=_ConfigureHook)
+_HandlerT = TypeVar("_HandlerT", bound=_Handler)
+_CONFIGURE_ATTRIBUTE = "__butterbot_plugin_configure__"
+_SUBSCRIPTIONS_ATTRIBUTE = "__butterbot_plugin_subscriptions__"
+
+
+@dataclass(frozen=True, slots=True)
+class _SubscriptionDeclaration:
+    source_kind: str
+    status: object
+    event_filter: object | None
+    allow_multiple: bool
 
 
 class ButterPlugin:
     """本地目录和 distribution 插件共享的唯一用户基类.
 
-    本地插件的 descriptor 来自 ``plugin.toml``；distribution 插件在子类上
-    声明 ``descriptor``。所有 hook 都提供空实现，插件只需覆盖实际使用的阶段。
+    Handler 使用 :func:`register` 声明订阅，无需手工构造 ``SourceRef`` 或
+    ``SubscriptionSpec``。生命周期只需按需覆盖 :meth:`on_start` 和
+    :meth:`on_stop`。
     """
 
-    def register_config(self, registrar: ConfigRegistrar) -> None:
-        """登记配置 builder 和 Source factory，不产生运行时任务."""
-        del registrar
+    @property
+    def settings(self) -> Mapping[str, object]:
+        """当前插件隔离且只读的配置 namespace."""
+        return getattr(self, "_plugin_settings", MappingProxyType({}))
 
-    async def register(self, registrar: PluginRegistrar) -> None:
-        """登记 Source、Handler 和清理回调."""
-        del registrar
+    @property
+    def resource_root(self) -> Path | None:
+        """本地插件资源根；distribution 插件返回 ``None``."""
+        return getattr(self, "_plugin_resource_root", None)
+
+    @property
+    def config_key(self) -> str | None:
+        """返回显式配置的 Source 配置键；未配置时按 kind 唯一匹配."""
+        value = self.settings.get("config_key")
+        if value is None:
+            return None
+        value = str(value)
+        if not value or value != value.strip():
+            raise ValueError("插件 config_key 必须为 None 或非空且无首尾空白的字符串")
+        return value
+
+    def source_ref(self, source_kind: str) -> SourceRef:
+        """使用当前插件的 ``config_key`` 构造逻辑 Source 引用."""
+        return SourceRef(source_kind, self.config_key)
 
     async def on_start(self) -> None:
-        """全部 Source 启动成功后执行."""
+        """全部 Source 启动成功后执行；子类按需覆盖."""
 
     async def on_stop(self) -> None:
-        """停止 Source 和撤销插件注册前执行."""
+        """Source 停止前按依赖逆序执行；子类按需覆盖."""
+
+    def _bind_context(
+        self,
+        settings: Mapping[str, object] | None,
+        resource_root: Path | None,
+    ) -> None:
+        self._plugin_settings = (
+            MappingProxyType({})
+            if settings is None
+            else MappingProxyType(dict(settings))
+        )
+        self._plugin_resource_root = resource_root
+
+    def _subscription_specs(self) -> tuple[SubscriptionSpec, ...]:
+        specs: list[SubscriptionSpec] = []
+        for handler, declaration in iter_plugin_subscriptions(self):
+            specs.append(
+                SubscriptionSpec(
+                    source=self.source_ref(declaration.source_kind),
+                    status=cast(Any, declaration.status),
+                    callback=cast(Any, handler),
+                    event_filter=cast(Any, declaration.event_filter),
+                    allow_multiple=declaration.allow_multiple,
+                )
+            )
+        return tuple(specs)
 
 
-__all__ = ["ButterPlugin"]
+def configure(method: _HookT) -> _HookT:
+    """声明同步配置方法，manager 会注入 ``ConfigRegistrar``."""
+    if not callable(method):
+        raise TypeError("@configure 只能用于可调用对象")
+    setattr(cast(Any, method), _CONFIGURE_ATTRIBUTE, True)
+    return method
+
+
+def register(
+    source_kind: str,
+    status: object,
+    *,
+    event_filter: object | None = None,
+    allow_multiple: bool = False,
+) -> Callable[[_HandlerT], _HandlerT]:
+    """把异步 Handler 声明为逻辑 Source 订阅."""
+    SourceRef(source_kind)
+    if not isinstance(allow_multiple, bool):
+        raise TypeError("allow_multiple 必须是布尔值")
+    declaration = _SubscriptionDeclaration(
+        source_kind=source_kind,
+        status=status,
+        event_filter=event_filter,
+        allow_multiple=allow_multiple,
+    )
+
+    def decorate(method: _HandlerT) -> _HandlerT:
+        if not inspect.iscoroutinefunction(method):
+            raise TypeError("@register 只能用于 async Handler")
+        existing = cast(
+            tuple[_SubscriptionDeclaration, ...],
+            getattr(method, _SUBSCRIPTIONS_ATTRIBUTE, ()),
+        )
+        declarations = list(existing)
+        declarations.insert(0, declaration)
+        setattr(cast(Any, method), _SUBSCRIPTIONS_ATTRIBUTE, tuple(declarations))
+        return method
+
+    return decorate
+
+
+def iter_configure_hooks(plugin: ButterPlugin) -> tuple[_ConfigureHook, ...]:
+    """按基类到子类、类内定义顺序返回配置方法."""
+    hooks: list[_ConfigureHook] = []
+    for name, member in _resolved_members(plugin).items():
+        if not getattr(member, _CONFIGURE_ATTRIBUTE, False):
+            continue
+        hook = getattr(plugin, name)
+        if not callable(hook):
+            raise TypeError("@configure 只能用于实例方法")
+        hooks.append(cast(_ConfigureHook, hook))
+    return tuple(hooks)
+
+
+def iter_plugin_subscriptions(
+    plugin: ButterPlugin,
+) -> tuple[tuple[_Handler, _SubscriptionDeclaration], ...]:
+    """返回绑定 Handler 及其声明，继承和定义顺序与配置方法一致."""
+    subscriptions: list[tuple[_Handler, _SubscriptionDeclaration]] = []
+    for name, member in _resolved_members(plugin).items():
+        declarations = getattr(member, _SUBSCRIPTIONS_ATTRIBUTE, ())
+        if not declarations:
+            continue
+        handler = getattr(plugin, name)
+        if not callable(handler):
+            raise TypeError("@register 只能用于实例方法")
+        subscriptions.extend(
+            (cast(_Handler, handler), declaration) for declaration in declarations
+        )
+    return tuple(subscriptions)
+
+
+def _resolved_members(plugin: ButterPlugin) -> dict[str, object]:
+    definitions: dict[str, object] = {}
+    for plugin_class in reversed(type(plugin).__mro__):
+        definitions.update(vars(plugin_class))
+    return definitions
+
+
+__all__ = [
+    "ButterPlugin",
+    "configure",
+    "register",
+]

@@ -66,6 +66,7 @@ def test_only_enabled_entry_points_are_imported():
     )
 
     assert catalog.plugin_ids == ("example.enabled",)
+    assert not hasattr(catalog.plugins[0], "plugin")
     assert enabled.loads == 1
     assert disabled.loads == 0
 
@@ -77,12 +78,6 @@ def test_distribution_plugin_must_inherit_butter_plugin():
             version="1.0.0",
             requires_core=">=3.1.0.dev1",
         )
-
-        def register_config(self, registrar) -> None:
-            del registrar
-
-        async def register(self, registrar) -> None:
-            del registrar
 
     with pytest.raises(PluginDiscoveryError, match="ButterPlugin"):
         PluginCatalog.discover(

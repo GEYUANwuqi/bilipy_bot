@@ -20,7 +20,7 @@ from butterbot.plugin.errors import (
 
 from .directory import (
     index_local_manifests,
-    load_local_hooks,
+    load_local_plugin,
     validate_distribution_requirements,
 )
 from .manifest import LocalPluginManifest
@@ -48,13 +48,8 @@ class LoadedPlugin:
     """一个已导入并通过静态校验的插件."""
 
     descriptor: PluginDescriptor
-    hooks: ButterPlugin
+    instance: ButterPlugin
     origin: PluginOrigin
-
-    @property
-    def plugin(self) -> ButterPlugin:
-        """兼容 P0 provisional API 的 hook 别名."""
-        return self.hooks
 
 
 CandidateLoader = Callable[[], LoadedPlugin]
@@ -231,8 +226,8 @@ def _distribution_candidate(entry_point: PluginEntryPoint) -> PluginCandidate:
 
 def _directory_candidate(manifest: LocalPluginManifest) -> PluginCandidate:
     def load() -> LoadedPlugin:
-        hooks = load_local_hooks(manifest)
-        return LoadedPlugin(manifest.descriptor, hooks, manifest.origin)
+        instance = load_local_plugin(manifest)
+        return LoadedPlugin(manifest.descriptor, instance, manifest.origin)
 
     return PluginCandidate(
         plugin_id=manifest.plugin_id,
@@ -299,12 +294,7 @@ def _load_distribution_plugin(
 
 
 def _looks_like_distribution_plugin(candidate: object) -> bool:
-    return (
-        isinstance(candidate, ButterPlugin)
-        and hasattr(candidate, "descriptor")
-        and callable(getattr(candidate, "register_config", None))
-        and callable(getattr(candidate, "register", None))
-    )
+    return isinstance(candidate, ButterPlugin) and hasattr(candidate, "descriptor")
 
 
 def _validate_dependencies(loaded: dict[str, LoadedPlugin]) -> None:

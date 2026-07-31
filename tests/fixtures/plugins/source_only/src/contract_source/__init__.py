@@ -10,6 +10,7 @@ from butterbot.plugin import (
     ButterPlugin,
     ConfigRegistrar,
     PluginDescriptor,
+    configure,
 )
 
 
@@ -51,7 +52,8 @@ class SourcePlugin(ButterPlugin):
         if os.environ.get("BUTTERBOT_CONTRACT_FAIL_IMPORT"):
             raise RuntimeError("external plugin import failed")
 
-    def register_config(self, registrar: ConfigRegistrar) -> None:
+    @configure
+    def configure_source(self, registrar: ConfigRegistrar) -> None:
         registrar.register_builder("contract", dict)
         registrar.register_factory(
             "contract",

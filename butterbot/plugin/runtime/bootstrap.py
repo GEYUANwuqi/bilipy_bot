@@ -92,7 +92,7 @@ class PluginBootstrap:
         self,
         app_factory: BotAppFactory = BotApp,
     ) -> BotApp:
-        """发现插件、构建配置和应用；运行阶段 hook 延迟到 app.start()."""
+        """发现插件、构建配置和应用；运行阶段方法延迟到 app.start()."""
         resolved_data, settings = self._load()
         catalog = self.discover()
 
