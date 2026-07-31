@@ -17,10 +17,11 @@ uv run butterbot run examples.plugin_app:create_app
 ```
 
 按目录内 README 启用插件，并让 YAML 创建 `BiliDynamicSource` 和
-`BiliLiveSource`。插件通过 `SourceRef` 分别订阅动态变化、在线状态、开播与下播。
+`BiliLiveSource`。插件通过 Handler 上的 `@register` 分别声明动态变化、在线状态、
+开播与下播订阅；`SourceRef` 和 `SubscriptionSpec` 由基类自动构造。
 入口模块只定义一个 `ButterPlugin` 子类，由 loader 自动实例化，不需要
-`create_plugin()`。Handler 作为插件实例方法注册，示例同时展示
-`on_start()`/`on_stop()` 生命周期回调。
+`create_plugin()` 或注册 hook。每种 `source_kind` 只有一个实例，因此无需设置
+插件 `config_key`。
 
 ## 直播弹幕
 

@@ -12,8 +12,8 @@ distribution 的 `butterbot.plugins` entry point，也可以是项目 `./plugins
 API 位于 `butterbot.plugin`；它仍可能在 3.x 开发版本中
 发生破坏性调整。
 
-普通 Handler 插件只依赖这个公开包，不导入 `butterbot.core`。只有同时提供新
-`BaseSource`、数据模型或状态类型的事件源适配插件需要从 core 导入底层基类。
+`butterbot.plugin` 只导出插件契约；`Event`、Filter、`BaseType`、`BaseSource`
+等 core 类型由插件作者按需从 `butterbot.core` 导入。
 
 ::: danger 插件拥有当前 Python 进程的完整权限
 插件可以访问文件、网络、环境变量和进程内对象。registrar 是生命周期和所有权边界，
@@ -99,22 +99,15 @@ requires_distributions = []
 factory：
 
 ```python
-from butterbot.plugin import ButterPlugin
+from butterbot.core import Event
+from butterbot.plugin import ButterPlugin, register
 
 
 class HelloPlugin(ButterPlugin):
-    async def register(self, registrar) -> None:
-        greeting = str(registrar.settings.get("greeting", "hello"))
-        resource = registrar.resource_root
-        # 使用 registrar 注册 Source、Handler 或 close callback
-
-    async def on_start(self) -> None:
-        # 全部 Source 启动成功后执行
-        ...
-
-    async def on_stop(self) -> None:
-        # 停止 Source 和撤销插件注册前执行
-        ...
+    @register("example.events", "example.ready")
+    async def handle_ready(self, event: Event) -> None:
+        greeting = str(self.settings.get("greeting", "hello"))
+        resource = self.resource_root
 ```
 
 只有 `candidate.__module__ == entry_module.__name__` 的具体 `ButterPlugin` 子类会被
@@ -139,16 +132,18 @@ import 前被拒绝。未启用本地插件只读取 manifest 和用于 fingerpr
 
 ## 两阶段注册
 
-配置阶段是同步 hook，只登记 builder 和 Source factory，不能创建任务或连接：
+配置阶段使用同步 `@configure` 方法，只登记 builder 和 Source factory，不能创建
+任务或连接：
 
 ```python
-from butterbot.plugin import ConfigRegistrar
+from butterbot.plugin import ConfigRegistrar, configure
 
 
 class ExamplePlugin(ButterPlugin):
     # descriptor 同上
 
-    def register_config(self, registrar: ConfigRegistrar) -> None:
+    @configure
+    def configure_source(self, registrar: ConfigRegistrar) -> None:
         registrar.register_builder("example", dict)
         registrar.register_factory(
             "example",
@@ -160,16 +155,15 @@ class ExamplePlugin(ButterPlugin):
 `factory_id="source"` 是 YAML 协议。它不依赖 `FeedSource` 的 Python 类名，因此类
 重命名不会破坏用户配置。
 
-运行阶段是异步 hook。Source provider 可创建 Source；Handler-only 插件只通过
-`SourceRef` 依赖逻辑事件能力，不需要导入 provider 的 Source 类：
+Handler 直接使用 `@register(source_kind, status)` 声明订阅，不需要编写运行阶段
+hook，也不需要导入 provider 的 Source 类：
 
 ```python
+from butterbot.core import Event
 from butterbot.plugin import (
     ButterPlugin,
     PluginDescriptor,
-    PluginRegistrar,
-    SourceRef,
-    SubscriptionSpec,
+    register,
 )
 
 
@@ -182,34 +176,30 @@ class HandlerPlugin(ButterPlugin):
         provides=("example.handler",),
     )
 
-    async def register(self, registrar: PluginRegistrar) -> None:
-        registrar.add_subscription(
-            SubscriptionSpec(
-                source=SourceRef("example.events", "primary"),
-                status="example.item",
-                callback=self.handle_item,
-            )
-        )
-        registrar.on_close(close_plugin_resource)
-
-    async def on_start(self) -> None:
-        """全部 Source 启动后执行一次."""
-
-    async def on_stop(self) -> None:
-        """停止 Source 和撤销 Handler 前执行一次."""
-
-    async def handle_item(self, event) -> None:
+    @register("example.events", "example.item")
+    async def handle_item(self, event: Event) -> None:
         ...
 ```
 
-`PluginManager` 注入 owner ID。插件不能代替其他插件登记 Source 或 Handler。
-建议把 Handler 写成插件实例方法，便于复用插件实例状态。`register()` 只执行一次；
-应用每次启动和停止都会成对调用插件 `on_start()`/`on_stop()`。启动回调按依赖顺序
-执行，停止回调按逆依赖顺序执行。
+基类从可选的 `plugins.config.<plugin-id>.config_key` 构造 `SourceRef`，再自动用
+绑定 Handler 创建 `SubscriptionSpec`。没有配置键时只按 `source_kind` 匹配，唯一
+结果会直接使用；同类 Source 有多个实例时才需要显式设置 `config_key`。插件不能
+代替其他插件登记 Source 或 Handler。
 
-插件 `on_start()` 只适合依赖 Source 已就绪的轻量初始化。L1 插件仍不得在 registrar
-之外创建无人托管的后台 task；长期任务应由 Source 的 `on_start()`/`on_stop()`
-管理，Handler task 由 EventBus 管理。
+插件按需覆盖固定生命周期回调，不需要装饰器：
+
+```python
+class HandlerPlugin(ButterPlugin):
+    async def on_start(self) -> None:
+        ...
+
+    async def on_stop(self) -> None:
+        ...
+```
+
+`on_start()` 在全部 Source 启动后按依赖顺序执行，`on_stop()` 在 Source 停止前按
+依赖逆序执行。长期连接通常仍应由 Source 的生命周期管理，Handler task 由
+EventBus 管理。
 
 ## 配置与应用 factory
 
@@ -242,10 +232,9 @@ cwd。`auto_enable` 默认关闭；设为 `true` 表示显式授权全部本地 
 选择结果与 `enabled` 取并集。
 
 `plugins.config.<plugin-id>` 只会作为不可变 mapping 注入该插件的
-`ConfigRegistrar.settings` 和 `PluginRegistrar.settings`。插件不能看到其他插件
-namespace；状态、收据和默认错误不会保存配置值。目录 registrar 的
-`resource_root` 是 `plugin.toml` 所在目录，distribution 插件为 `None` 并应使用
-`importlib.resources`。
+`ButterPlugin.settings` 和配置 registrar。插件不能看到其他插件 namespace；状态、
+收据和默认错误不会保存配置值。本地插件的 `resource_root` 是 `plugin.toml`
+所在目录，distribution 插件为 `None` 并应使用 `importlib.resources`。
 
 `plugins` 是 bootstrap 保留段，不会进入 `RuntimeConfig.get_config()`。可以使用
 `BUTTERBOT__PLUGINS__ENABLED='[example.feed, example.handler]'` 覆盖启用列表。
@@ -315,19 +304,23 @@ butterbot plugins init local.hello
 -> 应用 enabled / local.auto_enable
 -> 只导入已选择候选
 -> descriptor/依赖校验
--> register_config（依赖顺序）
+-> @configure（依赖顺序）
 -> 解析 RuntimeConfig
 -> 构造全部配置 Source
--> register（依赖顺序）
+-> 解析 @register Handler 声明（依赖顺序）
 -> 启动 Source
+-> on_start（依赖顺序）
 -> 运行
--> 插件逆依赖顺序关闭
+-> on_stop（逆依赖顺序）
+-> 插件注册项逆依赖顺序关闭
 -> SourceManager / EventBus / ApiRegistry 关闭
 ```
 
 builder、factory、Source、Handler 和 close callback 都有 owner 与撤销收据。配置、
-注册或 Source 启动出现普通异常或取消时，bootstrap 会逆序撤销本轮副作用。
-`SourceRef` 缺失、重复或歧义在 Source 启动前报告。
+注册、Source 启动或插件 `on_start()` 出现普通异常或取消时，bootstrap 会先调用
+已进入启动阶段插件的 `on_stop()`，再逆序撤销本轮副作用。停止回调发生取消也不会
+跳过其余插件和 Source 的清理。`SourceRef` 缺失、重复或歧义在 Source 启动前
+报告。
 
 `PluginBootstrap.manager.statuses` 返回不含配置值和 secret 的诊断快照，并带有
 `origin_kind`、`origin` 和本地 SHA-256 `fingerprint`。状态包括
@@ -340,7 +333,8 @@ builder、factory、Source、Handler 和 close callback 都有 owner 与撤销�
 distribution 插件至少应在独立 wheel 中验证：
 
 - entry point 能从 clean venv 发现；
-- Handler-only distribution 只导入 `butterbot.plugin` 公开接口；
+- Handler-only distribution 从 `butterbot.plugin` 导入插件契约，从
+  `butterbot.core` 导入事件与过滤类型；
 - provider/consumer 不通过实现类互相耦合；
 - import、register 和 Source start 失败不留下注册项或 task；
 - 重复关闭幂等。

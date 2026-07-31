@@ -47,26 +47,24 @@ from butterbot.sources.napcat import NapcatSource, NapcatType
 
 ## 插件作者从哪里导入
 
-业务 Handler、本地目录插件和 distribution 插件统一从
-`butterbot.plugin` 导入插件契约：
+插件契约从 `butterbot.plugin` 导入，事件等 core 类型从
+`butterbot.core` 导入：
 
 ```python
-from butterbot.plugin import (
-    Event,
-    ButterPlugin,
-    PluginRegistrar,
-    SourceRef,
-    SubscriptionSpec,
-)
+from butterbot.core import Event
+from butterbot.plugin import ButterPlugin, register
+
+
+class HandlerPlugin(ButterPlugin):
+    @register("example.events", "example.ready")
+    async def handle(self, event: Event) -> None:
+        ...
 ```
 
-普通插件不应导入 `butterbot.core`。只有实现新事件源、数据模型、状态类型或底层
-API 的适配作者需要使用 core：
+需要 Source、数据模型或状态类型时同样直接使用 core：
 
 ```python
-from butterbot.core.data import BaseDataMixin
-from butterbot.core.source import BaseSource
-from butterbot.core.types import BaseType
+from butterbot.core import BaseDataMixin, BaseSource, BaseType
 ```
 
 不要依赖以下内容：
@@ -82,10 +80,11 @@ from butterbot.core.types import BaseType
 flowchart TD
   U[用户应用] --> APP[butterbot.app]
   P[业务插件] --> PLUGIN[butterbot.plugin]
+  P --> CORE
   APP --> CONTRACT[plugin.contracts.routing]
   PLUGIN --> APP
   APP --> CORE[butterbot.core]
-  PLUGIN --> CORE
+  PLUGIN_RUNTIME[plugin.runtime] --> CORE
   U --> SOURCES[butterbot.sources]
   SOURCES --> CORE
   SOURCES --> UTILS[butterbot.utils]
@@ -96,7 +95,8 @@ flowchart TD
 
 `BotApp` 只导入轻量的 `plugin.contracts.routing`；反向组合应用的 bootstrap、
 registrar 和 manager 由 `butterbot.plugin` 门面延迟导出，因此模块级导入图不会
-形成循环。业务插件只依赖根门面，不把上述内部分类当作稳定导入路径。
+形成循环。插件作者从根门面导入插件契约，需要 core 类型时直接从
+`butterbot.core` 导入，不把插件内部分类当作稳定路径。
 
 `butterbot/plugin/` 内部同一目录的模块使用单点相对导入；跨
 `contracts/discovery/runtime` 目录或访问根目录模块时使用完整

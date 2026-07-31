@@ -19,5 +19,5 @@ title: 扩展开发
 依赖顺序、两阶段注册和失败回滚，但不是安全沙箱，也不支持热重载或运行期卸载。
 一个完整适配通常仍由 Source、API、Data、Type 和可选 Filter 组成。
 
-业务插件只从 `butterbot.plugin` 导入公开契约；实现新 Source、Data、Type 或
-底层 API 时才需要导入 `butterbot.core`。
+业务插件从 `butterbot.plugin` 导入插件契约；需要 Event、Filter、Source、Data、
+Type 或底层 API 时直接从 `butterbot.core` 导入。

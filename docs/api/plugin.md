@@ -4,100 +4,128 @@ title: 插件 API
 
 # 插件 API
 
-普通业务插件只从 `butterbot.plugin` 导入框架契约：
+`butterbot.plugin` 只导出插件系统自己的契约。普通 Handler 插件通常只需要
+`ButterPlugin` 和 `register`；事件类型按需从 `butterbot.core` 导入：
 
 ```python
-from butterbot.plugin import (
-    Event,
-    ButterPlugin,
-    PluginRegistrar,
-    SourceRef,
-    SubscriptionSpec,
+from butterbot.core import Event
+from butterbot.plugin import ButterPlugin, register
+
+
+class HandlerPlugin(ButterPlugin):
+    @register("example.events", "example.ready")
+    async def handle_ready(self, event: Event) -> None:
+        ...
+```
+
+`@register(source_kind, status)` 直接声明 Handler 的逻辑订阅。框架会自动：
+
+1. 从插件实例取得 `config_key`；
+2. 创建 `SourceRef(source_kind, config_key)`；
+3. 用当前绑定方法创建 `SubscriptionSpec`；
+4. 通过 owner-aware registrar 注册并记录撤销收据。
+
+因此 Handler 插件不需要导入 `PluginRegistrar`、`SourceRef` 或
+`SubscriptionSpec`。
+
+## ButterPlugin 内置上下文
+
+`ButterPlugin` 提供以下实例属性和方法：
+
+```python
+self.settings       # 当前插件只读私有配置
+self.resource_root  # 本地插件资源根；distribution 插件为 None
+self.config_key     # settings["config_key"]；未配置时为 None
+self.source_ref("example.events")
+```
+
+没有 `config_key` 时，`source_ref()` 只按 `source_kind` 匹配；如果结果唯一，用户
+无需写任何配置。同类 Source 有多个实例时，在
+`plugins.config.<plugin-id>.config_key` 显式指定一次即可。同一插件的所有
+`@register` 声明使用同一个解析结果。需要更特殊的路由策略时，可以覆盖
+`source_ref()`。
+
+## register
+
+完整签名：
+
+```python
+@register(
+    source_kind,
+    status,
+    event_filter=None,
+    allow_multiple=False,
 )
 ```
 
-`Event`、过滤器和状态基类由插件门面重新导出，因此 Handler-only 插件不需要知道
-`butterbot.core` 的内部布局。只有实现 `BaseSource`、数据模型或新状态类型的事件源
-适配作者需要直接导入 core。
+装饰器只能用于异步实例方法。同一 Handler 可以叠加多个 `@register`；声明按源码
+从上到下执行。继承时按基类到子类、类内定义顺序收集；子类同名方法会替换父类
+Handler，不加装饰器即可取消继承的订阅。
 
-## 插件定义
+`event_filter` 接受 core Filter，`allow_multiple=True` 会把声明绑定到所有匹配
+Source。默认仍要求 `SourceRef` 唯一匹配。
 
-- `ButterPlugin`：本地目录与 distribution 共用的唯一插件基类。
+## Source provider
+
+只有提供配置 builder 或 Source factory 的插件才需要 `configure` 和
+`ConfigRegistrar`：
+
+```python
+from butterbot.plugin import ButterPlugin, ConfigRegistrar, configure
+
+
+class SourcePlugin(ButterPlugin):
+    @configure
+    def configure_source(self, registrar: ConfigRegistrar) -> None:
+        registrar.register_builder("example", dict)
+        registrar.register_factory(
+            "example",
+            ExampleSource,
+            factory_id="source",
+        )
+```
+
+`@configure` 方法必须同步；一个插件可以声明多个。普通 Handler 插件不导入这两个
+名字。
+
+## 生命周期回调
+
+生命周期由 `PluginManager` 统一编排。插件只需按需覆盖固定回调，不使用装饰器：
+
+```python
+class HandlerPlugin(ButterPlugin):
+    async def on_start(self) -> None:
+        ...
+
+    async def on_stop(self) -> None:
+        ...
+```
+
+全部 Source 启动成功后，`on_start()` 按插件依赖顺序执行；停止 Source 前，
+`on_stop()` 按依赖逆序执行。启动失败时，已进入启动阶段的插件也会逆序执行
+`on_stop()`，随后撤销本轮注册。回调必须是异步方法；不需要生命周期工作的插件
+无需覆盖。依赖 `settings` 或已启动 Source 的实例初始化可以放进 `on_start()`，
+对应资源在 `on_stop()` 释放。
+
+订阅会在 Source 启动前从 `@register` 声明构造，因此不能等到 `on_start()` 再决定
+基础路由。长期连接通常仍应实现为 Source，Handler task 由 EventBus 管理。
+
+## 身份与低层原语
+
+- `ButterPlugin`：本地目录和 distribution 共用的唯一插件基类。
 - `PluginDescriptor`：distribution 插件的身份、版本、依赖和 capability。
-- `PluginRegistrar`：运行阶段的 owner-aware Source、订阅和关闭回调注册器。
-- `ConfigRegistrar`：配置阶段的 builder 和 Source factory 注册器。
+- `SourceRef`、`SubscriptionSpec`：应用和手工扩展使用的低层路由声明。
+- `PluginRegistrar`、`ExtensionRegistrar`：框架控制面和手工事务扩展使用。
 
 本地入口模块必须且只能定义一个具体 `ButterPlugin` 子类。distribution entry point
 可以直接指向插件实例、无参类或返回实例的无参 factory，并在子类上提供
-`PluginDescriptor`。本地插件的 descriptor 来自 `plugin.toml`，不在 Python
-代码中重复声明。
+`PluginDescriptor`。
 
-旧名称 `LocalPlugin` 和 `PluginBase` 不再导出。两种来源统一使用
-`ButterPlugin`，避免插件作者先判断自己的交付形式再选择基类。
-
-## 包内分层
-
-插件作者始终从 `butterbot.plugin` 门面导入，不依赖内部文件路径。实现按职责分为：
-
-- `contracts/`：`ButterPlugin`、descriptor、Source 路由和订阅声明；
-- `discovery/`：entry point 与目录索引、manifest、来源和设置；
-- `runtime/`：bootstrap、registrar、manager 和生命周期事务；
-- `errors.py`：插件系统共享异常。
-
-`descriptor.py` 只保留 `PluginDescriptor`；标识符校验、hook 基类和路由声明分别位于
-独立模块。`discovery/` 与 `runtime/` 通过根门面延迟导出，内部布局仍属于
-provisional 实现细节。
-
-## 插件生命周期
-
-`ButterPlugin` 提供四个可选 hook，未覆盖时都是空实现：
-
-```python
-class ExamplePlugin(ButterPlugin):
-    def register_config(self, registrar: ConfigRegistrar) -> None: ...
-    async def register(self, registrar: PluginRegistrar) -> None: ...
-    async def on_start(self) -> None: ...
-    async def on_stop(self) -> None: ...
-```
-
-调用顺序固定为：
-
-1. 按依赖顺序执行同步 `register_config()`；
-2. 应用构造后按依赖顺序执行异步 `register()`；
-3. 全部 Source 启动成功后按依赖顺序执行 `on_start()`；
-4. 停止或关闭时先按依赖逆序执行 `on_stop()`，再撤销 Handler 和 Source。
-
-`register()` 只负责一次性登记，应用重复 start/stop 时不会重复调用；`on_start()` 和
-`on_stop()` 则会成对重复。`on_start()` 失败会调用已进入启动阶段插件的
-`on_stop()`，再回滚全部插件注册。`on_stop()` 的普通异常会记录并继续清理，取消会在
-清理完成后传播。
-
-`registrar.on_close()` 与 `on_stop()` 含义不同：前者登记只在最终关闭或注册回滚时
-执行一次的资源释放回调；后者对应每次应用 stop，可在之后再次 start。
-
-## Handler 契约
-
-```python
-SourceRef(source_kind: str, config_key: str | None = None)
-
-SubscriptionSpec(
-    source: SourceRef,
-    status: str | re.Pattern[str] | BaseType,
-    callback: Callable[[Event], Coroutine[Any, Any, None]],
-    event_filter: BaseFilter | None = None,
-    allow_multiple: bool = False,
-)
-```
-
-`SourceRef` 在注册期由 `SourceCatalog` 解析为 Source UUID。默认要求唯一匹配；
-`allow_multiple=True` 才会显式 fan-out。
-
-推荐把 Handler 写成 `ButterPlugin` 的实例方法，再把绑定方法交给
-`SubscriptionSpec.callback`。这样 Handler 可以自然复用插件实例状态，代码也不会
-散落在入口模块的全局命名空间。
+插件没有 `@start` 或 `@stop` 装饰器，只有可覆盖的 `on_start()` 和
+`on_stop()` 基类回调。
 
 ## 控制面
 
-`PluginBootstrap`、`PluginCatalog`、`PluginManager`、来源模型、状态模型和插件异常也
-从同一包导出。它们仍是 3.x provisional API，不代表热重载、安全沙箱或运行期安装。
-完整的配置、发现和生命周期说明见[实验性插件系统](/extensions/plugins.html)。
+`PluginBootstrap`、`PluginCatalog`、`PluginManager`、来源模型、状态模型和插件异常
+目前仍从同一包导出。它们是 3.x provisional API，不代表热重载、安全沙箱或运行期
+安装。

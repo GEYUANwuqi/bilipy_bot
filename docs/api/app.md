@@ -111,10 +111,11 @@ async __aexit__(exc_type, exc_val, exc_tb) -> None
 
 `start()` 可能抛 `SourceStartError` 或 `PluginRegistrationError`。启动被取消时会
 回滚此前已启动的 Source 和插件注册，完成后传播 `CancelledError`。存在
-PluginManager 时，全部 Source 启动后按依赖顺序调用插件 `on_start()`；停止和关闭
-时先按逆依赖顺序调用 `on_stop()`。`close()` 随后撤销插件 Handler、callback、
-Source 和 registry，再按 Source、EventBus、API 顺序尽力释放其余资源。`run()` 是
-拥有事件循环的同步入口，内部使用 `asyncio.run()`。
+PluginManager 时，会在 Source 启动前解析并注册插件 Handler，并在全部 Source
+启动后按依赖顺序调用插件 `on_start()`。`stop()` 先逆依赖调用插件 `on_stop()`，
+再停止 Source。`close()` 同样先执行仍在运行的插件停止回调，再撤销插件 Handler、
+callback、Source 和 registry，最后按 Source、EventBus、API 顺序尽力释放其余
+资源。`run()` 是拥有事件循环的同步入口，内部使用 `asyncio.run()`。
 
 ## `RuntimeConfig`
 
@@ -213,10 +214,9 @@ bootstrap、依赖状态机和统一回滚都位于独立的 `butterbot.plugin` 
 loader 自动实例化，不需要 factory。两种来源最终都实例化为 `ButterPlugin` 并进入
 同一个 manager。
 
-`ConfigRegistrar` 和 `PluginRegistrar` 都提供当前 owner 隔离的只读 `settings`；
-`resource_root` 对本地目录插件是 manifest 所在目录，对 distribution 插件为
-`None`。`PluginStatus` 提供来源类型、来源位置和可选 fingerprint，但不保存插件
-私有配置。
+`ButterPlugin.settings` 提供当前 owner 隔离的只读私有配置；`resource_root` 对
+本地目录插件是 manifest 所在目录，对 distribution 插件为 `None`。
+`PluginStatus` 提供来源类型、来源位置和可选 fingerprint，但不保存插件私有配置。
 
 ## 门面中的其他导出
 

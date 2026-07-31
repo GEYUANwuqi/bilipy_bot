@@ -96,9 +96,9 @@ finally:
 
 ## 启动语义
 
-`BotApp.start()` 先完成插件注册，再委托给 `SourceManager.start()` 按注册顺序绑定
-上下文并启动 Source。全部 Source 成功后，按插件依赖顺序调用
-`ButterPlugin.on_start()`。任一 Source 启动失败时：
+`BotApp.start()` 先完成插件 Handler 注册，再委托给 `SourceManager.start()` 按
+注册顺序绑定上下文并启动 Source。全部 Source 就绪后，插件的 `on_start()` 按依赖
+顺序执行。任一 Source 启动失败时：
 
 - 失败源的 `running` 会回滚为 `False`；
 - 已成功启动的 Source 会被停止；
@@ -108,21 +108,20 @@ finally:
 启动协程被取消时也会停止此前已成功启动的 Source，再传播
 `asyncio.CancelledError`，不会留下半启动 manager。
 
-插件 `on_start()` 失败时，会先按逆依赖顺序调用已进入启动阶段插件的
-`on_stop()`，再撤销插件注册并停止 Source，最终抛
-`PluginRegistrationError(phase="starting")`。取消使用相同清理路径，最后传播
-`CancelledError`。
+插件 `on_start()` 发生异常或取消时，当前插件和此前已启动插件会先按依赖逆序执行
+`on_stop()`，然后撤销 Handler、插件 Source 与配置注册。普通异常包装为
+`PluginRegistrationError`；取消在清理完成后原样传播。
 
 ## 停止与关闭的区别
 
-`await app.stop()` 先按插件依赖逆序调用 `on_stop()`，再停止已注册 Source；它会
-保留 Source、插件注册、订阅、EventBus 与 API 缓存，因此可以再次启动。下一次
-`start()` 不会重复调用插件 `register()`，但会再次调用 `on_start()`。
+`await app.stop()` 先按依赖逆序执行插件 `on_stop()`，再停止已注册 Source，但保留
+Source、插件 Handler 注册、EventBus 与 API 缓存，因此可以再次启动。下一次
+`start()` 不会重复注册 Handler，但会在 Source 重新就绪后再次执行 `on_start()`。
 
 `await app.close()` 是终态操作，顺序固定：
 
-1. `PluginManager.aclose()`：逆依赖调用 `on_stop()`，再撤销插件 Handler、
-   close callback、Source 和 registry；
+1. `PluginManager.aclose()`：先逆依赖执行仍在运行的插件 `on_stop()`，再撤销插件
+   Handler、close callback、Source 和 registry；
 2. `SourceManager.close()`：停止其余 Source，不再产生新事件；
 3. `EventBus.close()`：等待正在执行的 Handler；
 4. `ApiRegistry.aclose_all()`：关闭 API 连接和任务。
@@ -145,7 +144,8 @@ Handler 若捕获 `asyncio.CancelledError`，完成必要清理后应重新抛�
 
 `BaseSource.start()` 捕获 `BaseException` 来保证启动取消时回滚状态，然后原样
 传播。`SourceManager.stop()` 会继续清理其余 Source，最后重新抛出观察到的
-`CancelledError`。动态移除 Source 时，即使停止被取消，也会完成退订和摘除。
+`CancelledError`。插件 `on_stop()` 被取消时，`PluginManager` 也会继续调用其余
+插件的停止回调。动态移除 Source 时，即使停止被取消，也会完成退订和摘除。
 `BotApp.close()` 使用嵌套 `finally`，manager 或 EventBus 清理被取消时仍会继续
 关闭后续资源；`ApiRegistry` 也会继续处理其余 API，最后再传播取消。
 

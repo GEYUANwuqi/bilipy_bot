@@ -29,9 +29,6 @@ plugins:
   # local:
   #   path: "./examples/plugins" # 相对 config.yaml 所在目录
   #   auto_enable: false # 默认只索引 manifest，不执行未启用代码
-  # config:
-  #   example.bilibili-manager:
-  #     config_key: bili_account
 
 # ---------- 命名 Source 配置 ----------
 # 自定义键（bili_account/qq_account）是运行时 config_key。

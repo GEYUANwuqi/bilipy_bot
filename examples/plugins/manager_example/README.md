@@ -2,8 +2,8 @@
 
 这个目录可以整体复制，不需要 `pyproject.toml`、wheel 或安装命令。`plugin.py`
 只定义一个 `ButterPlugin` 子类；启动时会被自动发现和实例化，不需要
-`create_plugin()`。所有 Handler 都是插件实例方法，并通过 `self.handle_*` 注册；
-`on_start()`/`on_stop()` 展示了 Source 启动后的初始化和停止前清理边界。
+`create_plugin()`。所有 Handler 都是插件实例方法，
+`@register(source_kind, status)` 直接声明订阅。
 
 从仓库根目录准备配置：
 
@@ -20,9 +20,6 @@ plugins:
   local:
     path: "./examples/plugins"
     auto_enable: false
-  config:
-    example.bilibili-manager:
-      config_key: bili_account
 ```
 
 并让同一个 `bili_account` 创建动态和直播 Source：
@@ -51,6 +48,7 @@ uv run butterbot plugins check examples.plugin_app:create_app
 uv run butterbot run examples.plugin_app:create_app
 ```
 
-插件只注册 Handler；Bilibili Source 仍由 YAML 和内置 factory 创建。启动时先启动
-全部 Source，再调用插件 `on_start()`；关闭时先调用 `on_stop()`，随后由
-`PluginManager` 按 owner 自动撤销 Handler。
+插件只声明 Handler；Bilibili Source 仍由 YAML 和内置 factory 创建。基类自动
+构造 `SourceRef` 和 `SubscriptionSpec`，`PluginManager` 按 owner 自动注册和撤销
+Handler。每种 `source_kind` 只有一个实例，不需要插件 `config_key`；只有同类
+Source 存在多个实例时，才在 `plugins.config.<plugin-id>.config_key` 中显式消歧。
