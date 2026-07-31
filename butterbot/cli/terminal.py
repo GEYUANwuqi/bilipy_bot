@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import select
 import sys
 from collections.abc import Iterator
@@ -90,22 +91,31 @@ def _read_posix_key() -> str:
     previous = termios.tcgetattr(descriptor)
     try:
         tty.setraw(descriptor)
-        character = sys.stdin.read(1)
-        if character == "\x1b":
-            sequence = ""
-            for _ in range(2):
-                readable, _, _ = select.select([sys.stdin], [], [], 0.03)
-                if not readable:
-                    break
-                sequence += sys.stdin.read(1)
-            if sequence == "[A":
+        character = os.read(descriptor, 1)
+        if character == b"\x1b":
+            sequence = _read_escape_sequence(descriptor)
+            if sequence in (b"[A", b"OA"):
                 return "up"
-            if sequence == "[B":
+            if sequence in (b"[B", b"OB"):
                 return "down"
             return "esc"
-        return _normalize_character(character)
+        return _normalize_character(character.decode("utf-8", errors="ignore"))
     finally:
         termios.tcsetattr(descriptor, termios.TCSADRAIN, previous)
+
+
+def _read_escape_sequence(descriptor: int) -> bytes:
+    """从文件描述符读取方向键剩余字节，避开 TextIO 输入缓冲."""
+    sequence = bytearray()
+    while len(sequence) < 2:
+        readable, _, _ = select.select([descriptor], [], [], 0.03)
+        if not readable:
+            break
+        chunk = os.read(descriptor, 2 - len(sequence))
+        if not chunk:
+            break
+        sequence.extend(chunk)
+    return bytes(sequence)
 
 
 def _normalize_character(character: str) -> str:

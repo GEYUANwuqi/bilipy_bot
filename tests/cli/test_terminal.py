@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import sys
+import threading
+import tty
+
 import pytest
 
 from butterbot.cli import terminal
@@ -34,3 +39,43 @@ def test_full_screen_always_restores_cursor_and_primary_screen(
 )
 def test_normalize_character(character: str, expected: str):
     assert terminal._normalize_character(character) == expected
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX 伪终端测试")
+@pytest.mark.parametrize(
+    ("sequence", "expected"),
+    [
+        (b"\x1b[A", "up"),
+        (b"\x1b[B", "down"),
+        (b"\x1bOA", "up"),
+        (b"\x1bOB", "down"),
+    ],
+)
+def test_read_posix_key_reads_complete_arrow_sequence(
+    sequence: bytes,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    master, slave = os.openpty()
+    reader = os.fdopen(slave, "r", encoding="utf-8")
+    raw_mode_ready = threading.Event()
+    original_setraw = tty.setraw
+
+    def setraw(descriptor: int):
+        original_setraw(descriptor)
+        raw_mode_ready.set()
+
+    def write_sequence():
+        if raw_mode_ready.wait(timeout=1):
+            os.write(master, sequence)
+
+    monkeypatch.setattr(terminal.sys, "stdin", reader)
+    monkeypatch.setattr(tty, "setraw", setraw)
+    writer = threading.Thread(target=write_sequence)
+    writer.start()
+    try:
+        assert terminal._read_posix_key() == expected
+    finally:
+        writer.join(timeout=1)
+        reader.close()
+        os.close(master)
