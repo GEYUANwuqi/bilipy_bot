@@ -83,7 +83,7 @@ class TestRuntimeConfigFromYaml:
     def test_plugins_section_is_reserved_for_bootstrap(self, tmp_path: Path):
         yaml_file = tmp_path / "config.yaml"
         yaml_file.write_text(
-            "plugins:\n  enabled: []\nordinary: value\n",
+            "plugins:\n  enabled: false\nordinary: value\n",
             encoding="utf-8",
         )
 

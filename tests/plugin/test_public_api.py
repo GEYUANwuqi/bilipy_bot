@@ -14,18 +14,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CORE_ROOT = PROJECT_ROOT / "butterbot" / "core"
 PLUGIN_ROOT = PROJECT_ROOT / "butterbot" / "plugin"
 HANDLER_PLUGIN_FILES = (
-    PROJECT_ROOT / "examples" / "plugins" / "manager_example" / "plugin.py",
+    PROJECT_ROOT / "examples" / "plugins" / "example.bilibili-manager" / "plugin.py",
     PROJECT_ROOT
     / "tests"
     / "fixtures"
     / "local_plugins"
-    / "handler_only"
+    / "local.contract.handler"
     / "plugin.py",
     PROJECT_ROOT
     / "tests"
     / "fixtures"
     / "local_plugins"
-    / "hybrid_handler"
+    / "local.contract.hybrid-handler"
     / "plugin.py",
     PROJECT_ROOT
     / "tests"
@@ -44,8 +44,8 @@ def test_app_and_plugin_public_api_import_in_fresh_process() -> None:
         (
             "from butterbot.core import Event",
             "from butterbot.plugin import (",
-            "    ButterPlugin, PluginBootstrap, PluginRegistrar,",
-            "    SourceRef, SubscriptionSpec, register,",
+            "    ButterPlugin, PluginBootstrap, PluginConfig, PluginContext,",
+            "    PluginRegistrar, PluginScope, SourceRef, SubscriptionSpec, register,",
             ")",
         )
     )

@@ -5,8 +5,9 @@ from types import MappingProxyType
 from typing import Any, cast
 
 import pytest
+from pydantic import ValidationError
 
-from butterbot.plugin import ButterPlugin, configure, register
+from butterbot.plugin import ButterPlugin, PluginConfig, configure, register
 from butterbot.plugin.contracts.hooks import (
     iter_configure_hooks,
     iter_plugin_subscriptions,
@@ -68,11 +69,16 @@ def test_base_context_builds_source_ref_and_subscription_spec(tmp_path: Path) ->
 
     plugin = ExamplePlugin()
     plugin._bind_context(
+        "example.plugin",
         MappingProxyType({"config_key": "primary", "value": 1}),
         tmp_path,
+        lambda phase, cause: None,
+        plugin_name="ExamplePlugin",
     )
 
     assert plugin.settings == {"config_key": "primary", "value": 1}
+    assert plugin.context.plugin_id == "example.plugin"
+    assert plugin.context.plugin_name == "ExamplePlugin"
     assert plugin.resource_root == tmp_path
     assert plugin.config_key == "primary"
     assert plugin.source_ref("example.events").config_key == "primary"
@@ -89,6 +95,46 @@ def test_missing_config_key_uses_kind_only_source_ref() -> None:
 
     assert plugin.config_key is None
     assert plugin.source_ref("example.events").config_key is None
+
+
+def test_declared_plugin_config_is_validated_and_frozen(tmp_path: Path) -> None:
+    class ExampleConfig(PluginConfig):
+        config_key: str
+        retries: int = 3
+
+    class ExamplePlugin(ButterPlugin[ExampleConfig]):
+        config_model = ExampleConfig
+
+    plugin = ExamplePlugin()
+    plugin._bind_context(
+        "example.plugin",
+        {"config_key": "primary"},
+        tmp_path,
+        lambda phase, cause: None,
+        plugin_name="ExamplePlugin",
+    )
+
+    assert plugin.config.config_key == "primary"
+    assert plugin.config.retries == 3
+    with pytest.raises(ValidationError):
+        plugin.config.retries = 4  # type: ignore[misc]
+
+
+def test_declared_plugin_config_rejects_unknown_fields(tmp_path: Path) -> None:
+    class ExampleConfig(PluginConfig):
+        enabled: bool
+
+    class ExamplePlugin(ButterPlugin[ExampleConfig]):
+        config_model = ExampleConfig
+
+    with pytest.raises(ValidationError):
+        ExamplePlugin()._bind_context(
+            "example.plugin",
+            {"enabled": True, "secret": "unexpected"},
+            tmp_path,
+            lambda phase, cause: None,
+            plugin_name="ExamplePlugin",
+        )
 
 
 @pytest.mark.asyncio

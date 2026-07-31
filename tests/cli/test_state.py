@@ -15,9 +15,10 @@ from butterbot.cli.state import RuntimeState, StateStore, is_process_alive
 def _running_state(tmp_path: Path, *, pid: int | None = None) -> RuntimeState:
     return RuntimeState.running(
         pid=pid or os.getpid(),
-        entrypoint="example:app",
         debug=False,
         working_directory=str(tmp_path),
+        application_path="example.app",
+        config_path=str(tmp_path / "config.yaml"),
         log_file=str(tmp_path / "app.log"),
     )
 
@@ -79,14 +80,15 @@ def test_required_state_reports_missing_file(tmp_path: Path):
 def test_rejects_invalid_running_pid(tmp_path: Path, pid: object):
     store = StateStore(tmp_path / "runtime.json")
     data = {
-        "schema_version": 2,
+        "schema_version": 3,
         "token": "token",
         "status": "running",
         "pid": pid,
         "process_identity": None,
-        "entrypoint": "example:app",
         "debug": False,
         "working_directory": str(tmp_path),
+        "application_path": "example.app",
+        "config_path": str(tmp_path / "config.yaml"),
         "log_file": str(tmp_path / "app.log"),
         "started_at": 1.0,
         "stopped_at": None,

@@ -41,21 +41,21 @@ def write_plugin(
     root: Path,
     plugin_id: str,
     *,
-    folder: str | None = None,
+    plugin_name: str | None = None,
     requires_plugins: tuple[str, ...] = (),
     requires_distributions: tuple[str, ...] = (),
     code: str | None = None,
 ) -> Path:
-    plugin_root = root / (folder or plugin_id)
+    plugin_root = root / plugin_id
     plugin_root.mkdir(parents=True)
+    resolved_plugin_name = plugin_name or "Hooks"
     plugin_root.joinpath("plugin.toml").write_text(
-        "schema_version = 1\n"
-        f'plugin_id = "{plugin_id}"\n'
+        "schema_version = 2\n"
+        f'plugin_name = "{resolved_plugin_name}"\n'
         'version = "0.1.0"\n'
         'requires_core = ">=3.1.0.dev2,<4"\n'
         'entry = "plugin.py"\n'
         "requires_plugins = [%s]\n"
-        "provides = []\n"
         "requires_distributions = [%s]\n"
         % (
             ", ".join('"%s"' % item for item in requires_plugins),
@@ -76,8 +76,8 @@ def write_plugin(
     return plugin_root
 
 
-def local_settings(*, auto_enable: bool = False) -> LocalPluginSettings:
-    return LocalPluginSettings(path="./plugins", auto_enable=auto_enable)
+def local_settings() -> LocalPluginSettings:
+    return LocalPluginSettings(path="./plugins")
 
 
 def test_disabled_local_plugin_is_indexed_without_import(tmp_path: Path):
@@ -100,13 +100,112 @@ def test_disabled_local_plugin_is_indexed_without_import(tmp_path: Path):
     assert tuple(candidate.plugin_id for candidate in catalog.candidates) == (
         "local.disabled",
     )
+    descriptor = catalog.candidates[0].descriptor
+    assert descriptor is not None
+    assert catalog.candidates[0].plugin_name == "Hooks"
+
+
+def test_local_plugin_id_comes_from_directory_and_name_matches_class(
+    tmp_path: Path,
+):
+    write_plugin(
+        tmp_path / "plugins",
+        "local.display-name",
+        plugin_name="LocalDisplayPlugin",
+        code=(
+            "from butterbot.plugin import ButterPlugin\n"
+            "\n"
+            "class LocalDisplayPlugin(ButterPlugin):\n"
+            "    pass\n"
+        ),
+    )
+
+    candidate = PluginCatalog.index_candidates(
+        entry_points=[],
+        local=local_settings(),
+        config_root=tmp_path,
+    )[0]
+
+    assert candidate.plugin_id == "local.display-name"
+    assert candidate.descriptor is not None
+    assert candidate.plugin_name == "LocalDisplayPlugin"
+    assert candidate.descriptor.provides == ()
+
+    catalog = PluginCatalog.discover(
+        ["LocalDisplayPlugin"],
+        entry_points=[],
+        local=local_settings(),
+        config_root=tmp_path,
+        core_version=CORE_VERSION,
+    )
+    assert catalog.selected_names == ("LocalDisplayPlugin",)
+    assert catalog.plugin_ids == ("local.display-name",)
+
+
+def test_local_plugin_name_must_match_loaded_class(tmp_path: Path):
+    write_plugin(
+        tmp_path / "plugins",
+        "local.name-mismatch",
+        plugin_name="DeclaredPlugin",
+        code=(
+            "from butterbot.plugin import ButterPlugin\n"
+            "\n"
+            "class ActualPlugin(ButterPlugin):\n"
+            "    pass\n"
+        ),
+    )
+
+    with pytest.raises(PluginDiscoveryError, match="实现类名 'ActualPlugin'"):
+        PluginCatalog.discover(
+            ["DeclaredPlugin"],
+            entry_points=[],
+            local=local_settings(),
+            config_root=tmp_path,
+            core_version=CORE_VERSION,
+        )
+
+
+@pytest.mark.parametrize("field", ("enabled", "plugin_id", "provides"))
+def test_removed_local_manifest_fields_are_rejected(
+    tmp_path: Path,
+    field: str,
+):
+    plugin_root = write_plugin(tmp_path / "plugins", "local.removed-field")
+    manifest = plugin_root / "plugin.toml"
+    suffix = {
+        "enabled": "enabled = true\n",
+        "plugin_id": 'plugin_id = "local.alias"\n',
+        "provides": 'provides = ["local.capability"]\n',
+    }[field]
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8") + suffix,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PluginDiscoveryError, match="未知字段"):
+        PluginCatalog.index_candidates(
+            entry_points=[],
+            local=local_settings(),
+            config_root=tmp_path,
+        )
+
+
+def test_local_plugin_directory_must_be_a_valid_plugin_id(tmp_path: Path):
+    write_plugin(tmp_path / "plugins", "Invalid Folder", plugin_name="Invalid")
+
+    with pytest.raises(PluginDiscoveryError, match="plugin_id"):
+        PluginCatalog.index_candidates(
+            entry_points=[],
+            local=local_settings(),
+            config_root=tmp_path,
+        )
 
 
 def test_invalid_disabled_manifest_still_fails_check(tmp_path: Path):
     plugin_root = tmp_path / "plugins" / "broken"
     plugin_root.mkdir(parents=True)
     plugin_root.joinpath("plugin.toml").write_text(
-        'plugin_id = "local.broken"\n',
+        'plugin_name = "Broken"\n',
         encoding="utf-8",
     )
 
@@ -135,8 +234,15 @@ def test_invalid_disabled_manifest_still_fails_check(tmp_path: Path):
             "根目录直接 Python 文件",
         ),
         (
-            lambda text: text.replace("schema_version = 1", "schema_version = 2"),
+            lambda text: text.replace("schema_version = 2", "schema_version = 1"),
             "descriptor 无效",
+        ),
+        (
+            lambda text: text.replace(
+                'plugin_name = "Hooks"',
+                'plugin_name = ""',
+            ),
+            "plugin_name",
         ),
         (
             lambda text: text.replace(
@@ -183,23 +289,23 @@ def test_symlink_entry_is_rejected(tmp_path: Path):
         )
 
 
-def test_missing_auto_enabled_local_root_is_rejected(tmp_path: Path):
-    with pytest.raises(PluginDiscoveryError, match="无法自动启用"):
-        PluginCatalog.discover(
-            [],
-            entry_points=[],
-            local=local_settings(auto_enable=True),
-            config_root=tmp_path,
-            core_version=CORE_VERSION,
-        )
+def test_missing_local_root_has_no_candidates(tmp_path: Path):
+    catalog = PluginCatalog.discover(
+        [],
+        entry_points=[],
+        local=local_settings(),
+        config_root=tmp_path,
+        core_version=CORE_VERSION,
+    )
+
+    assert catalog.candidates == ()
 
 
-def test_auto_enable_loads_local_plugins_without_sys_path_changes(tmp_path: Path):
+def test_plugin_list_loads_local_plugin_without_sys_path_changes(tmp_path: Path):
     plugin_root = tmp_path / "plugins"
     local = write_plugin(
         plugin_root,
         "local.relative",
-        folder="same-name",
         code=(
             "from butterbot.plugin import ButterPlugin\n"
             "from .helpers import VALUE\n"
@@ -214,9 +320,9 @@ def test_auto_enable_loads_local_plugins_without_sys_path_changes(tmp_path: Path
     original_path = tuple(sys.path)
 
     catalog = PluginCatalog.discover(
-        [],
+        ["Hooks"],
         entry_points=[],
-        local=local_settings(auto_enable=True),
+        local=local_settings(),
         config_root=tmp_path,
         core_version=CORE_VERSION,
     )
@@ -259,7 +365,7 @@ def test_entry_module_must_define_exactly_one_local_plugin_class(
 
     with pytest.raises(PluginDiscoveryError, match=found):
         PluginCatalog.discover(
-            ["local.ambiguous"],
+            ["Hooks"],
             entry_points=[],
             local=local_settings(),
             config_root=tmp_path,
@@ -295,8 +401,7 @@ def test_same_folder_and_module_names_are_isolated_across_workspaces(
         workspace = tmp_path / ("workspace-%s" % index)
         local = write_plugin(
             workspace / "plugins",
-            "local.workspace-%s" % index,
-            folder="same",
+            "same",
             code=(
                 "from butterbot.plugin import ButterPlugin\n"
                 "from .helpers import VALUE\n"
@@ -311,7 +416,7 @@ def test_same_folder_and_module_names_are_isolated_across_workspaces(
         )
         catalogs.append(
             PluginCatalog.discover(
-                ["local.workspace-%s" % index],
+                ["Hooks"],
                 entry_points=[],
                 local=local_settings(),
                 config_root=workspace,
@@ -333,7 +438,7 @@ def test_import_failure_removes_only_failed_synthetic_namespace(tmp_path: Path):
 
     with pytest.raises(PluginDiscoveryError, match="导入本地插件"):
         PluginCatalog.discover(
-            ["local.failure"],
+            ["Hooks"],
             entry_points=[],
             local=local_settings(),
             config_root=tmp_path,
@@ -355,7 +460,7 @@ def test_distribution_requirements_fail_before_import(tmp_path: Path):
 
     with pytest.raises(PluginDependencyError, match="Python distribution"):
         PluginCatalog.discover(
-            ["local.missing-dependency"],
+            ["Hooks"],
             entry_points=[],
             local=local_settings(),
             config_root=tmp_path,
@@ -365,20 +470,30 @@ def test_distribution_requirements_fail_before_import(tmp_path: Path):
     assert not marker.exists()
 
 
-def test_cross_origin_plugin_id_collision_is_rejected_before_import(tmp_path: Path):
-    class InstalledPlugin(ButterPlugin):
+def test_cross_origin_plugin_name_collision_is_rejected_before_import(tmp_path: Path):
+    class SharedPlugin(ButterPlugin):
         descriptor = PluginDescriptor(
-            plugin_id="shared.plugin",
+            plugin_id="installed.shared",
             version="1.0.0",
             requires_core=">=3.1.0.dev2",
         )
 
-    write_plugin(tmp_path / "plugins", "shared.plugin")
-    entry_point = FakeEntryPoint("shared.plugin", InstalledPlugin)
+    write_plugin(
+        tmp_path / "plugins",
+        "local.shared",
+        plugin_name="SharedPlugin",
+        code=(
+            "from butterbot.plugin import ButterPlugin\n"
+            "\n"
+            "class SharedPlugin(ButterPlugin):\n"
+            "    pass\n"
+        ),
+    )
+    entry_point = FakeEntryPoint("SharedPlugin", SharedPlugin)
 
     with pytest.raises(PluginDiscoveryError, match="重复来源"):
         PluginCatalog.discover(
-            ["shared.plugin"],
+            ["SharedPlugin"],
             entry_points=[entry_point],
             local=local_settings(),
             config_root=tmp_path,
@@ -403,8 +518,8 @@ def test_hybrid_dependencies_share_one_topological_graph(tmp_path: Path):
     )
 
     catalog = PluginCatalog.discover(
-        ["local.consumer", "installed.provider"],
-        entry_points=[FakeEntryPoint("installed.provider", InstalledProvider)],
+        ["Hooks", "InstalledProvider"],
+        entry_points=[FakeEntryPoint("InstalledProvider", InstalledProvider)],
         local=local_settings(),
         config_root=tmp_path,
         core_version=CORE_VERSION,
@@ -425,8 +540,8 @@ def test_distribution_can_depend_on_local_plugin(tmp_path: Path):
     write_plugin(tmp_path / "plugins", "local.provider")
 
     catalog = PluginCatalog.discover(
-        ["installed.consumer", "local.provider"],
-        entry_points=[FakeEntryPoint("installed.consumer", InstalledConsumer)],
+        ["InstalledConsumer", "Hooks"],
+        entry_points=[FakeEntryPoint("InstalledConsumer", InstalledConsumer)],
         local=local_settings(),
         config_root=tmp_path,
         core_version=CORE_VERSION,
@@ -442,6 +557,7 @@ async def test_bootstrap_injects_read_only_settings_and_resource_root(
     plugin_root = write_plugin(
         tmp_path / "plugins",
         "local.context",
+        plugin_name="Hooks",
         code=(
             "from butterbot.plugin import ButterPlugin, configure\n"
             "\n"
@@ -465,8 +581,9 @@ async def test_bootstrap_injects_read_only_settings_and_resource_root(
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "plugins:\n"
-        "  enabled: [local.context]\n"
-        "  local: {}\n"
+        "  enabled: true\n"
+        "  plugin_list: [Hooks]\n"
+        "  plugin_path: ./plugins\n"
         "  config:\n"
         "    local.context:\n"
         "      greeting: hello\n"
@@ -484,6 +601,7 @@ async def test_bootstrap_injects_read_only_settings_and_resource_root(
     manager = bootstrap.manager
     assert manager is not None
     status = manager.statuses[0]
+    assert status.plugin_name == "Hooks"
     assert status.origin_kind == "directory"
     assert status.origin == str(plugin_root.resolve())
     assert status.fingerprint
@@ -511,7 +629,8 @@ async def test_distribution_plugin_receives_same_private_settings(tmp_path: Path
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "plugins:\n"
-        "  enabled: [installed.settings]\n"
+        "  enabled: true\n"
+        "  plugin_list: [InstalledPlugin]\n"
         "  config:\n"
         "    installed.settings:\n"
         "      value: installed\n",
@@ -520,7 +639,7 @@ async def test_distribution_plugin_receives_same_private_settings(tmp_path: Path
 
     app = PluginBootstrap(
         config_path,
-        entry_points=[FakeEntryPoint("installed.settings", InstalledPlugin)],
+        entry_points=[FakeEntryPoint("InstalledPlugin", InstalledPlugin)],
         core_version=CORE_VERSION,
     ).build()
     assert app._plugin_manager is not None
@@ -550,7 +669,7 @@ async def test_local_runtime_failure_uses_existing_transaction_rollback(
     )
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "plugins:\n  enabled: [local.runtime-failure]\n  local: {}\n",
+        "plugins:\n  enabled: true\n  plugin_list: [Hooks]\n  plugin_path: ./plugins\n",
         encoding="utf-8",
     )
     bootstrap = PluginBootstrap(
@@ -574,11 +693,16 @@ async def test_local_runtime_failure_uses_existing_transaction_rollback(
 def test_unknown_plugin_private_config_is_rejected(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "plugins:\n  config:\n    local.unknown:\n      secret: token-canary\n",
+        "plugins:\n"
+        "  enabled: true\n"
+        "  plugin_list: []\n"
+        "  config:\n"
+        "    local.unknown:\n"
+        "      secret: token-canary\n",
         encoding="utf-8",
     )
 
-    with pytest.raises(ConfigError, match="未发现"):
+    with pytest.raises(ConfigError, match="未启用"):
         PluginBootstrap(
             config_path,
             entry_points=[],
@@ -602,8 +726,9 @@ def test_plugin_failure_status_does_not_leak_private_settings(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "plugins:\n"
-        "  enabled: [local.secret-failure]\n"
-        "  local: {}\n"
+        "  enabled: true\n"
+        "  plugin_list: [Hooks]\n"
+        "  plugin_path: ./plugins\n"
         "  config:\n"
         "    local.secret-failure:\n"
         "      token: token-canary-must-not-leak\n",

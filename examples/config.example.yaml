@@ -22,13 +22,17 @@ environment:
 # ---------- 实验插件（默认关闭） ----------
 # 只列出明确可信的 entry point 或 ./plugins 本地候选。
 plugins:
-  enabled: []
-  # 启用 examples/plugins/manager_example 时，把上一行替换为:
-  # enabled:
-  #   - example.bilibili-manager
-  # local:
-  #   path: "./examples/plugins" # 相对 config.yaml 所在目录
-  #   auto_enable: false # 默认只索引 manifest，不执行未启用代码
+  enabled: false
+  # 启用插件系统和 examples/plugins/example.bilibili-manager 时，改为:
+  # enabled: true
+  # plugin_list:
+  #   - BilibiliManagerPlugin
+  # plugin_path: "./examples/plugins" # 相对 config.yaml 所在目录
+  # lifecycle:
+  #   start_timeout: 30 # 单个插件 on_start 上限
+  #   stop_timeout: 10 # 单个插件 on_stop 上限
+  #   cleanup_timeout: 10 # 托管 task/cleanup 和注册撤销上限
+  #   drain_timeout: 5 # 等待当前插件 Handler 排空上限
 
 # ---------- 命名 Source 配置 ----------
 # 自定义键（bili_account/qq_account）是运行时 config_key。
@@ -41,7 +45,7 @@ sources:
     kwarg:
       BiliDanmakuSource:
         room_id: [26498147, 22758221]
-      # manager_example 插件需要以下两个 Source:
+      # example.bilibili-manager 插件需要以下两个 Source:
       # BiliDynamicSource:
       #   watch_targets: [1802011210]
       #   poll_interval: 100

@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from .errors import CliError
 
-_STATE_SCHEMA_VERSION = 2
+_STATE_SCHEMA_VERSION = 3
 _LOCK_STALE_SECONDS = 30.0
 _LOCK_WAIT_SECONDS = 2.0
 
@@ -27,9 +27,10 @@ class RuntimeState:
     status: Literal["running", "paused", "stopped"]
     pid: int | None
     process_identity: str | None
-    entrypoint: str
     debug: bool
     working_directory: str
+    application_path: str
+    config_path: str
     log_file: str
     started_at: float
     stopped_at: float | None = None
@@ -40,9 +41,10 @@ class RuntimeState:
         cls,
         *,
         pid: int,
-        entrypoint: str,
         debug: bool,
         working_directory: str,
+        application_path: str,
+        config_path: str,
         log_file: str,
     ) -> RuntimeState:
         return cls(
@@ -51,9 +53,10 @@ class RuntimeState:
             status="running",
             pid=pid,
             process_identity=process_identity(pid),
-            entrypoint=entrypoint,
             debug=debug,
             working_directory=working_directory,
+            application_path=application_path,
+            config_path=config_path,
             log_file=log_file,
             started_at=time.time(),
         )
@@ -72,8 +75,9 @@ class RuntimeState:
     def _validate(self) -> None:
         string_fields = {
             "token": self.token,
-            "entrypoint": self.entrypoint,
             "working_directory": self.working_directory,
+            "application_path": self.application_path,
+            "config_path": self.config_path,
             "log_file": self.log_file,
         }
         if any(

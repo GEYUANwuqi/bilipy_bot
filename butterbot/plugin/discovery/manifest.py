@@ -10,6 +10,7 @@ from typing import Any
 from packaging.requirements import InvalidRequirement, Requirement
 
 from butterbot.plugin.contracts.descriptor import PluginDescriptor
+from butterbot.plugin.contracts.identifiers import validate_plugin_name
 from butterbot.plugin.errors import PluginCompatibilityError, PluginDiscoveryError
 
 from .origin import DirectoryPluginOrigin
@@ -18,14 +19,13 @@ _MANIFEST_NAME = "plugin.toml"
 _ENTRY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.py$")
 _REQUIRED_FIELDS = {
     "schema_version",
-    "plugin_id",
+    "plugin_name",
     "version",
     "requires_core",
     "entry",
 }
 _OPTIONAL_FIELDS = {
     "requires_plugins",
-    "provides",
     "requires_distributions",
 }
 _KNOWN_FIELDS = _REQUIRED_FIELDS | _OPTIONAL_FIELDS
@@ -35,6 +35,7 @@ _KNOWN_FIELDS = _REQUIRED_FIELDS | _OPTIONAL_FIELDS
 class LocalPluginManifest:
     """在导入 Python 代码前解析完成的本地插件清单."""
 
+    plugin_name: str
     descriptor: PluginDescriptor
     entry: str
     requires_distributions: tuple[str, ...]
@@ -82,18 +83,16 @@ class LocalPluginManifest:
 
         entry, entry_path = _parse_entry(root, raw["entry"], manifest_path)
         try:
+            plugin_name = validate_plugin_name(
+                _require_string(raw, "plugin_name", manifest_path)
+            )
             descriptor = PluginDescriptor(
-                plugin_id=_require_string(raw, "plugin_id", manifest_path),
+                plugin_id=root.name,
                 version=_require_string(raw, "version", manifest_path),
                 requires_core=_require_string(raw, "requires_core", manifest_path),
                 requires_plugins=_require_string_tuple(
                     raw.get("requires_plugins", []),
                     "requires_plugins",
-                    manifest_path,
-                ),
-                provides=_require_string_tuple(
-                    raw.get("provides", []),
-                    "provides",
                     manifest_path,
                 ),
                 schema_version=_require_integer(
@@ -112,6 +111,7 @@ class LocalPluginManifest:
         )
         fingerprint = _fingerprint(root, manifest_bytes)
         return cls(
+            plugin_name=plugin_name,
             descriptor=descriptor,
             entry=entry,
             requires_distributions=requirements,

@@ -24,6 +24,11 @@ PLUGIN_IDS = (
     "contract.handler",
     "contract.source",
 )
+PLUGIN_NAMES = (
+    "ContractCombinedPlugin",
+    "ContractHandlerPlugin",
+    "ContractSourcePlugin",
+)
 FAILURE_VARIABLES = (
     "BUTTERBOT_CONTRACT_FAIL_IMPORT",
     "BUTTERBOT_CONTRACT_FAIL_REGISTER",
@@ -31,10 +36,11 @@ FAILURE_VARIABLES = (
 )
 CONFIG = """\
 plugins:
-  enabled:
-    - contract.handler
-    - contract.source
-    - contract.combined
+  enabled: true
+  plugin_list:
+    - ContractHandlerPlugin
+    - ContractSourcePlugin
+    - ContractCombinedPlugin
 sources:
   primary:
     source_name: contract
@@ -128,7 +134,7 @@ def _import_failure(config_path: Path) -> None:
         try:
             PluginBootstrap(config_path).build()
         except PluginDiscoveryError as exc:
-            assert "contract.source" in str(exc)
+            assert "ContractSourcePlugin" in str(exc)
         else:
             raise AssertionError("外部插件 import 失败未被报告")
 
@@ -193,7 +199,7 @@ def main() -> None:
         version(distribution)
 
     discovered = {point.name for point in entry_points(group="butterbot.plugins")}
-    assert set(PLUGIN_IDS) <= discovered
+    assert set(PLUGIN_NAMES) <= discovered
     assert not Path("butterbot").exists(), "smoke 必须从仓库外运行"
     assert not Path("tests").exists(), "smoke 不得依赖测试源码"
 

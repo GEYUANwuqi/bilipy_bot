@@ -37,10 +37,6 @@ def index_local_manifests(
     if plugin_root.is_symlink():
         raise PluginDiscoveryError("本地插件根目录不允许是符号链接: %s" % plugin_root)
     if not plugin_root.exists():
-        if settings.auto_enable:
-            raise PluginDiscoveryError(
-                "本地插件根目录不存在，无法自动启用: %s" % plugin_root
-            )
         return ()
     if not plugin_root.is_dir():
         raise PluginDiscoveryError("本地插件根路径必须是目录: %s" % plugin_root)

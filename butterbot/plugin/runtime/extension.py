@@ -141,12 +141,16 @@ class ExtensionRegistrar:
         self._subscriptions.clear()
 
         cancelled: asyncio.CancelledError | None = None
+        errors: list[Exception] = []
         for source_id in reversed(self._source_ids):
             try:
                 await self._app.remove_source(source_id)
             except asyncio.CancelledError as exc:
                 cancelled = cancelled or exc
-        self._source_ids.clear()
+            except Exception as exc:
+                errors.append(exc)
+            else:
+                self._source_ids.remove(source_id)
 
         try:
             await self._app.bus.drain_owner(
@@ -155,6 +159,8 @@ class ExtensionRegistrar:
             )
         except asyncio.CancelledError as exc:
             cancelled = cancelled or exc
+        except Exception as exc:
+            errors.append(exc)
 
         self._closed = (
             not self._subscriptions
@@ -163,6 +169,8 @@ class ExtensionRegistrar:
         )
         if cancelled is not None:
             raise cancelled
+        if errors:
+            raise errors[0]
 
     async def __aenter__(self) -> ExtensionRegistrar:
         self._require_open()

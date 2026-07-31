@@ -12,7 +12,7 @@ from butterbot.plugin import (
 RECEIVED: list[str] = []
 
 
-class HandlerPlugin(ButterPlugin):
+class ContractHandlerPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="contract.handler",
         version="1.0.0",
@@ -31,4 +31,4 @@ class HandlerPlugin(ButterPlugin):
         RECEIVED.append(str(event.data.value))
 
 
-__all__ = ["HandlerPlugin", "RECEIVED"]
+__all__ = ["ContractHandlerPlugin", "RECEIVED"]

@@ -33,7 +33,7 @@ class LocalContractSource(BaseSource):
         pass
 
 
-class SourcePlugin(ButterPlugin):
+class LocalContractSourcePlugin(ButterPlugin):
     @configure
     def configure_source(self, registrar: ConfigRegistrar) -> None:
         registrar.register_builder("local-contract", dict)

@@ -11,7 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 from butterbot.plugin.contracts import (
     ButterPlugin,
+    PluginConfig,
+    PluginContext,
     PluginDescriptor,
+    PluginScope,
     SourceRef,
     SubscriptionSpec,
     configure,
@@ -34,18 +37,20 @@ if TYPE_CHECKING:
         LocalPluginSettings,
         PluginCandidate,
         PluginCatalog,
+        PluginLifecyclePolicy,
         PluginOrigin,
         PluginSettings,
     )
     from butterbot.plugin.discovery.catalog import ENTRY_POINT_GROUP
     from butterbot.plugin.runtime.bootstrap import (
-        BotAppFactory,
         PluginBootstrap,
         bootstrap_app,
         validate_plugin_config,
     )
     from butterbot.plugin.runtime.extension import ExtensionRegistrar
     from butterbot.plugin.runtime.manager import (
+        PluginFailure,
+        PluginFailurePhase,
         PluginManager,
         PluginState,
         PluginStatus,
@@ -58,7 +63,6 @@ if TYPE_CHECKING:
     )
 
 _LAZY_EXPORTS = {
-    "BotAppFactory": ("butterbot.plugin.runtime.bootstrap", "BotAppFactory"),
     "CleanupRegistration": (
         "butterbot.plugin.runtime.registrar",
         "CleanupRegistration",
@@ -89,6 +93,15 @@ _LAZY_EXPORTS = {
     "PluginCandidate": ("butterbot.plugin.discovery.catalog", "PluginCandidate"),
     "PluginCatalog": ("butterbot.plugin.discovery.catalog", "PluginCatalog"),
     "PluginManager": ("butterbot.plugin.runtime.manager", "PluginManager"),
+    "PluginFailure": ("butterbot.plugin.runtime.manager", "PluginFailure"),
+    "PluginFailurePhase": (
+        "butterbot.plugin.runtime.manager",
+        "PluginFailurePhase",
+    ),
+    "PluginLifecyclePolicy": (
+        "butterbot.plugin.discovery.settings",
+        "PluginLifecyclePolicy",
+    ),
     "PluginOrigin": ("butterbot.plugin.discovery.origin", "PluginOrigin"),
     "PluginRegistrar": ("butterbot.plugin.runtime.registrar", "PluginRegistrar"),
     "PluginSettings": ("butterbot.plugin.discovery.settings", "PluginSettings"),
@@ -122,7 +135,6 @@ def __dir__() -> list[str]:
 
 
 __all__ = [
-    "BotAppFactory",
     "ButterPlugin",
     "CleanupRegistration",
     "ConfigRegistrar",
@@ -136,14 +148,20 @@ __all__ = [
     "PluginCandidate",
     "PluginCatalog",
     "PluginCompatibilityError",
+    "PluginConfig",
+    "PluginContext",
     "PluginDependencyError",
     "PluginDescriptor",
     "PluginDiscoveryError",
     "PluginError",
+    "PluginFailure",
+    "PluginFailurePhase",
+    "PluginLifecyclePolicy",
     "PluginManager",
     "PluginOrigin",
     "PluginRegistrar",
     "PluginRegistrationError",
+    "PluginScope",
     "PluginSettings",
     "PluginState",
     "PluginStatus",

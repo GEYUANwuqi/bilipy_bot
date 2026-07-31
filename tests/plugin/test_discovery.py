@@ -36,31 +36,33 @@ class FakeEntryPoint:
 def make_plugin(
     plugin_id: str,
     *,
+    class_name: str,
     requires: tuple[str, ...] = (),
     provides: tuple[str, ...] = (),
     requires_core: str = ">=3.1.0.dev1",
 ) -> type[ButterPlugin]:
-    class TestPlugin(ButterPlugin):
-        descriptor = PluginDescriptor(
-            plugin_id=plugin_id,
-            version="1.0.0",
-            requires_core=requires_core,
-            requires_plugins=requires,
-            provides=provides,
-        )
-
-    return TestPlugin
+    descriptor = PluginDescriptor(
+        plugin_id=plugin_id,
+        version="1.0.0",
+        requires_core=requires_core,
+        requires_plugins=requires,
+        provides=provides,
+    )
+    return type(class_name, (ButterPlugin,), {"descriptor": descriptor})
 
 
 def test_only_enabled_entry_points_are_imported():
-    enabled = FakeEntryPoint("example.enabled", make_plugin("example.enabled"))
+    enabled = FakeEntryPoint(
+        "ExampleEnabledPlugin",
+        make_plugin("example.enabled", class_name="ExampleEnabledPlugin"),
+    )
     disabled = FakeEntryPoint(
-        "example.disabled",
+        "ExampleDisabledPlugin",
         RuntimeError("不应导入"),
     )
 
     catalog = PluginCatalog.discover(
-        ["example.enabled"],
+        ["ExampleEnabledPlugin"],
         entry_points=[disabled, enabled],
         core_version=CORE_VERSION,
     )
@@ -69,6 +71,34 @@ def test_only_enabled_entry_points_are_imported():
     assert not hasattr(catalog.plugins[0], "plugin")
     assert enabled.loads == 1
     assert disabled.loads == 0
+
+
+def test_distribution_is_selected_by_plugin_name_and_keeps_stable_id():
+    entry_point = FakeEntryPoint(
+        "ExampleFeedPlugin",
+        make_plugin("example.feed", class_name="ExampleFeedPlugin"),
+    )
+
+    catalog = PluginCatalog.discover(
+        ["ExampleFeedPlugin"],
+        entry_points=[entry_point],
+        core_version=CORE_VERSION,
+    )
+
+    assert catalog.selected_names == ("ExampleFeedPlugin",)
+    assert catalog.plugin_ids == ("example.feed",)
+    assert catalog.candidates[0].plugin_id is None
+    assert catalog.candidates[0].plugin_name == "ExampleFeedPlugin"
+
+
+@pytest.mark.parametrize(
+    "plugin_name", ("Display Plugin", "bad-name", "bad\nname", "class", "x" * 101)
+)
+def test_entry_point_rejects_invalid_class_name(plugin_name: str):
+    with pytest.raises(PluginDiscoveryError, match="plugin_name"):
+        PluginCatalog.index_candidates(
+            entry_points=[FakeEntryPoint(plugin_name, object())],
+        )
 
 
 def test_distribution_plugin_must_inherit_butter_plugin():
@@ -81,28 +111,33 @@ def test_distribution_plugin_must_inherit_butter_plugin():
 
     with pytest.raises(PluginDiscoveryError, match="ButterPlugin"):
         PluginCatalog.discover(
-            ["example.duck"],
-            entry_points=[FakeEntryPoint("example.duck", DuckPlugin)],
+            ["DuckPlugin"],
+            entry_points=[FakeEntryPoint("DuckPlugin", DuckPlugin)],
             core_version=CORE_VERSION,
         )
 
 
 def test_dependencies_are_sorted_before_consumers():
     provider = FakeEntryPoint(
-        "example.provider",
-        make_plugin("example.provider", provides=("example.events",)),
+        "ExampleProviderPlugin",
+        make_plugin(
+            "example.provider",
+            class_name="ExampleProviderPlugin",
+            provides=("example.events",),
+        ),
     )
     consumer = FakeEntryPoint(
-        "example.consumer",
+        "ExampleConsumerPlugin",
         make_plugin(
             "example.consumer",
+            class_name="ExampleConsumerPlugin",
             requires=("example.provider",),
             provides=("example.handler",),
         ),
     )
 
     catalog = PluginCatalog.discover(
-        ["example.consumer", "example.provider"],
+        ["ExampleConsumerPlugin", "ExampleProviderPlugin"],
         entry_points=[consumer, provider],
         core_version=CORE_VERSION,
     )
@@ -115,59 +150,77 @@ def test_dependencies_are_sorted_before_consumers():
     [
         (
             [],
-            ["example.missing"],
+            ["MissingPlugin"],
             PluginDiscoveryError,
             "没有对应",
         ),
         (
             [
-                FakeEntryPoint("example.same", make_plugin("example.same"), "one"),
-                FakeEntryPoint("example.same", make_plugin("example.same"), "two"),
+                FakeEntryPoint(
+                    "ExampleSamePlugin",
+                    make_plugin("example.same", class_name="ExampleSamePlugin"),
+                    "one",
+                ),
+                FakeEntryPoint(
+                    "ExampleSamePlugin",
+                    make_plugin("example.same", class_name="ExampleSamePlugin"),
+                    "two",
+                ),
             ],
-            ["example.same"],
+            ["ExampleSamePlugin"],
             PluginDiscoveryError,
             "重复 entry point",
         ),
         (
             [
                 FakeEntryPoint(
-                    "example.consumer",
+                    "ExampleConsumerPlugin",
                     make_plugin(
                         "example.consumer",
+                        class_name="ExampleConsumerPlugin",
                         requires=("example.provider",),
                     ),
                 )
             ],
-            ["example.consumer"],
+            ["ExampleConsumerPlugin"],
             PluginDependencyError,
             "缺少已启用依赖",
         ),
         (
             [
                 FakeEntryPoint(
-                    "example.old",
+                    "ExampleOldPlugin",
                     make_plugin(
                         "example.old",
+                        class_name="ExampleOldPlugin",
                         requires_core=">=9",
                     ),
                 )
             ],
-            ["example.old"],
+            ["ExampleOldPlugin"],
             PluginCompatibilityError,
             "要求 ButterBot",
         ),
         (
             [
                 FakeEntryPoint(
-                    "example.one",
-                    make_plugin("example.one", provides=("same.events",)),
+                    "ExampleOnePlugin",
+                    make_plugin(
+                        "example.one",
+                        class_name="ExampleOnePlugin",
+                        provides=("same.events",),
+                    ),
                 ),
                 FakeEntryPoint(
-                    "example.two",
-                    make_plugin("example.two", provides=("same.events",)),
+                    "ExampleTwoPlugin",
+                    make_plugin(
+                        "example.two",
+                        class_name="ExampleTwoPlugin",
+                        provides=("same.events",),
+                    ),
                 ),
             ],
-            ["example.one", "example.two"],
+            ["ExampleOnePlugin", "ExampleTwoPlugin"],
             PluginCompatibilityError,
             "同时由",
         ),
@@ -184,31 +237,57 @@ def test_rejects_invalid_catalogs(entry_points, enabled, error, message):
 
 def test_rejects_dependency_cycle():
     one = FakeEntryPoint(
-        "example.one",
-        make_plugin("example.one", requires=("example.two",)),
+        "ExampleOnePlugin",
+        make_plugin(
+            "example.one",
+            class_name="ExampleOnePlugin",
+            requires=("example.two",),
+        ),
     )
     two = FakeEntryPoint(
-        "example.two",
-        make_plugin("example.two", requires=("example.one",)),
+        "ExampleTwoPlugin",
+        make_plugin(
+            "example.two",
+            class_name="ExampleTwoPlugin",
+            requires=("example.one",),
+        ),
     )
 
     with pytest.raises(PluginDependencyError, match="依赖循环"):
         PluginCatalog.discover(
-            ["example.one", "example.two"],
+            ["ExampleOnePlugin", "ExampleTwoPlugin"],
             entry_points=[one, two],
             core_version=CORE_VERSION,
         )
 
 
-def test_entry_point_identity_must_match_descriptor():
+def test_entry_point_name_must_match_implementation_class():
     entry_point = FakeEntryPoint(
-        "example.alias",
-        make_plugin("example.real"),
+        "AliasPlugin",
+        make_plugin("example.real", class_name="RealPlugin"),
     )
 
-    with pytest.raises(PluginDiscoveryError, match="plugin_id"):
+    with pytest.raises(PluginDiscoveryError, match="实现类名"):
         PluginCatalog.discover(
-            ["example.alias"],
+            ["AliasPlugin"],
             entry_points=[entry_point],
+            core_version=CORE_VERSION,
+        )
+
+
+def test_distinct_names_cannot_resolve_to_the_same_plugin_id():
+    first = FakeEntryPoint(
+        "FirstPlugin",
+        make_plugin("example.same", class_name="FirstPlugin"),
+    )
+    second = FakeEntryPoint(
+        "SecondPlugin",
+        make_plugin("example.same", class_name="SecondPlugin"),
+    )
+
+    with pytest.raises(PluginDiscoveryError, match="重复 plugin_id"):
+        PluginCatalog.discover(
+            ["FirstPlugin", "SecondPlugin"],
+            entry_points=[first, second],
             core_version=CORE_VERSION,
         )

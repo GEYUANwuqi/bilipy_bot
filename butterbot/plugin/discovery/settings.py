@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from math import isfinite
 from types import MappingProxyType
 from typing import Any
 
 from butterbot.core.exceptions import ConfigError
-from butterbot.plugin.contracts.identifiers import validate_plugin_id
+from butterbot.plugin.contracts.identifiers import (
+    validate_plugin_id,
+    validate_plugin_name,
+)
 from butterbot.plugin.errors import PluginCompatibilityError
 
 
@@ -15,7 +19,6 @@ class LocalPluginSettings:
     """本地目录插件来源设置."""
 
     path: str = "./plugins"
-    auto_enable: bool = False
 
     def __post_init__(self) -> None:
         if (
@@ -24,26 +27,58 @@ class LocalPluginSettings:
             or self.path != self.path.strip()
         ):
             raise ConfigError(
-                "配置项 'plugins.local.path' 应为非空且无首尾空白的字符串"
+                "配置项 'plugins.plugin_path' 应为非空且无首尾空白的字符串"
             )
-        if not isinstance(self.auto_enable, bool):
-            raise ConfigError("配置项 'plugins.local.auto_enable' 应为布尔值")
+
+
+@dataclass(frozen=True, slots=True)
+class PluginLifecyclePolicy:
+    """单个插件生命周期阶段的超时策略."""
+
+    start_timeout: float = 30.0
+    stop_timeout: float = 10.0
+    cleanup_timeout: float = 10.0
+    drain_timeout: float = 5.0
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("start_timeout", self.start_timeout),
+            ("stop_timeout", self.stop_timeout),
+            ("cleanup_timeout", self.cleanup_timeout),
+            ("drain_timeout", self.drain_timeout),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not isfinite(value)
+                or value <= 0
+            ):
+                raise ConfigError(
+                    "配置项 'plugins.lifecycle.%s' 应为大于 0 的有限数字" % name
+                )
 
 
 @dataclass(frozen=True, slots=True)
 class PluginSettings:
     """YAML ``plugins`` 保留段中的启动期插件设置."""
 
-    enabled: tuple[str, ...] = ()
-    local: LocalPluginSettings | None = None
+    enabled: bool = False
+    plugin_list: tuple[str, ...] = ()
+    plugin_path: str = "./plugins"
     config_by_plugin: Mapping[str, Mapping[str, object]] = field(
         default_factory=lambda: MappingProxyType({})
     )
+    lifecycle: PluginLifecyclePolicy = field(default_factory=PluginLifecyclePolicy)
 
     @property
     def requires_plugin_bootstrap(self) -> bool:
-        """配置是否选择了插件控制面，而非旧的已构造 BotApp 路径."""
-        return bool(self.enabled or self.local is not None or self.config_by_plugin)
+        """配置是否显式启用了插件控制面."""
+        return self.enabled
+
+    @property
+    def local(self) -> LocalPluginSettings:
+        """把 YAML 的扁平路径转换为发现层设置."""
+        return LocalPluginSettings(path=self.plugin_path)
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "PluginSettings":
@@ -51,56 +86,46 @@ class PluginSettings:
         if not isinstance(raw_plugins, Mapping):
             raise ConfigError("配置项 'plugins' 应为映射")
 
-        unknown = sorted(set(raw_plugins) - {"config", "enabled", "local"})
+        unknown = sorted(
+            set(raw_plugins)
+            - {"config", "enabled", "lifecycle", "plugin_list", "plugin_path"}
+        )
         if unknown:
             raise ConfigError("配置项 'plugins' 包含未知字段: %s" % ", ".join(unknown))
 
-        raw_enabled = raw_plugins.get("enabled", [])
-        if not isinstance(raw_enabled, list):
-            raise ConfigError("配置项 'plugins.enabled' 应为列表")
+        enabled = raw_plugins.get("enabled", False)
+        if not isinstance(enabled, bool):
+            raise ConfigError("配置项 'plugins.enabled' 应为布尔值")
 
-        enabled: list[str] = []
-        for plugin_id in raw_enabled:
-            if (
-                not isinstance(plugin_id, str)
-                or not plugin_id
-                or plugin_id != plugin_id.strip()
-            ):
-                raise ConfigError(
-                    "plugins.enabled 中的 plugin ID 必须是非空且无首尾空白的字符串"
-                )
-            enabled.append(_validate_config_plugin_id(plugin_id, "plugins.enabled"))
-        if len(set(enabled)) != len(enabled):
-            raise ConfigError("配置项 'plugins.enabled' 包含重复 plugin ID")
+        raw_plugin_list = raw_plugins.get("plugin_list", [])
+        if not isinstance(raw_plugin_list, list):
+            raise ConfigError("配置项 'plugins.plugin_list' 应为列表")
 
-        local = (
-            _parse_local_settings(raw_plugins["local"])
-            if "local" in raw_plugins
-            else None
-        )
+        plugin_list: list[str] = []
+        for plugin_name in raw_plugin_list:
+            plugin_list.append(
+                _validate_config_plugin_name(plugin_name, "plugins.plugin_list")
+            )
+        if len(set(plugin_list)) != len(plugin_list):
+            raise ConfigError("配置项 'plugins.plugin_list' 包含重复 plugin_name")
+
+        plugin_path = raw_plugins.get("plugin_path", "./plugins")
+        if (
+            not isinstance(plugin_path, str)
+            or not plugin_path
+            or plugin_path != plugin_path.strip()
+        ):
+            raise ConfigError(
+                "配置项 'plugins.plugin_path' 应为非空且无首尾空白的字符串"
+            )
         config_by_plugin = _parse_plugin_config(raw_plugins.get("config", {}))
         return cls(
-            enabled=tuple(enabled),
-            local=local,
+            enabled=enabled,
+            plugin_list=tuple(plugin_list),
+            plugin_path=plugin_path,
             config_by_plugin=config_by_plugin,
+            lifecycle=_parse_lifecycle_policy(raw_plugins.get("lifecycle", {})),
         )
-
-
-def _parse_local_settings(value: object) -> LocalPluginSettings:
-    if not isinstance(value, Mapping):
-        raise ConfigError("配置项 'plugins.local' 应为映射")
-    unknown = sorted(set(value) - {"auto_enable", "path"})
-    if unknown:
-        raise ConfigError(
-            "配置项 'plugins.local' 包含未知字段: %s" % ", ".join(unknown)
-        )
-    path = value.get("path", "./plugins")
-    if not isinstance(path, str) or not path or path != path.strip():
-        raise ConfigError("配置项 'plugins.local.path' 应为非空且无首尾空白的字符串")
-    auto_enable = value.get("auto_enable", False)
-    if not isinstance(auto_enable, bool):
-        raise ConfigError("配置项 'plugins.local.auto_enable' 应为布尔值")
-    return LocalPluginSettings(path=path, auto_enable=auto_enable)
 
 
 def _parse_plugin_config(
@@ -123,6 +148,28 @@ def _parse_plugin_config(
             raise ConfigError("配置项 'plugins.config.%s' 应为映射" % plugin_id)
         result[plugin_id] = _freeze_mapping(plugin_config)
     return MappingProxyType(result)
+
+
+def _parse_lifecycle_policy(value: object) -> PluginLifecyclePolicy:
+    if not isinstance(value, Mapping):
+        raise ConfigError("配置项 'plugins.lifecycle' 应为映射")
+    allowed = {
+        "cleanup_timeout",
+        "drain_timeout",
+        "start_timeout",
+        "stop_timeout",
+    }
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise ConfigError(
+            "配置项 'plugins.lifecycle' 包含未知字段: %s" % ", ".join(unknown)
+        )
+    return PluginLifecyclePolicy(
+        start_timeout=value.get("start_timeout", 30.0),
+        stop_timeout=value.get("stop_timeout", 10.0),
+        cleanup_timeout=value.get("cleanup_timeout", 10.0),
+        drain_timeout=value.get("drain_timeout", 5.0),
+    )
 
 
 def _freeze_mapping(value: Mapping[object, object]) -> Mapping[str, object]:
@@ -151,7 +198,15 @@ def _validate_config_plugin_id(value: str, path: str) -> str:
         raise ConfigError("%s 包含无效 plugin ID: %s" % (path, value)) from exc
 
 
+def _validate_config_plugin_name(value: object, path: str) -> str:
+    try:
+        return validate_plugin_name(value)
+    except PluginCompatibilityError as exc:
+        raise ConfigError("%s 包含无效 plugin_name: %r" % (path, value)) from exc
+
+
 __all__ = [
     "LocalPluginSettings",
+    "PluginLifecyclePolicy",
     "PluginSettings",
 ]

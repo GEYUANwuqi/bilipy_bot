@@ -31,15 +31,14 @@ def _write_workspace(workspace: Path) -> tuple[Path, dict[str, Path]]:
     }
     config = """\
 plugins:
-  enabled:
-    - local.contract.handler
-    - local.contract.source
-    - local.contract.combined
-    - local.contract.hybrid-handler
-    - contract.source
-  local:
-    path: "./plugins"
-    auto_enable: false
+  enabled: true
+  plugin_list:
+    - LocalContractHandlerPlugin
+    - LocalContractSourcePlugin
+    - LocalContractCombinedPlugin
+    - LocalContractHybridHandlerPlugin
+    - ContractSourcePlugin
+  plugin_path: "./plugins"
   config:
     local.contract.handler:
       output: %s

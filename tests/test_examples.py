@@ -14,7 +14,7 @@ from butterbot.plugin import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MANAGER_PLUGIN_ROOT = PROJECT_ROOT / "examples" / "plugins" / "manager_example"
+MANAGER_PLUGIN_ROOT = PROJECT_ROOT / "examples" / "plugins" / "example.bilibili-manager"
 CONFIGURED_EXAMPLE_FILES = (
     PROJECT_ROOT / "examples" / "live_danmaku_example.py",
     PROJECT_ROOT / "examples" / "napcat_example.py",
@@ -71,13 +71,17 @@ def test_manager_example_is_an_auto_discovered_local_plugin() -> None:
     manifest = tomllib.loads(
         MANAGER_PLUGIN_ROOT.joinpath("plugin.toml").read_text(encoding="utf-8")
     )
+    assert manifest["plugin_name"] == "BilibiliManagerPlugin"
+    assert "enabled" not in manifest
+    assert "plugin_id" not in manifest
+    assert "provides" not in manifest
     assert manifest["entry"] == "plugin.py"
     assert "create_plugin" not in MANAGER_PLUGIN_ROOT.joinpath("plugin.py").read_text(
         encoding="utf-8"
     )
 
     catalog = PluginCatalog.discover(
-        ["example.bilibili-manager"],
+        ["BilibiliManagerPlugin"],
         entry_points=[],
         local=LocalPluginSettings(path="./examples/plugins"),
         config_root=PROJECT_ROOT,

@@ -11,7 +11,7 @@ from typing import Any, Protocol
 from butterbot import __version__
 from butterbot.plugin.contracts.descriptor import PluginDescriptor
 from butterbot.plugin.contracts.hooks import ButterPlugin
-from butterbot.plugin.contracts.identifiers import validate_plugin_id
+from butterbot.plugin.contracts.identifiers import validate_plugin_name
 from butterbot.plugin.errors import (
     PluginCompatibilityError,
     PluginDependencyError,
@@ -25,7 +25,6 @@ from .directory import (
 )
 from .manifest import LocalPluginManifest
 from .origin import (
-    DirectoryPluginOrigin,
     DistributionPluginOrigin,
     PluginOrigin,
 )
@@ -47,6 +46,7 @@ class PluginEntryPoint(Protocol):
 class LoadedPlugin:
     """一个已导入并通过静态校验的插件."""
 
+    plugin_name: str
     descriptor: PluginDescriptor
     instance: ButterPlugin
     origin: PluginOrigin
@@ -59,9 +59,10 @@ CandidateLoader = Callable[[], LoadedPlugin]
 class PluginCandidate:
     """尚未执行或已经静态描述的统一插件候选."""
 
-    plugin_id: str
+    plugin_name: str
     origin: PluginOrigin
     _loader: CandidateLoader = field(repr=False, compare=False)
+    plugin_id: str | None = None
     descriptor: PluginDescriptor | None = None
     requires_distributions: tuple[str, ...] = ()
 
@@ -75,7 +76,7 @@ class PluginCatalog:
 
     plugins: tuple[LoadedPlugin, ...]
     candidates: tuple[PluginCandidate, ...] = ()
-    selected_ids: tuple[str, ...] = ()
+    selected_names: tuple[str, ...] = ()
 
     @property
     def plugin_ids(self) -> tuple[str, ...]:
@@ -112,7 +113,7 @@ class PluginCatalog:
             sorted(
                 candidates,
                 key=lambda item: (
-                    item.plugin_id,
+                    item.plugin_name,
                     item.origin.kind,
                     item.origin.location,
                 ),
@@ -124,7 +125,7 @@ class PluginCatalog:
     @classmethod
     def discover(
         cls,
-        enabled: Iterable[str],
+        plugin_list: Iterable[str],
         *,
         entry_points: Iterable[PluginEntryPoint] | None = None,
         local: LocalPluginSettings | None = None,
@@ -132,60 +133,77 @@ class PluginCatalog:
         core_version: str | None = None,
     ) -> "PluginCatalog":
         """统一选择并加载 entry point 和本地目录候选."""
-        enabled_ids = tuple(enabled)
-        if len(set(enabled_ids)) != len(enabled_ids):
-            raise PluginDiscoveryError("plugins.enabled 包含重复 plugin ID")
+        try:
+            enabled_names = tuple(validate_plugin_name(name) for name in plugin_list)
+        except PluginCompatibilityError as exc:
+            raise PluginDiscoveryError(
+                "plugins.plugin_list 包含无效 plugin_name"
+            ) from exc
+        if len(set(enabled_names)) != len(enabled_names):
+            raise PluginDiscoveryError("plugins.plugin_list 包含重复 plugin_name")
 
         candidates = cls.index_candidates(
             entry_points=entry_points,
             local=local,
             config_root=config_root,
         )
-        by_id = {candidate.plugin_id: candidate for candidate in candidates}
-        selected = list(enabled_ids)
-        if local is not None and local.auto_enable:
-            selected.extend(
-                candidate.plugin_id
-                for candidate in candidates
-                if isinstance(candidate.origin, DirectoryPluginOrigin)
-                and candidate.plugin_id not in selected
-            )
-        selected_ids = tuple(selected)
-        if not selected_ids:
+        by_name = {candidate.plugin_name: candidate for candidate in candidates}
+        selected = list(enabled_names)
+        selected_names = tuple(selected)
+        if not selected_names:
             return cls((), candidates, ())
 
-        for plugin_id in selected_ids:
-            if plugin_id not in by_id:
+        for plugin_name in selected_names:
+            if plugin_name not in by_name:
                 raise PluginDiscoveryError(
-                    "已启用插件 '%s' 没有对应的 entry point 或本地 manifest" % plugin_id
+                    "已启用插件名称 '%s' 没有对应的 entry point 或本地 manifest"
+                    % plugin_name
                 )
 
         loaded: dict[str, LoadedPlugin] = {}
         resolved_core_version = core_version or __version__
-        for plugin_id in sorted(selected_ids):
-            candidate = by_id[plugin_id]
+        for plugin_name in sorted(selected_names):
+            candidate = by_name[plugin_name]
             if candidate.requires_distributions:
                 validate_distribution_requirements(
-                    plugin_id,
+                    candidate.plugin_id or plugin_name,
                     candidate.requires_distributions,
                 )
             item = candidate.load()
             descriptor = item.descriptor
-            if descriptor.plugin_id != plugin_id:
+            implementation_name = type(item.instance).__name__
+            if implementation_name != plugin_name:
+                raise PluginDiscoveryError(
+                    "插件名称 '%s' 与实现类名 '%s' 不一致"
+                    % (plugin_name, implementation_name)
+                )
+            if (
+                candidate.plugin_id is not None
+                and descriptor.plugin_id != candidate.plugin_id
+            ):
                 raise PluginDiscoveryError(
                     "候选 '%s' 返回的 plugin_id 是 '%s'"
-                    % (plugin_id, descriptor.plugin_id)
+                    % (candidate.plugin_id, descriptor.plugin_id)
                 )
             if not descriptor.supports_core(resolved_core_version):
                 raise PluginCompatibilityError(
                     "插件 '%s' 要求 ButterBot %s，当前为 %s"
                     % (
-                        plugin_id,
+                        descriptor.plugin_id,
                         descriptor.requires_core,
                         resolved_core_version,
                     )
                 )
-            loaded[plugin_id] = item
+            if descriptor.plugin_id in loaded:
+                raise PluginDiscoveryError(
+                    "已启用插件 '%s' 和 '%s' 使用了重复 plugin_id '%s'"
+                    % (
+                        loaded[descriptor.plugin_id].plugin_name,
+                        plugin_name,
+                        descriptor.plugin_id,
+                    )
+                )
+            loaded[descriptor.plugin_id] = item
 
         _validate_dependencies(loaded)
         _validate_capabilities(loaded)
@@ -193,16 +211,16 @@ class PluginCatalog:
         return cls(
             tuple(loaded[plugin_id] for plugin_id in ordered_ids),
             candidates,
-            selected_ids,
+            selected_names,
         )
 
 
 def _distribution_candidate(entry_point: PluginEntryPoint) -> PluginCandidate:
     try:
-        plugin_id = validate_plugin_id(entry_point.name)
+        plugin_name = validate_plugin_name(entry_point.name)
     except PluginCompatibilityError as exc:
         raise PluginDiscoveryError(
-            "entry point plugin ID 无效: %s" % entry_point.name
+            "entry point plugin_name 无效: %r" % entry_point.name
         ) from exc
     distribution = getattr(entry_point, "dist", None)
     distribution_name = getattr(distribution, "name", None)
@@ -215,10 +233,10 @@ def _distribution_candidate(entry_point: PluginEntryPoint) -> PluginCandidate:
 
     def load() -> LoadedPlugin:
         plugin, descriptor = _load_distribution_plugin(entry_point)
-        return LoadedPlugin(descriptor, plugin, origin)
+        return LoadedPlugin(plugin_name, descriptor, plugin, origin)
 
     return PluginCandidate(
-        plugin_id=plugin_id,
+        plugin_name=plugin_name,
         origin=origin,
         _loader=load,
     )
@@ -227,9 +245,15 @@ def _distribution_candidate(entry_point: PluginEntryPoint) -> PluginCandidate:
 def _directory_candidate(manifest: LocalPluginManifest) -> PluginCandidate:
     def load() -> LoadedPlugin:
         instance = load_local_plugin(manifest)
-        return LoadedPlugin(manifest.descriptor, instance, manifest.origin)
+        return LoadedPlugin(
+            manifest.plugin_name,
+            manifest.descriptor,
+            instance,
+            manifest.origin,
+        )
 
     return PluginCandidate(
+        plugin_name=manifest.plugin_name,
         plugin_id=manifest.plugin_id,
         origin=manifest.origin,
         descriptor=manifest.descriptor,
@@ -241,8 +265,8 @@ def _directory_candidate(manifest: LocalPluginManifest) -> PluginCandidate:
 def _reject_origin_collisions(candidates: tuple[PluginCandidate, ...]) -> None:
     grouped: dict[str, list[PluginCandidate]] = defaultdict(list)
     for candidate in candidates:
-        grouped[candidate.plugin_id].append(candidate)
-    for plugin_id, matches in sorted(grouped.items()):
+        grouped[candidate.plugin_name].append(candidate)
+    for plugin_name, matches in sorted(grouped.items()):
         if len(matches) < 2:
             continue
         origins = ", ".join(
@@ -257,7 +281,9 @@ def _reject_origin_collisions(candidates: tuple[PluginCandidate, ...]) -> None:
             )
             else "重复来源"
         )
-        raise PluginDiscoveryError("插件 '%s' 有%s: %s" % (plugin_id, label, origins))
+        raise PluginDiscoveryError(
+            "插件名称 '%s' 有%s: %s" % (plugin_name, label, origins)
+        )
 
 
 def _load_distribution_plugin(

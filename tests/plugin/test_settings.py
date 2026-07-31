@@ -9,22 +9,33 @@ from butterbot.plugin import PluginSettings
 
 
 def test_empty_settings_disable_discovery():
-    assert PluginSettings.from_mapping({}).enabled == ()
+    settings = PluginSettings.from_mapping({})
+
+    assert not settings.enabled
+    assert settings.plugin_list == ()
+    assert settings.plugin_path == "./plugins"
 
 
-def test_enabled_order_is_preserved():
+def test_plugin_list_order_is_preserved():
     settings = PluginSettings.from_mapping(
-        {"plugins": {"enabled": ["example.two", "example.one"]}}
+        {
+            "plugins": {
+                "enabled": True,
+                "plugin_list": ["ExampleTwoPlugin", "示例一插件"],
+            }
+        }
     )
 
-    assert settings.enabled == ("example.two", "example.one")
+    assert settings.enabled
+    assert settings.plugin_list == ("ExampleTwoPlugin", "示例一插件")
 
 
 def test_local_and_private_settings_are_parsed_and_frozen():
     settings = PluginSettings.from_mapping(
         {
             "plugins": {
-                "local": {"path": "./extensions", "auto_enable": True},
+                "enabled": True,
+                "plugin_path": "./extensions",
                 "config": {
                     "local.example": {
                         "nested": {"values": [1, 2]},
@@ -34,21 +45,40 @@ def test_local_and_private_settings_are_parsed_and_frozen():
         }
     )
 
-    assert settings.local is not None
     assert settings.local.path == "./extensions"
-    assert settings.local.auto_enable
+    assert settings.plugin_path == "./extensions"
     assert settings.requires_plugin_bootstrap
     assert settings.config_by_plugin["local.example"]["nested"] == {"values": (1, 2)}
     with pytest.raises(TypeError):
         settings.config_by_plugin["local.example"]["new"] = "value"  # type: ignore[index]
 
 
-def test_private_config_alone_requires_plugin_bootstrap():
+def test_private_config_alone_does_not_enable_plugin_system():
     settings = PluginSettings.from_mapping(
         {"plugins": {"config": {"local.example": {}}}}
     )
 
-    assert settings.requires_plugin_bootstrap
+    assert not settings.requires_plugin_bootstrap
+
+
+def test_lifecycle_timeouts_are_parsed():
+    settings = PluginSettings.from_mapping(
+        {
+            "plugins": {
+                "lifecycle": {
+                    "start_timeout": 1,
+                    "stop_timeout": 2.5,
+                    "cleanup_timeout": 3,
+                    "drain_timeout": 4,
+                }
+            }
+        }
+    )
+
+    assert settings.lifecycle.start_timeout == 1
+    assert settings.lifecycle.stop_timeout == 2.5
+    assert settings.lifecycle.cleanup_timeout == 3
+    assert settings.lifecycle.drain_timeout == 4
 
 
 @pytest.mark.parametrize(
@@ -56,15 +86,24 @@ def test_private_config_alone_requires_plugin_bootstrap():
     [
         ({"plugins": []}, "应为映射"),
         ({"plugins": {"unknown": True}}, "未知字段"),
-        ({"plugins": {"enabled": "example.one"}}, "应为列表"),
-        ({"plugins": {"enabled": ["Example.One"]}}, "无效 plugin ID"),
-        ({"plugins": {"local": []}}, "plugins.local"),
-        ({"plugins": {"local": None}}, "plugins.local"),
-        ({"plugins": {"local": {"auto_enable": "yes"}}}, "布尔值"),
+        ({"plugins": {"enabled": []}}, "布尔值"),
+        ({"plugins": {"plugin_list": "ExamplePlugin"}}, "应为列表"),
+        ({"plugins": {"plugin_list": [""]}}, "无效 plugin_name"),
+        ({"plugins": {"plugin_path": []}}, "plugins.plugin_path"),
+        ({"plugins": {"plugin_path": " ./plugins"}}, "plugins.plugin_path"),
         ({"plugins": {"config": []}}, "plugins.config"),
-        ({"plugins": {"enabled": [" example.one"]}}, "无首尾空白"),
+        ({"plugins": {"lifecycle": []}}, "plugins.lifecycle"),
         (
-            {"plugins": {"enabled": ["example.one", "example.one"]}},
+            {"plugins": {"lifecycle": {"start_timeout": 0}}},
+            "大于 0",
+        ),
+        (
+            {"plugins": {"lifecycle": {"unknown": 1}}},
+            "未知字段",
+        ),
+        ({"plugins": {"plugin_list": ["Example Plugin"]}}, "无效 plugin_name"),
+        (
+            {"plugins": {"plugin_list": ["ExamplePlugin", "ExamplePlugin"]}},
             "重复",
         ),
     ],

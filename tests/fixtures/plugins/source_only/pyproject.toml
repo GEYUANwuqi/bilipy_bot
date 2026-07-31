@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = ["butterbot-python>=3.1.0.dev2"]
 
 [project.entry-points."butterbot.plugins"]
-"contract.source" = "contract_source:SourcePlugin"
+"ContractSourcePlugin" = "contract_source:ContractSourcePlugin"
 
 [build-system]
 requires = ["hatchling"]

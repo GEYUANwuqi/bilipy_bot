@@ -411,7 +411,7 @@ class BotApp:
         Raises:
             SourceStartError: 一个或多个事件源启动失败
                 （抛出前已回滚成功启动的事件源）
-            PluginRegistrationError: 插件配置或 Handler 注册失败
+            PluginRegistrationError: 插件配置、Handler 注册或启动回调失败
         """
         if self._plugin_manager is not None:
             await self._plugin_manager.register()

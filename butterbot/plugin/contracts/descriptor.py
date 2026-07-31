@@ -14,7 +14,7 @@ from .identifiers import (
     validate_unique_identifiers,
 )
 
-_DESCRIPTOR_SCHEMA_VERSION = 1
+_DESCRIPTOR_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)

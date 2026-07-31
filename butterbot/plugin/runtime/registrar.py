@@ -178,8 +178,10 @@ class PluginRegistrar(ExtensionRegistrar):
         owner_id: str,
         *,
         drain_timeout: float = 5.0,
+        report_failure: Callable[[str, BaseException], None] | None = None,
     ) -> None:
         super().__init__(app, owner_id, drain_timeout=drain_timeout)
+        self._report_failure = report_failure
         self._cleanups: list[tuple[object, Callable[[], Awaitable[None] | None]]] = []
         self._cleanup_registrations: list[CleanupRegistration] = []
 
@@ -264,7 +266,9 @@ class PluginRegistrar(ExtensionRegistrar):
                     await result
             except asyncio.CancelledError as exc:
                 cancelled = cancelled or exc
-            except Exception:
+            except Exception as exc:
+                if self._report_failure is not None:
+                    self._report_failure("cleaning", exc)
                 _log.exception("插件 '%s' 的清理回调失败", self.owner_id)
         self._cleanups.clear()
         self._cleanup_registrations.clear()

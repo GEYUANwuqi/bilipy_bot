@@ -6,7 +6,7 @@ from butterbot.core.event import Event
 from butterbot.plugin import ButterPlugin, register
 
 
-class HandlerPlugin(ButterPlugin):
+class LocalContractHandlerPlugin(ButterPlugin):
     @register("local-contract.events", "local-contract.message")
     async def handle(self, event: Event) -> None:
         output = Path(str(self.settings["output"]))

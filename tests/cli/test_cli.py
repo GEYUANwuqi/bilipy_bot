@@ -11,7 +11,9 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
+from butterbot.app import BotApp
 from butterbot.cli.errors import CliError
 from butterbot.cli.main import main
 from butterbot.cli.state import StateStore, is_process_alive
@@ -20,93 +22,268 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PID_PATTERN = re.compile(r"PID (\d+)")
 
 
-def test_check_config_success(
+@pytest.fixture(autouse=True)
+def _clear_application_modules():
+    yield
+    for name in ("app", "positional_app", "override_app"):
+        sys.modules.pop(name, None)
+
+
+def test_init_creates_complete_runnable_project(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
-    (tmp_path / "config.yaml").write_text("{}\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    exit_code = main(["check"])
+    assert main(["init"]) == 0
 
-    assert exit_code == 0
-    assert "配置有效" in capsys.readouterr().out
+    config = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))
+    assert config["plugins"]["enabled"] is True
+    assert config["plugins"]["plugin_list"] == ["HelloPlugin"]
+    assert config["plugins"]["plugin_path"] == "./plugins"
+    assert config["sources"] == {}
+    assert "def app(" in (tmp_path / "app.py").read_text(encoding="utf-8")
+    plugin_root = tmp_path / "plugins" / "example.hello"
+    assert 'plugin_name = "HelloPlugin"' in plugin_root.joinpath(
+        "plugin.toml"
+    ).read_text(encoding="utf-8")
+    assert "class HelloPlugin(ButterPlugin)" in plugin_root.joinpath(
+        "plugin.py"
+    ).read_text(encoding="utf-8")
+    assert "butterbot run" in capsys.readouterr().out
 
-
-def test_check_config_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-):
-    (tmp_path / "config.yaml").write_text("sources: []\n", encoding="utf-8")
-    monkeypatch.chdir(tmp_path)
-
-    exit_code = main(["check"])
-
-    assert exit_code == 1
-    assert "配置无效" in capsys.readouterr().err
-
-
-def test_check_config_with_plugin_app_factory(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-):
-    (tmp_path / "config.yaml").write_text("{}\n", encoding="utf-8")
-    (tmp_path / "checked_app.py").write_text(
-        "from butterbot.app import BotApp\n"
-        "def create_app(*, config, source_factory_registry):\n"
-        "    return BotApp(\n"
-        "        config,\n"
-        "        source_factory_registry=source_factory_registry,\n"
-        "    )\n",
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(tmp_path)
     monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(BotApp, "run", lambda self: None)
+    assert main(["run"]) == 0
 
-    exit_code = main(["check", "checked_app:create_app"])
-
-    assert exit_code == 0
-    assert "配置有效" in capsys.readouterr().out
-
-
-def test_plugins_init_list_and_check(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-):
-    monkeypatch.chdir(tmp_path)
-
-    assert main(["plugins", "init", "local.created"]) == 0
-    plugin_root = tmp_path / "plugins" / "local.created"
-    assert plugin_root.joinpath("plugin.toml").is_file()
-    assert plugin_root.joinpath("plugin.py").is_file()
-    assert 'entry = "plugin.py"' in plugin_root.joinpath("plugin.toml").read_text(
-        encoding="utf-8"
-    )
-    assert "ButterPlugin" in plugin_root.joinpath("plugin.py").read_text(
-        encoding="utf-8"
-    )
-    assert "create_plugin" not in plugin_root.joinpath("plugin.py").read_text(
-        encoding="utf-8"
-    )
-    assert main(["plugins", "init", "local.created"]) == 1
+    assert main(["init"]) == 1
     assert "拒绝覆盖" in capsys.readouterr().err
 
+
+def test_run_defaults_to_app_app_and_current_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     (tmp_path / "config.yaml").write_text(
-        "plugins:\n  enabled: [local.created]\n  local: {}\n",
+        "generation: default\nplugins:\n  enabled: false\n",
         encoding="utf-8",
     )
-    assert main(["plugins", "list"]) == 0
-    output = capsys.readouterr().out
-    assert "local.created" in output
-    assert "directory" in output
-    assert "yes" in output
+    _write_application(tmp_path / "app.py")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(BotApp, "run", lambda self: None)
 
-    assert main(["plugins", "check"]) == 0
-    assert "配置有效" in capsys.readouterr().out
+    assert main(["run"]) == 0
+
+    module = sys.modules["app"]
+    assert module.seen == ["default"]
+    state = StateStore(tmp_path / ".butterbot" / "runtime.json").load(required=True)
+    assert state is not None
+    assert state.application_path == "app.app"
+    assert state.config_path == str((tmp_path / "config.yaml").resolve())
+
+
+def test_run_accepts_positional_application_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    config = tmp_path / "settings.yaml"
+    config.write_text(
+        "generation: positional\nplugins:\n  enabled: false\n",
+        encoding="utf-8",
+    )
+    _write_application(tmp_path / "positional_app.py")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(BotApp, "run", lambda self: None)
+
+    assert main(["run", "positional_app.app", "-config", str(config)]) == 0
+
+    assert sys.modules["positional_app"].seen == ["positional"]
+
+
+def test_run_path_option_overrides_positional_and_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    config = tmp_path / "custom.yaml"
+    config.write_text(
+        "generation: override\nplugins:\n  enabled: false\n",
+        encoding="utf-8",
+    )
+    _write_application(tmp_path / "positional_app.py")
+    _write_application(tmp_path / "override_app.py")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(BotApp, "run", lambda self: None)
+
+    assert (
+        main(
+            [
+                "run",
+                "positional_app.app",
+                "-path",
+                "override_app.app",
+                "-config",
+                str(config),
+            ]
+        )
+        == 0
+    )
+
+    assert "positional_app" not in sys.modules
+    assert sys.modules["override_app"].seen == ["override"]
+
+
+def test_plugin_list_and_check_report_loaded_and_blocked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    plugin_root = tmp_path / "extensions"
+    _write_plugin(plugin_root, "local.hello", "HelloPlugin")
+    _write_plugin(plugin_root, "local.other", "OtherPlugin")
+    config = tmp_path / "settings.yaml"
+    _write_config(
+        config,
+        enabled=True,
+        plugin_list=["HelloPlugin"],
+        plugin_path="./extensions",
+    )
+    monkeypatch.chdir(tmp_path.parent)
+
+    assert main(["plugin", "list", "-config", str(config)]) == 0
+    output = capsys.readouterr().out
+    assert "HelloPlugin" in output
+    assert "OtherPlugin" in output
+    assert "local.hello" in output
+    assert str(plugin_root / "local.hello") in output
+
+    assert main(["plugin", "-config", str(config), "check"]) == 0
+    output = capsys.readouterr().out
+    assert "HelloPlugin\tLOADED" in output
+    assert "OtherPlugin\tBLOCKED: not in plugin_list" in output
+
+
+def test_plugin_check_does_not_import_when_system_disabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    plugin_root = tmp_path / "plugins"
+    _write_plugin(
+        plugin_root,
+        "local.disabled",
+        "DisabledPlugin",
+        before_class="raise AssertionError('不应导入')\n",
+    )
+    config = tmp_path / "config.yaml"
+    _write_config(
+        config,
+        enabled=False,
+        plugin_list=["DisabledPlugin"],
+        plugin_path="./plugins",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["plugin", "check"]) == 0
+    assert "BLOCKED: plugins.enabled=false" in capsys.readouterr().out
+
+
+def test_plugin_check_reports_missing_selected_plugin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    _write_config(
+        tmp_path / "config.yaml",
+        enabled=True,
+        plugin_list=["MissingPlugin"],
+        plugin_path="./plugins",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["plugin", "check"]) == 1
+    captured = capsys.readouterr()
+    assert "MissingPlugin\tMISSING" in captured.out
+    assert "发现错误" in captured.err
+
+
+def test_plugin_command_interactively_writes_all_plugin_settings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    plugin_root = tmp_path / "plugins"
+    _write_plugin(plugin_root, "local.hello", "HelloPlugin")
+    config = tmp_path / "settings.yaml"
+    data = {
+        "plugins": {
+            "enabled": False,
+            "plugin_list": ["MissingPlugin"],
+            "plugin_path": "./plugins",
+            "config": {"local.keep": {"value": 1}},
+        },
+        "sources": {"keep": {"source_name": "demo"}},
+    }
+    config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    answers = iter(["1", "2", "e", "l", "1", "2", "3", "4", "s"])
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+    monkeypatch.chdir(tmp_path.parent)
+
+    assert main(["plugin", "-config", str(config)]) == 0
+
+    written = yaml.safe_load(config.read_text(encoding="utf-8"))
+    assert written["plugins"]["enabled"] is True
+    assert written["plugins"]["plugin_list"] == ["HelloPlugin"]
+    assert written["plugins"]["plugin_path"] == "./plugins"
+    assert written["plugins"]["lifecycle"] == {
+        "start_timeout": 1.0,
+        "stop_timeout": 2.0,
+        "cleanup_timeout": 3.0,
+        "drain_timeout": 4.0,
+    }
+    assert written["plugins"]["config"] == {"local.keep": {"value": 1}}
+    assert written["sources"] == {"keep": {"source_name": "demo"}}
+    assert str(plugin_root / "local.hello") in capsys.readouterr().out
+
+
+def test_config_command_only_changes_plugin_switch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    config = tmp_path / "project.yaml"
+    original = {
+        "plugins": {
+            "enabled": False,
+            "plugin_list": ["KeepPlugin"],
+            "plugin_path": "./custom",
+        },
+        "sources": {"keep": {"source_name": "demo"}},
+    }
+    config.write_text(yaml.safe_dump(original, sort_keys=False), encoding="utf-8")
+    answers = iter(["e", "1", "s"])
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    assert main(["config", "-config", str(config)]) == 0
+
+    written = yaml.safe_load(config.read_text(encoding="utf-8"))
+    assert written["plugins"] == {
+        "enabled": True,
+        "plugin_list": ["KeepPlugin"],
+        "plugin_path": "./custom",
+    }
+    assert written["sources"] == original["sources"]
+    assert "Sources 配置暂为占位" in capsys.readouterr().out
+
+
+def test_removed_commands_are_rejected():
+    with pytest.raises(SystemExit, match="2"):
+        main(["check"])
+    with pytest.raises(SystemExit, match="2"):
+        main(["plugins"])
 
 
 def test_status_without_state(
@@ -139,15 +316,21 @@ def test_background_full_restart_and_close(tmp_path: Path):
     module = tmp_path / "managed_app.py"
     module.write_text(
         "from pathlib import Path\n"
-        "from butterbot.app import BotApp, RuntimeConfig\n"
-        "config = RuntimeConfig.from_yaml()\n"
-        "with Path('starts.log').open('a', encoding='utf-8') as output:\n"
-        "    output.write(config.get_config('generation') + '\\n')\n"
-        "app = BotApp(config)\n",
+        "from butterbot.app import BotApp\n"
+        "def app(*, config, source_factory_registry):\n"
+        "    with Path('starts.log').open('a', encoding='utf-8') as output:\n"
+        "        output.write(config.get_config('generation') + '\\n')\n"
+        "    return BotApp(\n"
+        "        config=config,\n"
+        "        source_factory_registry=source_factory_registry,\n"
+        "    )\n",
         encoding="utf-8",
     )
-    config = tmp_path / "config.yaml"
-    config.write_text("generation: first\n", encoding="utf-8")
+    config = tmp_path / "runtime.yaml"
+    config.write_text(
+        "generation: first\nplugins:\n  enabled: false\n",
+        encoding="utf-8",
+    )
     state_file = tmp_path / ".butterbot" / "runtime.json"
     environment = dict(os.environ)
     environment["PYTHONPATH"] = os.pathsep.join(
@@ -166,7 +349,14 @@ def test_background_full_restart_and_close(tmp_path: Path):
         )
 
     try:
-        started = cli("run", "managed_app:app", "--background", "--debug")
+        started = cli(
+            "run",
+            "managed_app.app",
+            "-config",
+            str(config),
+            "--background",
+            "--debug",
+        )
         assert started.returncode == 0, started.stderr
         first_pid = _extract_pid(started.stdout)
 
@@ -177,6 +367,8 @@ def test_background_full_restart_and_close(tmp_path: Path):
         state = StateStore(state_file).load(required=True)
         assert state is not None
         assert state.debug
+        assert state.application_path == "managed_app.app"
+        assert state.config_path == str(config.resolve())
 
         paused = cli("stop")
         assert paused.returncode == 0, paused.stderr
@@ -186,7 +378,7 @@ def test_background_full_restart_and_close(tmp_path: Path):
         assert status.returncode == 0
         assert "已暂停" in status.stdout
 
-        resumed = cli("run", "managed_app:app", "--background")
+        resumed = cli("run", "--background")
         assert resumed.returncode == 0, resumed.stderr
         assert "已恢复原进程" in resumed.stdout
         assert "未创建新实例" in resumed.stdout
@@ -195,7 +387,7 @@ def test_background_full_restart_and_close(tmp_path: Path):
             "first"
         ]
 
-        duplicate = cli("run", "managed_app:app", "--background")
+        duplicate = cli("run", "--background")
         assert duplicate.returncode == 1
         assert "正在运行" in duplicate.stderr
 
@@ -203,7 +395,10 @@ def test_background_full_restart_and_close(tmp_path: Path):
         assert paused_again.returncode == 0, paused_again.stderr
         _wait_until_process_paused(first_pid)
 
-        config.write_text("generation: second\n", encoding="utf-8")
+        config.write_text(
+            "generation: second\nplugins:\n  enabled: false\n",
+            encoding="utf-8",
+        )
         restarted = cli("restart")
         assert restarted.returncode == 0, restarted.stderr
         second_pid = _extract_pid(restarted.stdout)
@@ -223,7 +418,10 @@ def test_background_full_restart_and_close(tmp_path: Path):
         assert status.returncode == 3
         assert "已停止" in status.stdout
 
-        config.write_text("generation: third\n", encoding="utf-8")
+        config.write_text(
+            "generation: third\nplugins:\n  enabled: false\n",
+            encoding="utf-8",
+        )
         restarted_from_stopped = cli("restart")
         assert restarted_from_stopped.returncode == 0, restarted_from_stopped.stderr
         third_pid = _extract_pid(restarted_from_stopped.stdout)
@@ -248,6 +446,70 @@ def test_background_full_restart_and_close(tmp_path: Path):
                 os.kill(state.pid, signal.SIGCONT)
             os.kill(state.pid, signal.SIGTERM)
             _wait_until_process_exits(state.pid)
+
+
+def _write_application(path: Path) -> None:
+    path.write_text(
+        "from butterbot.app import BotApp\n"
+        "seen = []\n"
+        "def app(*, config, source_factory_registry):\n"
+        "    seen.append(config.get_config('generation'))\n"
+        "    return BotApp(\n"
+        "        config=config,\n"
+        "        source_factory_registry=source_factory_registry,\n"
+        "    )\n",
+        encoding="utf-8",
+    )
+
+
+def _write_plugin(
+    root: Path,
+    plugin_id: str,
+    plugin_name: str,
+    *,
+    before_class: str = "",
+) -> None:
+    directory = root / plugin_id
+    directory.mkdir(parents=True)
+    directory.joinpath("plugin.toml").write_text(
+        "schema_version = 2\n"
+        f'plugin_name = "{plugin_name}"\n'
+        'version = "0.1.0"\n'
+        'requires_core = ">=3.1.0.dev2,<4"\n'
+        'entry = "plugin.py"\n'
+        "requires_plugins = []\n"
+        "requires_distributions = []\n",
+        encoding="utf-8",
+    )
+    directory.joinpath("plugin.py").write_text(
+        "from butterbot.plugin import ButterPlugin\n"
+        f"{before_class}"
+        f"class {plugin_name}(ButterPlugin):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+
+def _write_config(
+    path: Path,
+    *,
+    enabled: bool,
+    plugin_list: list[str],
+    plugin_path: str,
+) -> None:
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "plugins": {
+                    "enabled": enabled,
+                    "plugin_list": plugin_list,
+                    "plugin_path": plugin_path,
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _extract_pid(output: str) -> int:

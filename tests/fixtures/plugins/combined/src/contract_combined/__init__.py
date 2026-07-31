@@ -39,7 +39,7 @@ class CombinedSource(BaseSource):
         pass
 
 
-class CombinedPlugin(ButterPlugin):
+class ContractCombinedPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="contract.combined",
         version="1.0.0",
@@ -61,4 +61,4 @@ class CombinedPlugin(ButterPlugin):
         RECEIVED.append(str(event.data.value))
 
 
-__all__ = ["CombinedPlugin", "RECEIVED"]
+__all__ = ["ContractCombinedPlugin", "RECEIVED"]

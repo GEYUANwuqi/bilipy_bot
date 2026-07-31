@@ -1,8 +1,7 @@
-schema_version = 1
-plugin_id = "local.contract.hybrid-handler"
+schema_version = 2
+plugin_name = "LocalContractHybridHandlerPlugin"
 version = "0.1.0"
 requires_core = ">=3.1.0.dev2,<4"
 entry = "plugin.py"
 requires_plugins = ["contract.source"]
-provides = ["local.contract.hybrid-handler"]
 requires_distributions = ["butterbot-plugin-contract-source>=1"]

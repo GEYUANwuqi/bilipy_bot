@@ -38,7 +38,7 @@ class CombinedSource(BaseSource):
         pass
 
 
-class CombinedPlugin(ButterPlugin):
+class LocalContractCombinedPlugin(ButterPlugin):
     @configure
     def configure_source(self, registrar: ConfigRegistrar) -> None:
         registrar.register_builder("local-combined", dict)

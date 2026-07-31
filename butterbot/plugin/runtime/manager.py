@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from collections.abc import Mapping
+from collections.abc import Coroutine, Mapping
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from enum import StrEnum
 from logging import getLogger
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from butterbot.core.exceptions import LifecycleError
+from butterbot.plugin.contracts.context import PluginScope
 from butterbot.plugin.contracts.hooks import iter_configure_hooks
 from butterbot.plugin.discovery.catalog import LoadedPlugin, PluginCatalog
+from butterbot.plugin.discovery.settings import PluginLifecyclePolicy
 from butterbot.plugin.errors import PluginRegistrationError
 
 from .registrar import (
@@ -42,17 +45,47 @@ class PluginState(StrEnum):
     CLOSED = "closed"
 
 
+class PluginFailurePhase(StrEnum):
+    """可持久诊断且不包含异常消息的插件失败阶段."""
+
+    CONFIGURING = "configuring"
+    REGISTERING = "registering"
+    STARTING = "starting"
+    STOPPING = "stopping"
+    CLEANING = "cleaning"
+    BACKGROUND = "background"
+    SOURCE_START = "source_start"
+
+
+@dataclass(frozen=True, slots=True)
+class PluginFailure:
+    """不泄露配置和异常消息的插件失败记录."""
+
+    plugin_id: str
+    phase: PluginFailurePhase
+    error_type: str
+    timed_out: bool = False
+    cancelled: bool = False
+
+
 @dataclass(frozen=True, slots=True)
 class PluginStatus:
     """不包含配置值和 secret 的插件诊断快照."""
 
     plugin_id: str
+    plugin_name: str
     version: str
     state: PluginState
     origin_kind: str
     origin: str
     fingerprint: str | None
     error: str | None = None
+    failures: tuple[PluginFailure, ...] = ()
+
+    @property
+    def healthy(self) -> bool:
+        """当前是否没有记录到生命周期或后台资源失败."""
+        return not self.failures
 
 
 @dataclass(slots=True)
@@ -60,6 +93,7 @@ class _PluginRecord:
     loaded: LoadedPlugin
     state: PluginState = PluginState.VALIDATED
     error: str | None = None
+    failures: list[PluginFailure] = dataclass_field(default_factory=list)
 
     @property
     def plugin_id(self) -> str:
@@ -76,11 +110,13 @@ class PluginManager:
         factory_registry: "SourceFactoryRegistry",
         *,
         plugin_settings: Mapping[str, Mapping[str, object]] | None = None,
+        lifecycle: PluginLifecyclePolicy | None = None,
     ) -> None:
         self._catalog = catalog
         self._builder_registry = builder_registry
         self._factory_registry = factory_registry
         self._plugin_settings = plugin_settings or {}
+        self._lifecycle = lifecycle or PluginLifecyclePolicy()
         self._records = {
             item.descriptor.plugin_id: _PluginRecord(item) for item in catalog.plugins
         }
@@ -90,11 +126,6 @@ class PluginManager:
         self._configured = False
         self._registered = False
         self._closed = False
-        for record in self._records.values():
-            record.loaded.instance._bind_context(
-                self._plugin_settings.get(record.plugin_id),
-                record.loaded.origin.resource_root,
-            )
 
     @property
     def plugin_ids(self) -> tuple[str, ...]:
@@ -105,14 +136,23 @@ class PluginManager:
         return tuple(
             PluginStatus(
                 plugin_id=record.plugin_id,
+                plugin_name=record.loaded.plugin_name,
                 version=record.loaded.descriptor.version,
                 state=record.state,
                 origin_kind=record.loaded.origin.kind,
                 origin=record.loaded.origin.location,
                 fingerprint=record.loaded.origin.fingerprint,
                 error=record.error,
+                failures=tuple(record.failures),
             )
             for record in self._ordered_records()
+        )
+
+    @property
+    def failures(self) -> tuple[PluginFailure, ...]:
+        """返回按插件拓扑和发生顺序排列的失败记录."""
+        return tuple(
+            failure for record in self._ordered_records() for failure in record.failures
         )
 
     @property
@@ -120,13 +160,19 @@ class PluginManager:
         receipts: list[RegistrationReceipt] = []
         for plugin_id in self.plugin_ids:
             if self._records[plugin_id].state not in (
+                PluginState.FAILED,
                 PluginState.REGISTERED,
                 PluginState.STARTED,
             ):
                 continue
             config = self._config_registrars.get(plugin_id)
             runtime = self._runtime_registrars.get(plugin_id)
-            if config is not None and runtime is not None:
+            if (
+                config is not None
+                and runtime is not None
+                and not config.closed
+                and not runtime.closed
+            ):
                 receipts.append(make_receipt(config, runtime))
         return tuple(receipts)
 
@@ -149,6 +195,17 @@ class PluginManager:
             self._config_registrars[plugin_id] = registrar
             record.state = PluginState.CONFIGURING
             try:
+                record.loaded.instance._bind_context(
+                    plugin_id,
+                    self._plugin_settings.get(plugin_id),
+                    record.loaded.origin.resource_root,
+                    lambda phase, cause, owner=plugin_id: self._record_failure(
+                        owner,
+                        PluginFailurePhase(phase),
+                        cause,
+                    ),
+                    plugin_name=record.loaded.plugin_name,
+                )
                 for hook in iter_configure_hooks(record.loaded.instance):
                     result = hook(registrar)
                     if inspect.isawaitable(result):
@@ -158,7 +215,11 @@ class PluginManager:
                 registrar.commit()
             except BaseException as exc:
                 registrar.rollback()
-                self._mark_failure(plugin_id, exc)
+                self._mark_failure(
+                    plugin_id,
+                    PluginFailurePhase.CONFIGURING,
+                    exc,
+                )
                 self._rollback_config()
                 self._mark_rolled_back()
                 self._closed = True
@@ -187,8 +248,22 @@ class PluginManager:
                 registrar = PluginRegistrar(
                     app,
                     plugin_id,
+                    drain_timeout=self._lifecycle.drain_timeout,
+                    report_failure=lambda phase, cause, owner=plugin_id: (
+                        self._record_failure(
+                            owner,
+                            PluginFailurePhase(phase),
+                            cause,
+                        )
+                    ),
                 )
                 self._runtime_registrars[plugin_id] = registrar
+                record = self._records[plugin_id]
+                record.loaded.instance._bind_runtime_context(
+                    get_source=app.get_source,
+                    get_sources=app.get_sources,
+                    get_api=app.get_api,
+                )
                 for entry in app.manager.source_catalog.by_owner(plugin_id):
                     registrar.adopt_source(entry.source_id)
         except BaseException:
@@ -214,6 +289,15 @@ class PluginManager:
         """按依赖顺序登记 ``@register`` Handler，失败时回滚全部注册."""
         if self._closed:
             raise LifecycleError("PluginManager 已关闭")
+        failed_ids = tuple(
+            record.plugin_id
+            for record in self._ordered_records()
+            if record.state in (PluginState.FAILED, PluginState.BLOCKED)
+        )
+        if failed_ids:
+            raise LifecycleError(
+                "插件停止或清理失败，不能重新启动: %s" % ", ".join(failed_ids)
+            )
         if self._registered:
             return
         if self._app is None:
@@ -228,7 +312,11 @@ class PluginManager:
                     registrar.add_subscription(spec)
                 registrar.commit()
             except BaseException as exc:
-                self._mark_failure(plugin_id, exc)
+                self._mark_failure(
+                    plugin_id,
+                    PluginFailurePhase.REGISTERING,
+                    exc,
+                )
                 cleanup_cancelled = await self._rollback_all()
                 if not isinstance(exc, Exception):
                     raise
@@ -259,15 +347,22 @@ class PluginManager:
                 continue
             plugin_id = record.plugin_id
             try:
-                result = record.loaded.instance.on_start()
-                if not inspect.isawaitable(result):
-                    raise TypeError("on_start 必须是 async 函数")
-                await result
+                record.loaded.instance.context.scope._start()
+                await self._run_callback(
+                    record.loaded.instance.on_start,
+                    name="on_start",
+                    timeout=self._lifecycle.start_timeout,
+                    scope=record.loaded.instance.context.scope,
+                )
             except BaseException as exc:
                 stop_cancelled = await self._run_stop_callbacks(
                     tuple(reversed((*started_ids, plugin_id)))
                 )
-                self._mark_failure(plugin_id, exc)
+                self._mark_failure(
+                    plugin_id,
+                    PluginFailurePhase.STARTING,
+                    exc,
+                )
                 cleanup_cancelled = await self._rollback_all()
                 if not isinstance(exc, Exception):
                     raise
@@ -301,7 +396,11 @@ class PluginManager:
         for record in self._ordered_records():
             if record.state in (PluginState.REGISTERED, PluginState.STARTED):
                 record.state = PluginState.FAILED
-                record.error = "Source 启动失败（%s）" % type(cause).__name__
+                self._record_failure(
+                    record.plugin_id,
+                    PluginFailurePhase.SOURCE_START,
+                    cause,
+                )
         cleanup_cancelled = await self._rollback_all()
         if cleanup_cancelled is not None:
             raise cleanup_cancelled
@@ -321,7 +420,11 @@ class PluginManager:
         self._closed = True
         for record in self._ordered_records():
             if record.state not in (PluginState.FAILED, PluginState.BLOCKED):
-                record.state = PluginState.CLOSED
+                record.state = (
+                    PluginState.FAILED
+                    if self._has_cleanup_failure(record)
+                    else PluginState.CLOSED
+                )
         if callback_cancelled is not None:
             raise callback_cancelled
         if runtime_cancelled is not None:
@@ -334,17 +437,59 @@ class PluginManager:
         cancelled: asyncio.CancelledError | None = None
         for plugin_id in plugin_ids:
             record = self._records[plugin_id]
+            failure_count = len(record.failures)
             try:
-                result = record.loaded.instance.on_stop()
-                if not inspect.isawaitable(result):
-                    raise TypeError("on_stop 必须是 async 函数")
-                await result
+                await self._run_callback(
+                    record.loaded.instance.on_stop,
+                    name="on_stop",
+                    timeout=self._lifecycle.stop_timeout,
+                    scope=record.loaded.instance.context.scope,
+                )
             except asyncio.CancelledError as exc:
+                self._record_failure(
+                    plugin_id,
+                    PluginFailurePhase.STOPPING,
+                    exc,
+                )
                 cancelled = cancelled or exc
-            except Exception:
+            except Exception as exc:
+                self._record_failure(
+                    plugin_id,
+                    PluginFailurePhase.STOPPING,
+                    exc,
+                )
                 _log.exception("插件 '%s' 的 on_stop 回调失败", plugin_id)
+            try:
+                await record.loaded.instance.context.scope._close(
+                    self._lifecycle.cleanup_timeout
+                )
+            except asyncio.CancelledError as exc:
+                self._record_failure(
+                    plugin_id,
+                    PluginFailurePhase.CLEANING,
+                    exc,
+                )
+                cancelled = cancelled or exc
+            except Exception as exc:
+                self._record_failure(
+                    plugin_id,
+                    PluginFailurePhase.CLEANING,
+                    exc,
+                )
+                _log.exception("插件 '%s' 的资源作用域清理失败", plugin_id)
             if record.state == PluginState.STARTED:
-                record.state = PluginState.REGISTERED
+                record.state = (
+                    PluginState.FAILED
+                    if any(
+                        failure.phase
+                        in (
+                            PluginFailurePhase.CLEANING,
+                            PluginFailurePhase.STOPPING,
+                        )
+                        for failure in record.failures[failure_count:]
+                    )
+                    else PluginState.REGISTERED
+                )
         return cancelled
 
     async def _rollback_all(self) -> asyncio.CancelledError | None:
@@ -358,13 +503,47 @@ class PluginManager:
     async def _close_runtime(self) -> asyncio.CancelledError | None:
         cancelled: asyncio.CancelledError | None = None
         for plugin_id in reversed(self.plugin_ids):
+            scope = self._records[plugin_id].loaded.instance.context.scope
+            if scope.task_count or scope.cleanup_count:
+                try:
+                    await scope._close(self._lifecycle.cleanup_timeout)
+                except asyncio.CancelledError as exc:
+                    self._record_failure(
+                        plugin_id,
+                        PluginFailurePhase.CLEANING,
+                        exc,
+                    )
+                    cancelled = cancelled or exc
+                except Exception as exc:
+                    self._record_failure(
+                        plugin_id,
+                        PluginFailurePhase.CLEANING,
+                        exc,
+                    )
+                    _log.exception("插件 '%s' 的剩余资源清理失败", plugin_id)
             registrar = self._runtime_registrars.get(plugin_id)
             if registrar is None:
                 continue
             try:
-                await registrar.aclose()
+                await _run_bounded(
+                    registrar.aclose(),
+                    timeout=self._lifecycle.cleanup_timeout,
+                    name="butterbot.plugin.cleanup",
+                )
             except asyncio.CancelledError as exc:
+                self._record_failure(
+                    plugin_id,
+                    PluginFailurePhase.CLEANING,
+                    exc,
+                )
                 cancelled = cancelled or exc
+            except Exception as exc:
+                self._record_failure(
+                    plugin_id,
+                    PluginFailurePhase.CLEANING,
+                    exc,
+                )
+                _log.exception("插件 '%s' 的运行时注册清理失败", plugin_id)
         return cancelled
 
     def _rollback_config(self) -> None:
@@ -377,12 +556,70 @@ class PluginManager:
         """把没有失败或被阻断的记录标记为已关闭."""
         for record in self._ordered_records():
             if record.state not in (PluginState.FAILED, PluginState.BLOCKED):
-                record.state = PluginState.CLOSED
+                record.state = (
+                    PluginState.FAILED
+                    if self._has_cleanup_failure(record)
+                    else PluginState.CLOSED
+                )
 
-    def _mark_failure(self, failed_id: str, cause: BaseException) -> None:
+    @staticmethod
+    def _has_cleanup_failure(record: _PluginRecord) -> bool:
+        return any(
+            failure.phase in (PluginFailurePhase.CLEANING, PluginFailurePhase.STOPPING)
+            for failure in record.failures
+        )
+
+    async def _run_callback(
+        self,
+        callback: object,
+        *,
+        name: str,
+        timeout: float,
+        scope: PluginScope,
+    ) -> None:
+        if not callable(callback) or not inspect.iscoroutinefunction(callback):
+            raise TypeError("%s 必须是 async 函数" % name)
+        result = callback()
+        if not inspect.iscoroutine(result):
+            raise TypeError("%s 必须返回 coroutine" % name)
+        task = asyncio.create_task(result, name="butterbot.plugin.%s" % name)
+        scope._track_task(task, report_failure=False)
+        try:
+            _, pending = await asyncio.wait((task,), timeout=timeout)
+        except asyncio.CancelledError:
+            task.cancel()
+            raise
+        if pending:
+            task.cancel()
+            raise TimeoutError("%s 执行超过 %.3f 秒" % (name, timeout))
+        await task
+
+    def _record_failure(
+        self,
+        plugin_id: str,
+        phase: PluginFailurePhase,
+        cause: BaseException,
+    ) -> None:
+        failure = PluginFailure(
+            plugin_id=plugin_id,
+            phase=phase,
+            error_type=type(cause).__name__,
+            timed_out=isinstance(cause, TimeoutError),
+            cancelled=isinstance(cause, asyncio.CancelledError),
+        )
+        record = self._records[plugin_id]
+        record.failures.append(failure)
+        record.error = failure.error_type
+
+    def _mark_failure(
+        self,
+        failed_id: str,
+        phase: PluginFailurePhase,
+        cause: BaseException,
+    ) -> None:
         failed = self._records[failed_id]
         failed.state = PluginState.FAILED
-        failed.error = type(cause).__name__
+        self._record_failure(failed_id, phase, cause)
         for record in self._ordered_records():
             if record.plugin_id == failed_id:
                 continue
@@ -407,7 +644,38 @@ class PluginManager:
         return tuple(self._records[plugin_id] for plugin_id in self.plugin_ids)
 
 
+async def _run_bounded(
+    coroutine: Coroutine[Any, Any, object],
+    *,
+    timeout: float,
+    name: str,
+) -> None:
+    task = asyncio.create_task(coroutine, name=name)
+    try:
+        _, pending = await asyncio.wait((task,), timeout=timeout)
+    except asyncio.CancelledError:
+        task.cancel()
+        task.add_done_callback(_consume_task_result)
+        raise
+    if pending:
+        task.cancel()
+        task.add_done_callback(_consume_task_result)
+        raise TimeoutError("%s 执行超过 %.3f 秒" % (name, timeout))
+    await task
+
+
+def _consume_task_result(task: asyncio.Task[object]) -> None:
+    if task.cancelled():
+        return
+    try:
+        task.exception()
+    except asyncio.CancelledError:
+        pass
+
+
 __all__ = [
+    "PluginFailure",
+    "PluginFailurePhase",
     "PluginManager",
     "PluginState",
     "PluginStatus",

@@ -7,7 +7,7 @@ from .origin import (
     DistributionPluginOrigin,
     PluginOrigin,
 )
-from .settings import LocalPluginSettings, PluginSettings
+from .settings import LocalPluginSettings, PluginLifecyclePolicy, PluginSettings
 
 __all__ = [
     "DirectoryPluginOrigin",
@@ -17,6 +17,7 @@ __all__ = [
     "LocalPluginSettings",
     "PluginCandidate",
     "PluginCatalog",
+    "PluginLifecyclePolicy",
     "PluginOrigin",
     "PluginSettings",
 ]

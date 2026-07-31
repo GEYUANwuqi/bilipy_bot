@@ -24,7 +24,7 @@ from butterbot.plugin.errors import PluginRegistrationError
 
 from .manager import PluginManager
 
-BotAppFactory = Callable[..., BotApp]
+ApplicationEntry = Callable[..., BotApp]
 
 
 class PluginBootstrap:
@@ -50,7 +50,7 @@ class PluginBootstrap:
 
     @property
     def settings(self) -> PluginSettings:
-        """读取与 build 相同的已解析启用列表."""
+        """读取与 build 相同的插件系统设置."""
         self._load()
         assert self._settings is not None
         return self._settings
@@ -72,25 +72,27 @@ class PluginBootstrap:
     def discover(self) -> PluginCatalog:
         """执行与 build 相同的候选选择、导入和依赖校验."""
         _, settings = self._load()
+        if not settings.enabled:
+            return PluginCatalog(())
         catalog = PluginCatalog.discover(
-            settings.enabled,
+            settings.plugin_list,
             entry_points=self._entry_points,
             local=settings.local,
             config_root=self._path.resolve().parent,
             core_version=self._core_version,
         )
         configured_ids = set(settings.config_by_plugin)
-        candidate_ids = {candidate.plugin_id for candidate in catalog.candidates}
-        unknown = sorted(configured_ids - candidate_ids)
+        enabled_ids = set(catalog.plugin_ids)
+        unknown = sorted(configured_ids - enabled_ids)
         if unknown:
             raise ConfigError(
-                "plugins.config 引用了未发现的插件: %s" % ", ".join(unknown)
+                "plugins.config 引用了未启用的 plugin ID: %s" % ", ".join(unknown)
             )
         return catalog
 
     def build(
         self,
-        app_factory: BotAppFactory = BotApp,
+        application: ApplicationEntry = BotApp,
     ) -> BotApp:
         """发现插件、构建配置和应用；运行阶段方法延迟到 app.start()."""
         resolved_data, settings = self._load()
@@ -103,6 +105,7 @@ class PluginBootstrap:
             builder_registry,
             factory_registry,
             plugin_settings=settings.config_by_plugin,
+            lifecycle=settings.lifecycle,
         )
         self._manager = manager
         manager.configure()
@@ -111,8 +114,8 @@ class PluginBootstrap:
                 resolved_data,
                 builder_registry=builder_registry,
             )
-            app = _call_app_factory(
-                app_factory,
+            app = _call_application(
+                application,
                 config=config,
                 source_factory_registry=factory_registry,
             )
@@ -137,10 +140,10 @@ class PluginBootstrap:
 
     def validate(
         self,
-        app_factory: BotAppFactory = BotApp,
+        application: ApplicationEntry = BotApp,
     ) -> None:
         """执行与 run 相同的发现和注册，但不启动外部 Source."""
-        app = self.build(app_factory)
+        app = self.build(application)
 
         async def validate_and_close() -> None:
             try:
@@ -154,7 +157,7 @@ class PluginBootstrap:
 def bootstrap_app(
     path: str | Path = "config.yaml",
     *,
-    app_factory: BotAppFactory = BotApp,
+    application: ApplicationEntry = BotApp,
     environ: Mapping[str, str] | None = None,
     env_prefix: str = "BUTTERBOT__",
     entry_points: Iterable[PluginEntryPoint] | None = None,
@@ -167,13 +170,13 @@ def bootstrap_app(
         env_prefix=env_prefix,
         entry_points=entry_points,
         core_version=core_version,
-    ).build(app_factory)
+    ).build(application)
 
 
 def validate_plugin_config(
     path: str | Path = "config.yaml",
     *,
-    app_factory: BotAppFactory = BotApp,
+    application: ApplicationEntry = BotApp,
     environ: Mapping[str, str] | None = None,
     env_prefix: str = "BUTTERBOT__",
     entry_points: Iterable[PluginEntryPoint] | None = None,
@@ -186,50 +189,48 @@ def validate_plugin_config(
         env_prefix=env_prefix,
         entry_points=entry_points,
         core_version=core_version,
-    ).validate(app_factory)
+    ).validate(application)
 
 
-def _call_app_factory(
-    app_factory: BotAppFactory,
+def _call_application(
+    application: ApplicationEntry,
     *,
     config: RuntimeConfig,
     source_factory_registry: SourceFactoryRegistry,
 ) -> BotApp:
-    if not callable(app_factory):
-        raise TypeError("app_factory 必须可调用")
+    if not callable(application):
+        raise TypeError("应用入口必须可调用")
     kwargs: dict[str, Any] = {
         "config": config,
         "source_factory_registry": source_factory_registry,
     }
     try:
-        inspect.signature(app_factory).bind(**kwargs)
+        inspect.signature(application).bind(**kwargs)
     except (TypeError, ValueError) as exc:
         raise ConfigError(
-            "插件模式应用 factory 必须接受关键字参数 "
-            "'config' 和 'source_factory_registry'"
+            "应用入口必须接受关键字参数 'config' 和 'source_factory_registry'"
         ) from exc
 
     try:
-        app = app_factory(**kwargs)
+        app = application(**kwargs)
     except BaseException as exc:
         if not isinstance(exc, Exception):
             raise
         raise PluginRegistrationError(
             "<application>",
-            "app_factory",
+            "application",
             exc,
         ) from exc
     if inspect.isawaitable(app):
         if inspect.iscoroutine(app):
             app.close()
-        raise ConfigError("插件模式应用 factory 必须是同步函数")
+        raise ConfigError("应用入口必须是同步函数")
     if not isinstance(app, BotApp):
-        raise ConfigError("插件模式应用 factory 必须返回 BotApp")
+        raise ConfigError("应用入口必须返回 BotApp")
     return app
 
 
 __all__ = [
-    "BotAppFactory",
     "PluginBootstrap",
     "bootstrap_app",
     "validate_plugin_config",

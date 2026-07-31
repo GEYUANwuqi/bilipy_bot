@@ -7,9 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from butterbot.app import BotApp
 from butterbot.cli.errors import CliError
-from butterbot.cli.loader import load_app, load_app_factory
+from butterbot.cli.loader import load_application, resolve_entrypoint
 
 
 def _write_module(tmp_path: Path, content: str) -> str:
@@ -24,73 +23,54 @@ def _clear_test_module():
     sys.modules.pop("test_cli_app", None)
 
 
-def test_load_bot_app_object(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    module = _write_module(
+@pytest.mark.parametrize("entrypoint", ["test_cli_app.app", "test_cli_app:app"])
+def test_load_application_without_calling_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    entrypoint: str,
+):
+    _write_module(
         tmp_path,
-        "from butterbot.app import BotApp, RuntimeConfig\n"
-        "app = BotApp(RuntimeConfig())\n",
+        "def app(*, config, source_factory_registry):\n"
+        "    raise AssertionError('loader 不应调用应用入口')\n",
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    app = load_app(f"{module}:app")
+    application = load_application(entrypoint)
 
-    assert isinstance(app, BotApp)
+    assert callable(application)
 
 
-def test_load_zero_argument_app_factory(
+def test_load_application_rejects_constructed_object(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    module = _write_module(
-        tmp_path,
-        "from butterbot.app import BotApp, RuntimeConfig\n"
-        "def create_app():\n"
-        "    return BotApp(RuntimeConfig())\n",
-    )
+    _write_module(tmp_path, "app = object()\n")
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    app = load_app(f"{module}:create_app")
+    with pytest.raises(CliError, match="必须可调用"):
+        load_application("test_cli_app.app")
 
-    assert isinstance(app, BotApp)
 
-
-def test_load_plugin_app_factory_without_calling_it(
+def test_resolve_nested_attribute_with_colon(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    module = _write_module(
+    _write_module(
         tmp_path,
-        "def create_app(*, config, source_factory_registry):\n"
-        "    raise AssertionError('loader 不应调用 factory')\n",
+        "class Container:\n    value = 1\ncontainer = Container()\n",
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    factory = load_app_factory(f"{module}:create_app")
-
-    assert callable(factory)
-
-
-def test_plugin_mode_rejects_constructed_app(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    module = _write_module(
-        tmp_path,
-        "from butterbot.app import BotApp, RuntimeConfig\n"
-        "app = BotApp(RuntimeConfig())\n",
-    )
-    monkeypatch.syspath_prepend(str(tmp_path))
-
-    with pytest.raises(CliError, match="必须是 factory"):
-        load_app_factory(f"{module}:app")
+    assert resolve_entrypoint("test_cli_app:container.value") == 1
 
 
 @pytest.mark.parametrize(
     ("entrypoint", "message"),
     [
         ("invalid", "必须使用"),
-        ("missing_module:app", "无法导入"),
-        ("test_cli_app:missing", "入口不存在"),
+        ("missing_module.app", "无法导入"),
+        ("test_cli_app.missing", "入口不存在"),
         ("test_cli_app:nested..value", "空属性"),
     ],
 )
@@ -104,15 +84,4 @@ def test_invalid_entrypoint(
     monkeypatch.syspath_prepend(str(tmp_path))
 
     with pytest.raises(CliError, match=message):
-        load_app(entrypoint)
-
-
-def test_entrypoint_must_be_bot_app(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    module = _write_module(tmp_path, "value = object()\n")
-    monkeypatch.syspath_prepend(str(tmp_path))
-
-    with pytest.raises(CliError, match="没有提供 BotApp"):
-        load_app(f"{module}:value")
+        resolve_entrypoint(entrypoint)

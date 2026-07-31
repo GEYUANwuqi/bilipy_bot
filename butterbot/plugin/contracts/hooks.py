@@ -7,14 +7,17 @@ from collections.abc import Callable, Coroutine, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, TypeVar, cast
+from typing import Any, ClassVar, Generic, TypeVar, cast
 
+from .config import PluginConfig
+from .context import PluginContext
 from .routing import SourceRef, SubscriptionSpec
 
 _ConfigureHook = Callable[..., object]
 _Handler = Callable[..., Coroutine[Any, Any, None]]
 _HookT = TypeVar("_HookT", bound=_ConfigureHook)
 _HandlerT = TypeVar("_HandlerT", bound=_Handler)
+_PluginConfigT = TypeVar("_PluginConfigT", bound=PluginConfig)
 _CONFIGURE_ATTRIBUTE = "__butterbot_plugin_configure__"
 _SUBSCRIPTIONS_ATTRIBUTE = "__butterbot_plugin_subscriptions__"
 
@@ -27,7 +30,7 @@ class _SubscriptionDeclaration:
     allow_multiple: bool
 
 
-class ButterPlugin:
+class ButterPlugin(Generic[_PluginConfigT]):
     """本地目录和 distribution 插件共享的唯一用户基类.
 
     Handler 使用 :func:`register` 声明订阅，无需手工构造 ``SourceRef`` 或
@@ -35,26 +38,44 @@ class ButterPlugin:
     :meth:`on_stop`。
     """
 
+    config_model: ClassVar[type[PluginConfig] | None] = None
+
+    @property
+    def context(self) -> PluginContext:
+        """返回框架绑定的窄化插件运行上下文."""
+        context = getattr(self, "_plugin_context", None)
+        if context is None:
+            raise RuntimeError("插件上下文尚未绑定")
+        return cast(PluginContext, context)
+
     @property
     def settings(self) -> Mapping[str, object]:
         """当前插件隔离且只读的配置 namespace."""
-        return getattr(self, "_plugin_settings", MappingProxyType({}))
+        try:
+            return self.context.settings
+        except RuntimeError:
+            return MappingProxyType({})
+
+    @property
+    def config(self) -> _PluginConfigT:
+        """返回声明 ``config_model`` 后通过校验的只读配置."""
+        return cast(_PluginConfigT, self.context.config)
 
     @property
     def resource_root(self) -> Path | None:
         """本地插件资源根；distribution 插件返回 ``None``."""
-        return getattr(self, "_plugin_resource_root", None)
+        try:
+            return self.context.resource_root
+        except RuntimeError:
+            return None
 
     @property
     def config_key(self) -> str | None:
         """返回显式配置的 Source 配置键；未配置时按 kind 唯一匹配."""
-        value = self.settings.get("config_key")
-        if value is None:
+        try:
+            return self.context.config_key
+        except RuntimeError:
             return None
-        value = str(value)
-        if not value or value != value.strip():
-            raise ValueError("插件 config_key 必须为 None 或非空且无首尾空白的字符串")
-        return value
 
     def source_ref(self, source_kind: str) -> SourceRef:
         """使用当前插件的 ``config_key`` 构造逻辑 Source 引用."""
@@ -68,15 +89,50 @@ class ButterPlugin:
 
     def _bind_context(
         self,
+        plugin_id: str,
         settings: Mapping[str, object] | None,
         resource_root: Path | None,
+        report_failure: Callable[[str, BaseException], None],
+        *,
+        plugin_name: str,
     ) -> None:
-        self._plugin_settings = (
+        frozen_settings = (
             MappingProxyType({})
             if settings is None
             else MappingProxyType(dict(settings))
         )
-        self._plugin_resource_root = resource_root
+        config_model = self.config_model
+        if config_model is not None and (
+            not isinstance(config_model, type)
+            or not issubclass(config_model, PluginConfig)
+        ):
+            raise TypeError("config_model 必须是 PluginConfig 子类")
+        config = (
+            None
+            if config_model is None
+            else config_model.model_validate(dict(frozen_settings))
+        )
+        self._plugin_context = PluginContext(
+            plugin_id,
+            plugin_name=plugin_name,
+            settings=frozen_settings,
+            config=config,
+            resource_root=resource_root,
+            report_failure=report_failure,
+        )
+
+    def _bind_runtime_context(
+        self,
+        *,
+        get_source: Callable[[SourceRef], object | None],
+        get_sources: Callable[[SourceRef], tuple[object, ...]],
+        get_api: Callable[[type[Any], str], Any],
+    ) -> None:
+        self.context._bind_runtime(
+            get_source=get_source,
+            get_sources=get_sources,
+            get_api=get_api,
+        )
 
     def _subscription_specs(self) -> tuple[SubscriptionSpec, ...]:
         specs: list[SubscriptionSpec] = []

@@ -40,7 +40,7 @@ class ContractSource(BaseSource):
         pass
 
 
-class SourcePlugin(ButterPlugin):
+class ContractSourcePlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="contract.source",
         version="1.0.0",
@@ -62,4 +62,9 @@ class SourcePlugin(ButterPlugin):
         )
 
 
-__all__ = ["ContractData", "ContractSource", "ContractType", "SourcePlugin"]
+__all__ = [
+    "ContractData",
+    "ContractSource",
+    "ContractSourcePlugin",
+    "ContractType",
+]
