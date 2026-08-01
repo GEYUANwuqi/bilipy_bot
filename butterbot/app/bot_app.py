@@ -160,6 +160,8 @@ class BotApp:
                     self._manager.discard_unstarted_source(source_id)
                 if not isinstance(exc, Exception):
                     raise
+                if isinstance(exc, ConfigError):
+                    raise
                 raise ConfigError(
                     "Source 配置 '%s' 自动实例化 '%s' 失败（%s）"
                     % (config_key, factory_entry.factory_id, type(exc).__name__)

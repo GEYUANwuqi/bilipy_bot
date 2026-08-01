@@ -10,7 +10,7 @@ from butterbot.core.source import SourceHealthState
 from butterbot.sources.napcat.data import NapcatGroupMessageData
 from butterbot.sources.napcat.source import NapcatSource
 from butterbot.sources.napcat.types import NapcatType
-from butterbot.utils import ConnectionHealth, ConnectionHealthState
+from butterbot.utils.websocket import ConnectionHealth, ConnectionHealthState
 
 
 def _group_message() -> dict[str, object]:

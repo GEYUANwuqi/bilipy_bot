@@ -26,6 +26,18 @@ uv add butterbot-python
 如果当前目录还不是 uv 项目，先运行 `uv init`。安装包名是
 `butterbot-python`，Python 导入名是 `butterbot`。
 
+基础安装只包含核心、CLI 和插件契约. 按实际 adapter 选择 extra:
+
+```bash
+uv add "butterbot-python[websocket]"  # 通用 aiohttp WebSocket 工具
+uv add "butterbot-python[napcat]"     # NapCat, 显式安装 aiohttp
+uv add "butterbot-python[bilibili]"  # Bilibili SDK 和 aiohttp
+uv add "butterbot-python[all]"        # 全部内置 adapter
+```
+
+NapCat 和 Bilibili 都直接依赖 `aiohttp`; Bilibili extra 不依赖
+上游 SDK 是否恰好传递安装它.
+
 ## 从仓库开发
 
 ```bash
@@ -34,8 +46,8 @@ cd ButterBot
 uv sync --locked --dev
 ```
 
-`--locked` 要求安装结果与 `uv.lock` 一致；`--dev` 会安装测试、lint 和类型检查
-工具。仓库没有定义可选 extras，NapCat 与 Bilibili 依赖都属于当前运行时依赖。
+`--locked` 要求安装结果与 `uv.lock` 一致; `--dev` 会安装测试、lint、
+类型检查与全部内置 adapter 的开发依赖.
 
 ## 验证安装
 
@@ -81,6 +93,12 @@ uv sync --locked --dev --python 3.12
 
 安装名是 `butterbot-python`，导入路径是 `butterbot`。应用入口从
 `butterbot.app` 导入，不要从 `butterbot.core` 导入 `BotApp`。
+
+### 缺少 adapter extra
+
+配置了 NapCat 或 Bilibili Source 但没有安装对应 extra 时, 构造会抛出
+带完整安装命令的 `ConfigError`. 基础 wheel 仍可以导入 `butterbot.app`,
+运行空 `BotApp` 和加载不依赖内置 adapter 的插件.
 
 ## 下一步
 

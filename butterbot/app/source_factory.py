@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from butterbot.core.exceptions import ConfigError
 from butterbot.core.source import BaseSource
 
+from ._optional import require_optional_module
+
 SourceFactory = Callable[..., BaseSource]
 
 
@@ -151,20 +153,53 @@ class SourceFactoryRegistry:
 
     @classmethod
     def with_defaults(cls) -> SourceFactoryRegistry:
-        """创建包含 ButterBot 内置 Source 的隔离注册表."""
-        from butterbot.sources.bilibili import (
-            BiliDanmakuSource,
-            BiliDynamicSource,
-            BiliLiveSource,
-        )
-        from butterbot.sources.napcat import NapcatSource
-
+        """创建包含延迟 adapter 工厂的隔离注册表."""
         registry = cls()
-        registry.register("bilibili", BiliDanmakuSource)
-        registry.register("bilibili", BiliDynamicSource)
-        registry.register("bilibili", BiliLiveSource)
-        registry.register("napcat", NapcatSource)
+        for class_name in (
+            "BiliDanmakuSource",
+            "BiliDynamicSource",
+            "BiliLiveSource",
+        ):
+            registry.register(
+                "bilibili",
+                _optional_source_factory(
+                    "butterbot.sources.bilibili",
+                    class_name,
+                    extra="bilibili",
+                    dependency_modules=("aiohttp", "bilibili_api"),
+                ),
+                factory_name=class_name,
+            )
+        registry.register(
+            "napcat",
+            _optional_source_factory(
+                "butterbot.sources.napcat",
+                "NapcatSource",
+                extra="napcat",
+                dependency_modules=("aiohttp",),
+            ),
+            factory_name="NapcatSource",
+        )
         return registry
+
+
+def _optional_source_factory(
+    module_name: str,
+    class_name: str,
+    *,
+    extra: str,
+    dependency_modules: tuple[str, ...],
+) -> SourceFactory:
+    def factory(*args, **kwargs) -> BaseSource:
+        module = require_optional_module(
+            module_name,
+            extra=extra,
+            dependency_modules=dependency_modules,
+        )
+        source_class = getattr(module, class_name)
+        return source_class(*args, **kwargs)
+
+    return factory
 
 
 def _validate_name(value: object, label: str) -> None:

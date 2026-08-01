@@ -7,6 +7,8 @@ title: Bilibili
 ## 本页目标
 
 选择 Bilibili 动态、直播状态或直播弹幕 Source，并理解它们不同的并发模型。
+使用前先安装 `uv add "butterbot-python[bilibili]"`; 该 extra 显式包含
+`bilibili-api-python` 和 `aiohttp`.
 
 ## 配置
 

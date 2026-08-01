@@ -4,6 +4,9 @@ title: 内置事件源 API
 
 # 内置事件源 API
 
+NapCat API 需要 `butterbot-python[napcat]`, Bilibili API 需要
+`butterbot-python[bilibili]`. 两个 extra 都显式包含 `aiohttp`.
+
 ## NapCat 顶层导出
 
 ```python

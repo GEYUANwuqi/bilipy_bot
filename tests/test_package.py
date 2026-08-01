@@ -41,6 +41,19 @@ class TestPackage:
         assert NapcatSource is not None
         assert BiliDynamicSource is not None
 
+    def test_utils_facade_does_not_import_optional_websocket(self):
+        """WebSocket 工具只从具体模块导入, 不污染基础门面."""
+        import butterbot.utils as utils
+
+        for name in (
+            "AsyncWebSocketClient",
+            "ConnectionHealth",
+            "ConnectionHealthState",
+            "ListenerId",
+            "MessageType",
+        ):
+            assert not hasattr(utils, name)
+
     def test_console_script_is_packaged(self):
         """wheel 元数据应提供 butterbot CLI."""
         scripts = entry_points(group="console_scripts")

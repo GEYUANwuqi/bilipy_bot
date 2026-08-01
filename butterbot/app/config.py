@@ -421,6 +421,8 @@ def _run_builder(
 ) -> Any:
     try:
         return builder(value)
+    except ConfigError:
+        raise
     except Exception as exc:
         message = "Source 配置 '%s'（source_name='%s'）构建失败（%s）" % (
             config_key,
@@ -595,15 +597,25 @@ def _set_nested_value(
 
 
 def _build_bilibili(value: dict[str, Any]) -> Any:
-    from bilibili_api import Credential
+    from ._optional import require_optional_module
 
-    return Credential(**value)
+    module = require_optional_module(
+        "bilibili_api",
+        extra="bilibili",
+        dependency_modules=("aiohttp", "bilibili_api"),
+    )
+    return module.Credential(**value)
 
 
 def _build_napcat(value: dict[str, Any]) -> Any:
-    from butterbot.sources.napcat.api.napcat_api import NapcatConfig
+    from ._optional import require_optional_module
 
-    return NapcatConfig(**value)
+    module = require_optional_module(
+        "butterbot.sources.napcat.api.napcat_api",
+        extra="napcat",
+        dependency_modules=("aiohttp",),
+    )
+    return module.NapcatConfig(**value)
 
 
 register_builder("bilibili", _build_bilibili)

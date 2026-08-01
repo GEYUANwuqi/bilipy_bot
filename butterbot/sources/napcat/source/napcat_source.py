@@ -3,8 +3,11 @@ from typing import Any
 
 from butterbot.core.event import Event
 from butterbot.core.source import BaseSource
-from butterbot.utils import ConnectionHealth, ConnectionHealthState
-from butterbot.utils.websocket import ConnectionError
+from butterbot.utils.websocket import (
+    ConnectionError,
+    ConnectionHealth,
+    ConnectionHealthState,
+)
 
 from ..api import (
     NapcatApi,

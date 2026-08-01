@@ -10,6 +10,7 @@ title: NapCat
 
 ## 前置条件
 
+- 已安装 `uv add "butterbot-python[napcat]"`;
 - 可访问的 NapCat WebSocket 地址；
 - 服务器要求认证时准备 Token；
 - 已复制并妥善保管本地 `config.yaml`。

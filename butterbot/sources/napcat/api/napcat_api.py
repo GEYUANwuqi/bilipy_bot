@@ -8,13 +8,14 @@ from uuid import uuid4
 
 from butterbot.core.api import BaseApi
 from butterbot.core.context import ApiRegistry
-from butterbot.utils import (
+from butterbot.utils.websocket import (
     AsyncWebSocketClient,
     ConnectionHealth,
+    ListenerClosedError,
+    ListenerEvictedError,
     ListenerId,
     MessageType,
 )
-from butterbot.utils.websocket import ListenerClosedError, ListenerEvictedError
 
 _log = getLogger("NapcatApi")
 

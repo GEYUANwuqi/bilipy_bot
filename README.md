@@ -16,6 +16,10 @@ Source，把数据与状态包装为 Event，再由 EventBus 分发给异步 Han
 uv sync --locked --dev
 ```
 
+已发布 wheel 的基础安装不包含 adapter 网络依赖. 按需安装
+`butterbot-python[websocket]`、`[napcat]`、`[bilibili]` 或 `[all]`;
+NapCat 和 Bilibili extra 都显式包含 `aiohttp`.
+
 运行完整 Python 检查：
 
 ```bash

@@ -7,13 +7,17 @@ authors = [{ name = "GEYUANwuqi", email = "wuqichan@outlook.com" }]
 license = { file = "LICENSE" }
 requires-python = ">=3.12"
 dependencies = [
-    "aiohttp>=3.14.1",
-    "bilibili-api-python>=17.4.2",
     "click>=8.1",
     "packaging>=24",
     "pydantic>=2.13.4,<3",
     "pyyaml>=6.0",
 ]
+
+[project.optional-dependencies]
+websocket = ["aiohttp>=3.14.1"]
+napcat = ["aiohttp>=3.14.1"]
+bilibili = ["aiohttp>=3.14.1", "bilibili-api-python>=17.4.2"]
+all = ["aiohttp>=3.14.1", "bilibili-api-python>=17.4.2"]
 
 [project.scripts]
 butterbot = "butterbot.cli:main"
@@ -33,6 +37,8 @@ packages = ["butterbot"]
 # 开发依赖
 [dependency-groups]
 dev = [
+    "aiohttp>=3.14.1",
+    "bilibili-api-python>=17.4.2",
     "pre-commit>=4.6.0",
     "pyright>=1.1.411",
     "pytest>=9.1.1",
