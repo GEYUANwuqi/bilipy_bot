@@ -524,6 +524,11 @@ NoneBug 能在隔离和集成模式下断言 matcher、rule、permission、send 
 
 此阶段停止增加 adapter、热重载、市场和新插件控制面。
 
+> 实施进度（2026-08-01）：R0.1 已由 `95e0643` 完成；R0.2 已由
+> `cd544be` 和 `036785a` 完成代码与单元回归。WebSocket/NapCat 的
+> 本地真实协议故障验证仍归 R0.4，不因 R0.2 的状态模型完成而视为
+> 已获得长稳证据。R0.3 仍按“保留一房间一线程、改为受管 worker”执行。
+
 #### R0.1 修复 Source 所有权与状态
 
 1. 为 `BaseSource` 增加生命周期锁和显式状态，至少区分 running 与 cleanup required；
