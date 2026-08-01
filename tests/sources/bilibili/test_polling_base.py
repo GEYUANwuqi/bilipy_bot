@@ -56,3 +56,12 @@ class TestDanmakuConstructorCompatibility:
         """同时提供新旧参数时尽早给出明确错误."""
         with pytest.raises(TypeError, match="room_id.*watch_targets"):
             BiliDanmakuSource(room_id=[100], watch_targets=[200])
+
+    @pytest.mark.parametrize("targets", [[0], [-1], [True], [100, 100]])
+    def test_invalid_or_duplicate_rooms_are_rejected(self, targets) -> None:
+        with pytest.raises(ValueError):
+            BiliDanmakuSource(room_id=targets)
+
+    def test_room_lifecycle_timeouts_must_be_positive(self) -> None:
+        with pytest.raises(ValueError, match="超时"):
+            BiliDanmakuSource(room_id=[100], room_ready_timeout=0)

@@ -90,14 +90,27 @@ async def on_danmaku(event: Event[DanmakuMsgData]) -> None:
 
 为兼容旧代码，构造器仍接受 `room_id=[...]`；不能同时传 `room_id` 和
 `watch_targets`。弹幕源为每个房间创建专用线程和事件循环，并把事件线程安全地
-调度回 BotApp 所在主循环。这是内置适配器实现细节，用户入口仍应使用
-`asyncio.run()` 或 `app.run()`。
+调度回 BotApp 所在主循环。一房间一线程是对上游 WebSocket 监听缺陷的
+稳定性隔离边界，不会被合并成主 loop task。每个受管 worker 统一持有
+thread、loop、connect task 和 ready/error/closed 信号；多房间启动只有在全部
+认证 ready 后才成功，任一失败会回滚所有线程。
+
+`room_ready_timeout` 和 `room_stop_timeout` 分别控制单房间就绪与关闭上限。
+动态房间方法均需要 `await`：
+
+```python
+await source.add_new_room(123456)
+await source.stop_room(123456)
+await source.start_room(123456)
+await source.remove_room(123456)
+```
 
 ## 任务与错误边界
 
 - 两个轮询 Source 拥有自己的 monitor task，停止时取消并等待；
 - 单目标轮询失败会记录日志并继续后续目标/轮次；
-- 弹幕 Source 停止房间时等待 disconnect 和线程退出，超时会记录警告；
+- 弹幕 Source 会消费 connect/publish Future 结果；停止超时会向上抛出并
+  保留 worker 以便再次清理；
 - 平台请求、字段和限流行为由 `bilibili-api-python` 与远端服务决定。
 
 完整示例：

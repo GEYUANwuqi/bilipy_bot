@@ -45,6 +45,8 @@ sources:
     kwarg:
       BiliDanmakuSource:
         room_id: [26498147, 22758221]
+        # room_ready_timeout: 20.0
+        # room_stop_timeout: 10.0
       # example.bilibili-manager 插件需要以下两个 Source:
       # BiliDynamicSource:
       #   watch_targets: [1802011210]

@@ -109,6 +109,8 @@ BiliDanmakuSource(
     debug: bool = False,
     *,
     watch_targets: list[int] | None = None,
+    room_ready_timeout: float = 20.0,
+    room_stop_timeout: float = 10.0,
     uuid: UUID | None = None,
     config_key: str | None = None,
 )
@@ -117,6 +119,11 @@ BiliDanmakuSource(
 轮询 Source 公开 `add_members()`、`remove_members()`、
 `set_poll_interval()`、`watch_targets` 和 `poll_num`。动态源另有 `members`，
 直播源另有 `rooms`。
+
+弹幕 Source 保留一房间一线程的上游兼容边界，但每个房间由受管
+worker 统一持有 thread、event loop、connect task 和 ready/error/closed 信号。
+`start_room()`、`add_new_room()`、`stop_room()` 和 `remove_room()` 是异步方法；
+启动返回时已经认证 ready，停止使用异步跨线程等待，不阻塞主 loop。
 
 ### `BilibiliApi`
 
