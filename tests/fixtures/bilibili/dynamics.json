@@ -1,0 +1,165 @@
+{
+  "items": [
+    {
+      "id_str": "1001",
+      "type": "DYNAMIC_TYPE_AV",
+      "visible": true,
+      "modules": {
+        "module_author": {
+          "mid": 101,
+          "name": "测试用户甲",
+          "face": "https://example.invalid/avatar-a.png",
+          "pub_time": "刚刚",
+          "pub_ts": 1700000001
+        },
+        "module_dynamic": {
+          "desc": {"text": "视频动态正文"},
+          "major": {
+            "archive": {
+              "aid": "2001",
+              "bvid": "BV1TEST00001",
+              "title": "测试视频",
+              "cover": "https://example.invalid/video.png",
+              "desc": "视频简介",
+              "duration_text": "01:23",
+              "stat": {"play": "1.2万", "danmaku": "42"}
+            }
+          }
+        },
+        "module_stat": {
+          "comment": {"count": 3},
+          "like": {"count": 4},
+          "forward": {"count": 5}
+        }
+      }
+    },
+    {
+      "id_str": "1002",
+      "type": "DYNAMIC_TYPE_DRAW",
+      "visible": true,
+      "modules": {
+        "module_author": {
+          "mid": 102,
+          "name": "测试用户乙",
+          "face": "https://example.invalid/avatar-b.png",
+          "pub_time": "1分钟前",
+          "pub_ts": 1700000002
+        },
+        "module_dynamic": {
+          "major": {
+            "opus": {
+              "summary": {"text": "图文动态"},
+              "pics": [
+                {"url": "https://example.invalid/pic-1.png"},
+                {"url": "https://example.invalid/pic-2.png"}
+              ]
+            }
+          }
+        },
+        "module_tag": {"text": "置顶"}
+      }
+    },
+    {
+      "id_str": "1003",
+      "type": "DYNAMIC_TYPE_MUSIC",
+      "visible": true,
+      "modules": {
+        "module_author": {
+          "mid": 103,
+          "name": "测试用户丙",
+          "face": "https://example.invalid/avatar-c.png",
+          "pub_time": "2分钟前",
+          "pub_ts": 1700000003
+        },
+        "module_dynamic": {
+          "desc": {"text": "音乐动态正文"},
+          "major": {
+            "music": {
+              "id": 3001,
+              "title": "测试音乐",
+              "cover": "https://example.invalid/music.png",
+              "label": "测试歌手"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id_str": "1004",
+      "type": "DYNAMIC_TYPE_ARTICLE",
+      "visible": true,
+      "modules": {
+        "module_author": {
+          "mid": 104,
+          "name": "测试用户丁",
+          "face": "https://example.invalid/avatar-d.png",
+          "pub_time": "3分钟前",
+          "pub_ts": 1700000004
+        },
+        "module_dynamic": {
+          "major": {
+            "opus": {
+              "title": "测试专栏",
+              "summary": {"text": "专栏摘要", "has_more": true}
+            }
+          }
+        }
+      }
+    },
+    {
+      "id_str": "1005",
+      "type": "DYNAMIC_TYPE_LIVE_RCMD",
+      "visible": true,
+      "modules": {
+        "module_author": {
+          "mid": 105,
+          "name": "测试用户戊",
+          "face": "https://example.invalid/avatar-e.png",
+          "pub_time": "4分钟前",
+          "pub_ts": 1700000005
+        },
+        "module_dynamic": {
+          "major": {
+            "live_rcmd": {
+              "content": "{\"live_play_info\":{\"room_id\":9001,\"live_status\":1,\"title\":\"测试直播\",\"cover\":\"https://example.invalid/live.png\",\"online\":123,\"area_id\":10,\"area_name\":\"测试分区\",\"parent_area_id\":1,\"parent_area_name\":\"主分区\",\"live_start_time\":1700000000,\"watched_show\":{\"num\":456,\"switch\":true,\"text_small\":\"456人看过\",\"text_large\":\"456人看过\"}}}"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id_str": "1006",
+      "type": "DYNAMIC_TYPE_FORWARD",
+      "visible": true,
+      "modules": {
+        "module_author": {
+          "mid": 106,
+          "name": "测试用户己",
+          "face": "https://example.invalid/avatar-f.png",
+          "pub_time": "5分钟前",
+          "pub_ts": 1700000006
+        },
+        "module_dynamic": {"major": {}}
+      },
+      "orig": {
+        "id_str": "999",
+        "type": "DYNAMIC_TYPE_WORD",
+        "visible": true,
+        "modules": {
+          "module_author": {
+            "mid": 199,
+            "name": "原动态用户",
+            "face": "https://example.invalid/avatar-orig.png",
+            "pub_time": "昨天",
+            "pub_ts": 1699999999
+          },
+          "module_dynamic": {
+            "major": {
+              "opus": {"summary": {"text": "原动态正文"}, "pics": []}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

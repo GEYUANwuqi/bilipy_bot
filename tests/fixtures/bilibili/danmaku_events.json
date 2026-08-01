@@ -1,0 +1,88 @@
+{
+  "message": {
+    "room_display_id": 9001,
+    "room_real_id": 99001,
+    "data": {
+      "info": [
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {"user": {"base": {"face": "https://example.invalid/user.png"}}}],
+        "测试弹幕",
+        [301, "测试观众"],
+        [8, "测试牌", "测试主播", 9001, 0, 0, 0, 0, 0, 0, 0, 1, 201],
+        [25],
+        null,
+        null,
+        null,
+        null,
+        {"ts": 1700000010}
+      ]
+    }
+  },
+  "gift": {
+    "room_display_id": 9001,
+    "room_real_id": 99001,
+    "data": {
+      "data": {
+        "giftId": 1,
+        "giftName": "测试礼物",
+        "num": 2,
+        "price": 100,
+        "total_coin": 200,
+        "coin_type": "gold",
+        "action": "投喂",
+        "uid": 302,
+        "uname": "送礼观众",
+        "face": "https://example.invalid/giver.png",
+        "guard_level": 3,
+        "wealth_level": 4,
+        "receiver_uinfo": {
+          "uid": 201,
+          "base": {
+            "name": "测试主播",
+            "face": "https://example.invalid/anchor.png",
+            "official_info": {"title": "测试认证"}
+          }
+        },
+        "medal_info": {
+          "medal_level": 8,
+          "medal_name": "测试牌",
+          "anchor_roomid": 9001,
+          "anchor_uname": "测试主播",
+          "guard_level": 3,
+          "is_lighted": 1,
+          "target_id": 201
+        },
+        "gift_info": {
+          "img_basic": "https://example.invalid/gift.png",
+          "gif": "https://example.invalid/gift.gif",
+          "webp": "https://example.invalid/gift.webp"
+        },
+        "blind_gift": {
+          "blind_gift_config_id": 10,
+          "original_gift_id": 11,
+          "original_gift_name": "测试盲盒",
+          "original_gift_price": 50,
+          "gift_action": "爆出",
+          "gift_tip_price": 100
+        },
+        "timestamp": 1700000020,
+        "is_first": true,
+        "combo_total_coin": 200
+      }
+    }
+  },
+  "guard": {
+    "room_display_id": 9001,
+    "room_real_id": 99001,
+    "data": {
+      "data": {
+        "uid": 303,
+        "username": "上舰观众",
+        "guard_level": 3,
+        "num": 1,
+        "price": 198000,
+        "gift_id": 10003,
+        "gift_name": "舰长"
+      }
+    }
+  }
+}

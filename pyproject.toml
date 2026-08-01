@@ -72,6 +72,9 @@ line-ending = "lf"
 testpaths = ["tests"]
 pythonpath = ["."]
 
+[tool.coverage.run]
+branch = true
+
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"

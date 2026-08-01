@@ -1,0 +1,36 @@
+{
+  "room_info": {
+    "uid": 201,
+    "room_id": 9001,
+    "title": "测试直播间",
+    "cover": "https://example.invalid/cover.png",
+    "background": "https://example.invalid/background.png",
+    "description": " <b>第一行</b><br> 第二行 &amp; 更多 ",
+    "tags": "聊天,测试",
+    "live_status": 1,
+    "live_start_time": 1700000000,
+    "parent_area_name": "主分区",
+    "parent_area_id": 1,
+    "area_name": "测试分区",
+    "area_id": 10,
+    "keyframe": "https://example.invalid/keyframe.png",
+    "online": 123
+  },
+  "anchor_info": {
+    "base_info": {
+      "uname": "测试主播",
+      "face": "https://example.invalid/anchor.png",
+      "gender": "保密",
+      "official_info": {"title": "测试认证"}
+    },
+    "medal_info": {"medal_name": "测试牌", "fansclub": 20},
+    "live_info": {"level": 5, "score": 100, "upgrade_score": 200}
+  },
+  "watched_show": {
+    "switch": true,
+    "num": 456,
+    "text_small": "456人看过",
+    "text_large": "共有456人看过"
+  },
+  "news_info": {"content": "测试公告", "ctime": "2026-08-01"}
+}
