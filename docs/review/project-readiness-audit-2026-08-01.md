@@ -4,6 +4,7 @@
 > ButterBot 原始审查基线：`dev_main` / `9f920ff2f48e9659ac1e73fc1fff072a1811bc90`
 > R0 整改实现基线：`dev_main` / `a676263`
 > 本次复审代码基线：`dev_main` / `85d3d7c`
+> R1 低风险项实现基线: `dev_main` / `65a3320`
 > NcatBot 基线：本地 `dev/NcatBot-main`，包版本 `5.5.6`
 > NoneBot 基线：官方 `nonebot2` 2.5.0 代码、文档与 CI
 > 文档性质：当前唯一有效的项目审查基线；结论是审查时点的快照，不替代缺陷修复后的回归验收。
@@ -21,6 +22,13 @@
 | R0.4 本地协议、脱敏夹具、独立覆盖率门禁 | 已完成 | `c87e401`、`98fc01d` |
 | R0.5 CLI 优雅停止与失败子进程回收 | 已完成 | `98fc01d` |
 | Bilibili 非法轮询间隔 | 已完成 | `a676263` |
+| R1.7 稳定边界与 clean break 规则 | 已完成 | `45b3959` |
+| R1.1 死代码与无用直接依赖 | 已完成 | `fde452e` |
+| R1.2 日志与 terminal 所有权 | 已完成 | `836fa2c` |
+| R1.3 插件作者公开面 | 已完成 | `ae67b49` |
+| R1.4 运行时注册事务统一 | 已完成 | `ddbbfd0` |
+| R1.5 adapter extras | 已完成 | `65a3320` |
+| R1.6 类型、Lint 与半角标点门禁 | **分阶段待完成** | 本轮未加入高风险或过严门禁 |
 | 二次复审发现的 P1 异步边界 | **待完成** | 插件取消静默期、WebSocket 满队列取消 |
 | 24 小时长稳与真实上游联调 | **待完成** | P1 关闭后执行，仍是有限生产 Beta 的发布阻断项 |
 
@@ -32,8 +40,8 @@
 - **核心事件框架处于 Beta**：Source 停止失败可重试，manager 不再丢弃仍有清理责任的句柄，启动部分失败会回滚。
 - **NapCat 与 WebSocket 已建立有限 Beta 所需的大部分代码门槛**：首连 readiness、失败传播、退化状态、本地真实 socket 故障和 echo/背压均有回归；发送取消竞态仍须先关闭。
 - **Bilibili polling 可进入受控试运行；danmaku 是 Beta 候选**：一房间一线程仍作为上游 WebSocket 缺陷的隔离边界，线程、loop、connect task 与跨线程 Future 已由 worker 管理；尚缺真实上游和 24 小时证据。
-- **插件系统是“契约较成熟、生态尚未验证”**：发现、依赖排序、所有权和回滚设计值得保留，但控制面偏大，超时取消还有竞态，而且真实第三方插件数量不足以证明 API 已稳定。
-- **CLI 已具备最小受管进程语义**：`stop` 发送 `SIGTERM` 并等待生命周期清理，`close` 是兼容别名，`status` 聚合 Source/插件健康；它仍不是完整运维平台。
+- **插件系统是“契约较成熟、生态尚未验证”**：作者公开面和注册事务已经收敛，发现、依赖排序、所有权和回滚设计值得保留；但运行时实现仍大，超时取消还有竞态，而且真实第三方插件数量不足以证明 API 已稳定。
+- **CLI 已具备最小受管进程语义**：`stop` 发送 `SIGTERM` 并等待生命周期清理，`status` 聚合 Source/插件健康；旧 `close` 别名已在 clean break 中删除，它仍不是完整运维平台。
 
 因此，当前版本适合以下范围：
 
@@ -160,12 +168,12 @@ after_failed_connect: False closed
 
 | 验证项 | 整改复审结果 |
 | --- | --- |
-| 完整 pytest | 717 passed |
-| 全包 branch coverage | 83.36% |
+| 完整 pytest | 730 passed |
+| 全包 branch coverage | 84.72% |
 | Bilibili 独立门禁 | 83.96% |
-| NapCat 独立门禁 | 86.98% |
-| WebSocket 独立门禁 | 82.11% |
-| CLI runtime 独立门禁 | 83.98% |
+| NapCat 独立门禁 | 86.96% |
+| WebSocket 独立门禁 | 87.27% |
+| CLI runtime 独立门禁 | 82.51% |
 | Ruff / format / Pyright | 全部通过，Pyright 0 error / 0 warning |
 | `uv build` | wheel 与 sdist 构建成功 |
 
@@ -182,20 +190,20 @@ basic/Ruff 门禁失败。
 
 ### 3.5 第二次复审的当前问题清单
 
-本表只描述 `85d3d7c` 的当前状态，不重复第 5 节保留的 R0 前历史缺陷。
+本表描述 `65a3320` 的当前状态, 不重复第 5 节保留的 R0 前历史缺陷.
 
 | 模块 | 当前判断 | 仍需处理的问题 |
 | --- | --- | --- |
 | `core` | Beta，无已知 P0 | EventBus 默认无界；`supported_types` 定义期检查仍无效；两个模型占位方法仍可能返回 `None` |
-| `app` | Beta，无已知 P0/P1 所有权缺陷 | 内置 Source factory 同时导入两个 adapter，不利于 optional extras |
-| `plugin` | Beta，存在 P1 | 生命周期回调超时后只请求取消，不等待任务静默，`on_start` 与 `on_stop` 可能重叠 |
-| `cli` | Beta | 进程语义已修复；Source 交互配置仍是明确占位，不应宣称完整配置器 |
+| `app` | Beta，无已知 P0/P1 所有权缺陷 | 内置 Source factory 已延迟导入 adapter; 基础 wheel 可独立运行 |
+| `plugin` | Beta，存在 P1 | 作者公开面和注册事务已收敛; 生命周期回调超时后仍可能发生 `on_start` 与 `on_stop` 重叠 |
+| `cli` | Beta | 只保留优雅停止的 `stop`; Source 交互配置仍是明确占位，不应宣称完整配置器 |
 | Bilibili | 受控 Beta 候选 | 一房间一线程已正确保留并受管；真实上游兼容、限流和 24 小时资源曲线仍无证据 |
 | NapCat | 受控 Beta 候选 | 本地协议覆盖已建立；真实 NapCat/QQ 联调仍缺失 |
 | WebSocket | Beta，存在 P1 | 发送中的消息在取消时用 `await queue.put()` 回填，队列被并发填满时取消不能及时结束 |
-| `utils` | 可用但维护面偏大 | 同步 WebSocket、tqdm、ANSI 工具是死代码或重复能力；日志格式仍要求用户显式初始化，logger 命名也未统一 |
-| 测试/CI | 强 | 717 tests 与四项独立 branch 门禁通过；尚无长稳、最小依赖 wheel 和 adapter extra 矩阵 |
-| 文档/API | Beta | 审查基线已统一；普通 API 文档仍出现旧版本号，且没有正式稳定性边界 |
+| `utils` | 可用 | 同步 WebSocket 和 tqdm 包装已删除; `BotApp` managed 模式自动配置 root, arbitrary named logger 无需用户显式初始化 |
+| 测试/CI | 强 | 730 tests、四项独立 branch 门禁、最小 wheel、adapter extra 矩阵和外部插件 smoke 通过; 尚无长稳 |
+| 文档/API | Beta | 已建立 stable/provisional/internal 边界和插件作者 API snapshot; R1.6 风格与类型收敛仍待分批完成 |
 
 第二次复审还直接复现了 WebSocket 满队列取消问题：发送任务取出第一条消息并阻塞
 后，生产者填满容量为 1 的队列；对发送任务调用 `cancel()` 后，任务停在异常处理中的
@@ -446,25 +454,25 @@ NapCat 数据层接近 Beta，网络连接层仍是 Alpha。有限生产使用�
 
 “冗余”不等于文件小，也不等于抽象多。只有重复职责、无调用者、无独立所有权价值或把内部细节误当公开 API 的代码才应删除。
 
-### 6.1 可以尽快删除
+### 6.1 已在 R1.1 删除
 
-| 项目 | 理由 | 前置验证 |
+| 项目 | 原因 | 当前状态 |
 | --- | --- | --- |
-| `SyncWebSocketClient` | 未导出、无调用、无测试，线程安全承诺不成立 | 全仓调用检索后删除 |
-| `logging_config.py` 内自定义 `tqdm` | 未导出、无调用，制造直接依赖 | 删除后跑测试与 wheel smoke |
-| 直接依赖 `requests` | 项目无 import | 检查 lock 中上游依赖后更新锁 |
-| 直接依赖 `pillow` | 项目无 import | 若 Bilibili 可选能力需要，移入 extra |
+| `SyncWebSocketClient` | 未导出、无调用、无测试，线程安全承诺不成立 | 已删除 |
+| `logging_config.py` 内自定义 `tqdm` | 未导出、无调用，制造直接依赖 | 已删除 |
+| 直接依赖 `requests` | 项目无 import | 已删除 |
+| 直接依赖 `pillow` | 项目无 import | 已删除; Bilibili 上游传递依赖只存在对应 extra 中 |
 | 旧审查报告 | 基线和结论互相冲突 | 已由本文替代 |
 
 ### 6.2 应合并或降为内部 API
 
 | 项目 | 建议 |
 | --- | --- |
-| `ExtensionRegistrar` / `PluginRegistrar` | 提取一套私有事务实现；直接删除前者 |
-| `utils/terminal.py` / `cli/terminal.py` | 共享最小平台能力，Click 负责 CLI 样式 |
+| `ExtensionRegistrar` / `PluginRegistrar` | 已提取私有事务实现并删除前者 |
+| `utils/terminal.py` / `cli/terminal.py` | 已收敛为日志私有 ANSI 能力和 CLI terminal 两个职责层 |
 | Bilibili dynamic/live 轮询模板 | 在回归测试完成后提取小型快照发布模板 |
-| `butterbot.plugin.__all__` | 分为稳定作者 API 与 `plugin.internal` 控制面 |
-| CLI `stop` / `close` | `stop` 已统一为优雅终止；R1 直接删除 `close` 别名，不增加暂停/恢复命令 |
+| `butterbot.plugin.__all__` | 已收窄为稳定作者 API, 控制面使用具体模块或 `_internal` |
+| CLI `stop` / `close` | `stop` 已统一为优雅终止; `close` 别名已删除, 不增加暂停/恢复命令 |
 
 ### 6.3 不应为了“减文件”删除
 
@@ -649,7 +657,7 @@ NoneBug 能在隔离和集成模式下断言 matcher、rule、permission、send 
 
 1. 在 R0.1 生命周期修复完成后，让 `stop` 变为优雅停止；
 2. 删除当前 `SIGSTOP` 暂停语义，不新增 `pause/resume`；
-3. R0 暂时保留 `close` 别名，R1 clean break 直接删除；
+3. R0 暂时保留的 `close` 别名已在 R1 clean break 中删除；
 4. 后台启动失败执行完整子进程回收；
 5. 添加真实子进程和信号测试；
 6. 默认脚手架统一为支持插件 builder/factory 的应用工厂。
@@ -748,7 +756,14 @@ R1 不增加 adapter、热重载、市场、暂停/恢复命令或新的插件�
 | 中文文本 | 内容继续使用中文, 项目自有文本的标点统一改为英文 ASCII 半角符号 |
 | 当前兼容 | `3.1.0.dev2` 的 R1 是 clean break, 不保留旧 alias、warning 或转发层; R1 后的新 stable API 才开始遵守 SemVer |
 
+截至 `65a3320`, R1.1-R1.5 和 R1.7 已完成. R1.6 保留为渐进工作流: 本轮不把
+Pyright `standard`、全量半角标点扫描或未经逐条评估的 Ruff 规则加入 CI. 这不是取消
+R1.6, 而是把契约修正、机械文本迁移和门禁启用拆开, 避免一次性引入高噪声改动.
+
 #### R1.1 删除死代码和无用直接依赖
+
+**实施状态: 已完成 (`fde452e`).** 已删除同步 WebSocket、tqdm 包装、`get_log()` 和
+CLI `close`; `requests`、`pillow`、`tqdm` 不再是项目直接依赖.
 
 当前证据：
 
@@ -783,6 +798,9 @@ R1 不增加 adapter、热重载、市场、暂停/恢复命令或新的插件�
 - 不改动 Bilibili 一房间一线程 worker；它是必要的上游隔离，不属于本项冗余。
 
 #### R1.2 收敛 terminal 与日志所有权
+
+**实施状态: 已完成 (`836fa2c`).** `BotApp` 默认自动取得 managed logging lease,
+任意正常传播的命名 logger 使用统一格式; `external` 模式保留宿主日志配置.
 
 两个 terminal 文件不应机械合并成一个大文件。正确边界是：
 
@@ -828,6 +846,9 @@ handler; external 模式从始至终不修改 sentinel; 两个应用共享同配
 
 #### R1.3 缩小 `butterbot.plugin` 稳定公开面
 
+**实施状态: 已完成 (`ae67b49`).** 根门面固定为 14 个插件作者契约与可捕获异常,
+框架控制面迁入具体模块或 `_internal`, API snapshot 已覆盖删除结果.
+
 当前 `butterbot.plugin.__all__` 把插件作者契约、发现模型、bootstrap、manager、状态
 记录和 registrar 收据放在同一门面。延迟导入降低了启动成本，却没有降低兼容承诺。
 
@@ -858,6 +879,9 @@ provider 最多再依赖 `configure`/`ConfigRegistrar`。框架内部控制面�
 
 #### R1.4 删除 `ExtensionRegistrar`，消除重复事务实现
 
+**实施状态: 已完成 (`ddbbfd0`).** `ExtensionRegistrar` 和旧原型文档已删除,
+`PluginRegistrar` 复用私有 `_RuntimeRegistrationTransaction`.
+
 当前不能先删 [extension.py](../../butterbot/plugin/runtime/extension.py) 再处理调用方,
 因为 `PluginRegistrar` 继承它. 但本轮不需要保留公开兼容包装器, 应在同一工作项内
 完成内部提取和旧入口删除:
@@ -880,6 +904,9 @@ provider 最多再依赖 `configure`/`ConfigRegistrar`。框架内部控制面�
 原型文档; 新旧双轨维护成本归零.
 
 #### R1.5 将 adapter 依赖改为 extras，再评估独立发行
+
+**实施状态: 已完成 (`65a3320`).** 基础 wheel 只保留核心依赖; `websocket`、
+`napcat`、`bilibili`、`all` 可独立安装, 缺少 extra 时返回可执行的安装命令.
 
 先做同 wheel extras，不立即拆仓。建议基础依赖只保留 Click、Packaging、Pydantic
 和 PyYAML；可选依赖定义为：
@@ -914,6 +941,10 @@ requests 或 tqdm；安装单个 extra 不要求另一个 adapter；全 extras �
 独立覆盖率门禁。
 
 #### R1.6 分阶段提高 Pyright 与 Ruff 门禁
+
+**实施状态: 分阶段待完成.** 当前继续使用既有低噪声门禁. 本轮没有全仓机械转换
+标点, 没有启用 Pyright `standard`, 也没有一次性启用整组 `RUF`/`PT`/`ASYNC`.
+后续先修正真实类型契约并单独评审, 再逐项提高检查强度.
 
 本次实测把 Pyright 临时切到 `standard` 后有 12 个错误，范围可控：五个 Bilibili
 DTO 的 `from_raw` 返回 `None` 与基类契约不一致、`NapcatMessage.__iter__` 改写
@@ -956,6 +987,9 @@ Ruff 本次实测 `ASYNC` 19 项、`PT` 18 项、`RUF` 1376 项. `RUF` 的大头
 
 #### R1.7 建立 R1 收敛窗口和之后的 SemVer 边界
 
+**实施状态: 已完成 (`45b3959`).** 已新增稳定性文档和 changelog, 本轮删除均采用
+clean break, R1 后由 stable 白名单承接 SemVer 约束.
+
 当前版本是 `3.1.0.dev2`, 还没有需要承担迁移成本的真实外部生态. R1 应被定义成
 一次 clean break 收敛窗口: 只保留最终设计, 不为现有 provisional/内部入口增加
 warning、alias、转发模块或双轨测试. 这项仍应最先落文档, 因为需要先列出本轮哪些
@@ -986,22 +1020,26 @@ R1 验收并发布第一个明确标记 stable 的版本后, 新的 stable 白�
 
 ### R1 执行顺序与总体验收
 
-编号表示需求来源，不等于实施顺序。建议按依赖执行：
+编号表示需求来源, 不等于实施顺序. 实际执行状态如下:
 
-| 顺序 | 工作项 | 原因 |
+| 顺序 | 工作项 | 状态 |
 | ---: | --- | --- |
-| 1 | R1.7 收敛边界 | 先定义本轮直接删除什么、R1 后稳定什么 |
-| 2 | R1.1 死代码/依赖 | 无公开面依赖，风险最低，给后续最小安装打基础 |
-| 3 | R1.2 日志/终端 | 先收敛宿主副作用，再固定 utils 门面 |
-| 4 | R1.3 → R1.4 插件面 | 先划稳定边界，再拆 registrar 继承关系 |
-| 5 | R1.6 类型/Lint | 利用已收窄的 API 修正真实契约，避免重复返工 |
-| 6 | R1.5 extras | 最后改变安装矩阵，并在全部稳定契约上做 wheel 验收 |
+| 1 | R1.7 收敛边界 | 已完成 |
+| 2 | R1.1 死代码/依赖 | 已完成 |
+| 3 | R1.2 日志/terminal | 已完成 |
+| 4 | R1.3 -> R1.4 插件面 | 已完成 |
+| 5 | R1.5 extras | 已完成; 提前完成低风险安装矩阵验收 |
+| 6 | R1.6 类型/Lint | 分阶段待完成; 暂不加入高风险或高噪声规则 |
 
-R1 总体验收: 基础 wheel 与各 extra 可独立安装; 717 项现有回归不得减少语义覆盖;
-Pyright standard、Ruff、半角标点检查、格式、四项独立 branch coverage、文档、build、
-基础/all-extras wheel smoke 和三个外部插件 fixture 全部通过; managed logging 无需
-显式初始化且 arbitrary named logger 使用统一格式; external logging 不修改宿主;
-稳定 API snapshot 进入 CI, 仓库不存在旧兼容入口.
+当前 R1 低风险部分验收: 基础 wheel 与各 extra 可独立安装; 730 项回归、既有
+Pyright/Ruff/格式、四项独立 branch coverage、文档、build、基础/all-extras wheel
+smoke 和三个外部插件 fixture 通过; managed logging 无需显式初始化且 arbitrary
+named logger 使用统一格式; external logging 不修改宿主; 稳定 API snapshot 进入 CI,
+仓库不存在本轮已删除入口的兼容层.
+
+R1 尚不能标记全部完成, 唯一未完成工作项是 R1.6. 它的最终验收仍包括 Pyright
+`standard`、项目自有文本半角标点检查和经逐条评估的 Ruff 规则; 在这些门禁实际启用
+前, 不应把“计划通过”写成“已经通过”.
 
 ### R2：选择产品方向，而不是复制竞品
 
@@ -1021,11 +1059,12 @@ Pyright standard、Ruff、半角标点检查、格式、四项独立 branch cove
 2. ✅ 为 WebSocket/NapCat 增加 readiness 和 fake server；
 3. ✅ 按受管 worker 模型加固 Bilibili danmaku，保留一房间一线程；
 4. ✅ 修 CLI stop/close、状态聚合与失败子进程回收；
-5. **下一步：修插件超时取消竞态与 WebSocket 满队列取消**；
-6. **下一步：给 BotApp/EventBus 建立有界生产默认值**；
-7. **下一步：完成真实 NapCat/Bilibili 故障注入和 24 小时长稳**；
-8. 长稳通过后按 R1.7 → R1.1 → R1.2 → R1.3 → R1.4 → R1.6 → R1.5 收敛；
-9. 最后再评估 adapter 独立发行和产品化功能。
+5. ✅ 完成 R1.7、R1.1-R1.5 的低风险收敛和独立提交;
+6. **下一步: 修插件超时取消竞态与 WebSocket 满队列取消**;
+7. **下一步: 给 BotApp/EventBus 建立有界生产默认值**;
+8. 分批完成 R1.6, 先修真实类型契约, 再启用对应门禁;
+9. 完成真实 NapCat/Bilibili 故障注入和 24 小时长稳;
+10. 最后再评估 adapter 独立发行和产品化功能.
 
 顺序的核心原则是：先让资源“能正确拥有、能知道是否 ready、能可靠关闭”，再扩展功能和生态。
 
@@ -1041,4 +1080,5 @@ ButterBot 的优势不是功能比 NcatBot 多，也不是生态接近 NoneBot�
 
 因此下一步不是继续堆 adapter、插件功能和 CLI 界面，而是先修复 R0.6 的三个
 前置项，再冻结候选版本执行长稳与故障注入。这些证据通过后，ButterBot 才适合
-标记为有明确边界的“有限生产 Beta”；随后按本文展开的顺序进入 R1。
+标记为有明确边界的“有限生产 Beta”. R1 的低风险收敛已经提前完成; 剩余 R1.6
+按“先修真实契约、再提高门禁”的方式渐进推进, 不阻塞上述可靠性前置项.
