@@ -91,7 +91,7 @@ def app(
 
 ::: danger 导入阶段不要启动应用
 如果入口模块在顶层执行 `app.run()`，模块导入会阻塞，CLI 无法登记后台状态，也
-无法可靠执行 `status`、`restart` 和 `close`。
+无法可靠执行 `status`、`restart` 和 `stop`.
 :::
 
 ## 项目配置界面
@@ -212,14 +212,12 @@ butterbot stop
 顺序释放资源。固定等待上限为 10 秒；超时只报告错误，不会强制终止一个已经进入
 正常运行阶段的应用。
 
-## 兼容关闭命令与完整重启
+## 完整重启
 
 ```bash
-butterbot close
 butterbot restart
 ```
 
-`close` 暂时作为 `stop` 的兼容别名，行为和输出一致；新脚本应使用 `stop`。
 旧版本留下的暂停状态会在执行 `stop` 时先恢复，再进入同一优雅停止路径。
 
 `restart` 不做热重载。它等待旧 PID 完全退出，再创建新解释器，并复用状态文件中

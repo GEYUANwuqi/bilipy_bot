@@ -154,11 +154,6 @@ def stop_application() -> int:
     return 0
 
 
-def close_application() -> int:
-    """兼容旧命令；关闭行为与 :func:`stop_application` 完全一致."""
-    return stop_application()
-
-
 def restart_application() -> int:
     """使用原入口和配置完整重启应用."""
     store = _state_store(Path.cwd())
@@ -365,7 +360,6 @@ def _continue_process(pid: int) -> None:
 
 
 __all__ = [
-    "close_application",
     "restart_application",
     "run_application",
     "show_status",

@@ -12,4 +12,8 @@
 
 ### Removed
 
+- 删除未导出且无调用的 `SyncWebSocketClient`.
+- 删除 CLI `close` 别名, 统一使用 `stop` 优雅停止.
+- 删除已被 `logging.getLogger()` 取代的 `get_log()`.
+- 删除未使用的 tqdm 包装器和 Pillow、requests、tqdm 直接依赖.
 - R1 中删除的 provisional API 不提供兼容 alias 或弃用包装器.

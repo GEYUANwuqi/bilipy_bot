@@ -471,6 +471,7 @@ def test_click_command_tree_and_help():
 
 def test_removed_commands_are_rejected():
     assert main(["check"]) == 2
+    assert main(["close"]) == 2
     assert main(["plugins"]) == 2
 
 
@@ -540,7 +541,7 @@ def test_non_debug_reports_cli_error(capsys: pytest.CaptureFixture[str]):
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="依赖 POSIX SIGTERM 进程管理")
-def test_background_full_restart_and_close(tmp_path: Path):
+def test_background_full_restart_and_stop(tmp_path: Path):
     module = tmp_path / "managed_app.py"
     module.write_text(
         "from pathlib import Path\n"
@@ -640,9 +641,9 @@ def test_background_full_restart_and_close(tmp_path: Path):
             "third",
         ]
 
-        closed_again = cli("close")
-        assert closed_again.returncode == 0, closed_again.stderr
-        assert "已停止" in closed_again.stdout
+        stopped_again = cli("stop")
+        assert stopped_again.returncode == 0, stopped_again.stderr
+        assert "已停止" in stopped_again.stdout
         _wait_until_process_exits(third_pid)
     finally:
         state = StateStore(state_file).refresh()

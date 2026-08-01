@@ -15,12 +15,6 @@ from pathlib import Path
 
 from .terminal import Color, set_console_mode
 
-# 尝试从 tqdm 导入进度条类，不强制依赖
-try:
-    from tqdm import tqdm as tqdm_original  # type: ignore[import-untyped]
-except ImportError:
-    tqdm_original = None
-
 __author__ = "Fish-LP <Fish.zh@outlook.com>"
 __status__ = "dev"
 __version__ = "2.1.1-dev"
@@ -152,95 +146,6 @@ LOG_MESSAGE_FORMATS = {
         "CRITICAL": "[%(asctime)s] %(levelname)-8s {%(module)s}[%(filename)s]%(name)s:%(lineno)d ➜ %(message)s",
     },
 }
-
-if tqdm_original is not None:
-
-    class tqdm(tqdm_original):
-        """
-        自定义 tqdm 类的初始化方法
-        通过设置默认参数,确保每次创建 tqdm 进度条时都能应用统一的风格
-
-        参数说明:
-        :param args: 原生 tqdm 支持的非关键字参数（如可迭代对象等）
-        :param kwargs: 原生 tqdm 支持的关键字参数,用于自定义进度条的行为和外观
-            - bar_format (str): 进度条的格式化字符串
-            - ncols (int): 进度条的宽度（以字符为单位）
-            - colour (str): 进度条的颜色
-            - desc (str): 进度条的描述信息
-            - unit (str): 进度条的单位
-            - leave (bool): 进度条完成后是否保留显示
-        """
-
-        _STYLE_MAP = {
-            "BLACK": Color.BLACK,
-            "RED": Color.RED,
-            "GREEN": Color.GREEN,
-            "YELLOW": Color.YELLOW,
-            "BLUE": Color.BLUE,
-            "MAGENTA": Color.MAGENTA,
-            "CYAN": Color.CYAN,
-            "WHITE": Color.WHITE,
-        }
-
-        def __init__(self, *args, **kwargs):
-            # 保存颜色参数以便后续处理
-            self._custom_colour = kwargs.get("colour", "GREEN")
-
-            # 设置默认进度条格式
-            kwargs.setdefault(
-                "bar_format",
-                (
-                    Color.CYAN
-                    + "{desc}"
-                    + Color.RESET
-                    + " "
-                    + Color.WHITE
-                    + "{percentage:3.0f}%"
-                    + Color.RESET
-                    + " "
-                    + Color.GRAY
-                    + "[{n_fmt}]"
-                    + Color.RESET
-                    + Color.WHITE
-                    + "|{bar:20}|"
-                    + Color.RESET
-                    + Color.BLUE
-                    + "[{elapsed}]"
-                    + Color.RESET
-                ),
-            )
-            kwargs.setdefault("ncols", 80)
-            kwargs.setdefault("colour", None)  # 避免基类处理颜色
-
-            super().__init__(*args, **kwargs)
-
-            # 在初始化完成后应用颜色
-            self.colour = self._custom_colour
-
-        @property
-        def colour(self):
-            return self._colour
-
-        @colour.setter
-        def colour(self, color):
-            # 确保颜色值有效
-            if not color:
-                color = "GREEN"
-
-            color_upper = color.upper()
-            valid_color = self._STYLE_MAP.get(color_upper, "GREEN")
-
-            # 保存颜色值
-            self._colour = color_upper
-
-            # 更新描述信息颜色
-            if hasattr(self, "GREEN") and self.desc:
-                self.desc = "%s%s%s" % (
-                    getattr(Color, valid_color),
-                    self.desc,
-                    Color.RESET,
-                )
-
 
 # 日志级别颜色映射
 LOG_LEVEL_TO_COLOR = {
@@ -482,40 +387,3 @@ def setup_logging(console_level: str | None = None) -> None:
         logger.addHandler(file_handler)
         logger.propagate = False
         _managed_handlers.append((logger, file_handler))
-
-
-def get_log(name="Logger"):
-    """
-    获取日志记录器
-    """
-    warnings.warn(
-        "The 'get_log' method is deprecated, use 'logging.getLogger' instead",
-        DeprecationWarning,
-        2,
-    )
-    return logging.getLogger(name)
-
-
-# 示例用法
-if __name__ == "__main__":
-    # 获取不同记录器的日志
-    root_logger = logging.getLogger()
-    db_logger = logging.getLogger("database")
-    net_logger = logging.getLogger("network")
-    sec_logger = logging.getLogger("security")
-    setup_logging("DEBUG")
-
-    print("测试不同级别的日志输出（使用动态格式）：")
-    root_logger.debug("根记录器调试信息")
-    root_logger.info("根记录器普通信息")
-    root_logger.warning("根记录器警告信息")
-    net_logger.error("网络错误: 连接超时")
-    sec_logger.critical("安全警报: 检测到异常登录尝试")
-
-    # 测试不同格式的差异
-    print("\n测试不同日志级别的格式差异：")
-    root_logger.debug("调试信息 - 包含文件名、行号和函数名")
-    root_logger.info("普通信息 - 简洁格式")
-    root_logger.warning("警告信息 - 带警告符号")
-    root_logger.error("错误信息 - 包含文件名和行号")
-    root_logger.critical("严重错误 - 包含模块名和文件名")

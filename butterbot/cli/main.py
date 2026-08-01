@@ -18,7 +18,6 @@ from .errors import CliError
 from .plugin_tools import check_plugins, list_plugins
 from .project import initialize_project
 from .runtime import (
-    close_application,
     restart_application,
     run_application,
     show_status,
@@ -168,12 +167,6 @@ def restart_command() -> int:
 def stop_command() -> int:
     """优雅停止应用进程."""
     return stop_application()
-
-
-@cli.command("close")
-def close_command() -> int:
-    """优雅停止应用进程（stop 的兼容别名）."""
-    return close_application()
 
 
 @cli.command("status")
