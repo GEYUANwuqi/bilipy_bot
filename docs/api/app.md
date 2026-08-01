@@ -21,6 +21,7 @@ BotApp(
     *,
     close_timeout: float = 5.0,
     max_pending_callbacks: int | None = None,
+    logging_mode: Literal["managed", "external"] = "managed",
     source_factory_registry: SourceFactoryRegistry | None = None,
 )
 ```
@@ -34,6 +35,13 @@ BotApp(
 `max_pending_callbacks` 为 `None` 时保持无限并发的兼容行为；设置正整数后，
 EventBus 达到该数量的 in-flight Handler task 时会让 `publish()` 等待容量。
 注入自定义 `ctx` 时 EventBus 已由该上下文持有，不能同时设置此参数。
+
+`logging_mode="managed"` 会在构造时自动管理 root logger, 所有保持
+`propagate=True` 的命名 logger 都使用 ButterBot 的 console/file 格式.
+用户不需要导入或调用 `setup_logging()`. 嵌入已管理日志的宿主时,
+使用 `logging_mode="external"`; 此模式不修改 root logger, 也不创建日志文件.
+并存的 managed 应用共享同配置 handler, 最后一个应用完成
+`close()` 后恢复宿主原有日志状态.
 
 ### 属性
 

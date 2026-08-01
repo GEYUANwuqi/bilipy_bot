@@ -4,7 +4,7 @@ import signal
 import time
 from collections.abc import Coroutine
 from logging import getLogger
-from typing import TYPE_CHECKING, Any, Callable, ParamSpec, overload
+from typing import TYPE_CHECKING, Any, Callable, Literal, ParamSpec, overload
 from uuid import UUID
 
 from butterbot.core.api import BaseApiT
@@ -14,6 +14,7 @@ from butterbot.core.exceptions import ConfigError
 from butterbot.core.source import BaseSource, BaseSourceT
 from butterbot.core.types import BaseType
 from butterbot.plugin.contracts.routing import SourceRef
+from butterbot.utils.logging_config import LoggingLease, setup_logging
 
 if TYPE_CHECKING:
     from butterbot.core.filter import BaseFilter
@@ -55,6 +56,7 @@ class BotApp:
         *,
         close_timeout: float = 5.0,
         max_pending_callbacks: int | None = None,
+        logging_mode: Literal["managed", "external"] = "managed",
         source_factory_registry: SourceFactoryRegistry | None = None,
     ) -> None:
         """初始化 BotApp.
@@ -65,6 +67,8 @@ class BotApp:
             close_timeout: 关闭时等待 in-flight 回调完成的秒数，超时后强制取消
             max_pending_callbacks: 自动创建 EventBus 时可选的回调 task 上限；
                 达到上限后 publish 等待容量。注入 ``ctx`` 时该参数必须为 ``None``
+            logging_mode: ``managed`` 自动管理进程 root logger;
+                ``external`` 保留宿主的日志配置
             source_factory_registry: 可选的 YAML Source 工厂注册表。默认使用内置
                 Bilibili 和 NapCat Source；只在配置包含 ``kwarg`` 时使用
 
@@ -76,19 +80,27 @@ class BotApp:
 
         if ctx is not None and max_pending_callbacks is not None:
             raise ValueError("注入 ctx 时不能同时设置 max_pending_callbacks")
+        if logging_mode not in ("managed", "external"):
+            raise ValueError("logging_mode 必须是 'managed' 或 'external'")
 
-        # 统一注入对象，传递给各 Source
-        self._ctx = ctx or AppContext(
-            config=self._config,
-            event_bus=EventBus(max_pending_callbacks=max_pending_callbacks),
-        )
+        logging_lease = setup_logging() if logging_mode == "managed" else None
+        try:
+            # 统一注入对象，传递给各 Source
+            self._ctx = ctx or AppContext(
+                config=self._config,
+                event_bus=EventBus(max_pending_callbacks=max_pending_callbacks),
+            )
 
-        # 事件源生命周期管理器
-        self._manager = SourceManager(self._ctx)
-        self._plugin_manager: PluginManager | None = None
-        self._add_configured_sources(source_factory_registry)
-
-        self._close_timeout = close_timeout
+            # 事件源生命周期管理器
+            self._manager = SourceManager(self._ctx)
+            self._plugin_manager: PluginManager | None = None
+            self._close_timeout = close_timeout
+            self._logging_lease: LoggingLease | None = logging_lease
+            self._add_configured_sources(source_factory_registry)
+        except BaseException:
+            if logging_lease is not None:
+                logging_lease.close()
+            raise
 
     def _add_configured_sources(
         self,
@@ -532,20 +544,42 @@ class BotApp:
                 raise deferred_error
             raise
 
+        bus_closed_cleanly = False
         try:
             await self.bus.close(timeout=self._close_timeout)
         except BaseException as exc:
             if deferred_error is None:
                 deferred_error = exc
+        else:
+            bus_closed_cleanly = True
 
+        apis_closed_cleanly = False
         try:
             await self.api_ctx.aclose_all()
         except BaseException as exc:
             if deferred_error is None:
                 deferred_error = exc
+        else:
+            apis_closed_cleanly = True
+
+        if bus_closed_cleanly and apis_closed_cleanly:
+            self._release_logging()
 
         if deferred_error is not None:
             raise deferred_error
+
+    def _release_logging(self) -> None:
+        """释放由当前应用持有的进程级日志所有权."""
+        if self._logging_lease is None:
+            return
+        self._logging_lease.close()
+        self._logging_lease = None
+
+    def __del__(self) -> None:
+        try:
+            self._release_logging()
+        except Exception:
+            pass
 
     # ============ 阻塞式入口 ============ #
 

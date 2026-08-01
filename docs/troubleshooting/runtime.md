@@ -81,12 +81,11 @@ CLI 显式指定 `-config` 时必须使用工厂入口注入配置；对象入�
 
 ## Handler 抛错但发布方没有异常
 
-这是 EventBus 的设计：Handler 在独立 task 中执行，异常记录到日志。启用日志：
+这是 EventBus 的设计：Handler 在独立 task 中执行，异常记录到日志。
+`BotApp` 默认已自动启用日志. 需要 debug 级别时在启动前设置:
 
-```python
-from butterbot.utils import setup_logging
-
-setup_logging("DEBUG")
+```bash
+export LOG_LEVEL=DEBUG
 ```
 
 需要把业务失败返回发布方时，使用显式 Future/Queue 协议。

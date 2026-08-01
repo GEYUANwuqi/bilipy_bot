@@ -10,9 +10,7 @@ from logging import getLogger
 from butterbot.app import BotApp, Event
 from butterbot.sources.bilibili import BiliDanmakuSource, DanmakuType
 from butterbot.sources.bilibili.data import LiveRoomData
-from butterbot.utils import setup_logging
 
-setup_logging("DEBUG")
 _log = getLogger("BILIBILI")
 
 

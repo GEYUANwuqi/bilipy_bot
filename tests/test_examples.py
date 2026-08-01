@@ -57,6 +57,13 @@ def test_examples_point_to_existing_config_template() -> None:
         assert "cp examples/config.example.yaml config.yaml" in source
 
 
+def test_bot_app_examples_rely_on_automatic_logging() -> None:
+    """普通 BotApp 示例不应再要求用户显式初始化日志."""
+    for example_file in EXAMPLE_FILES:
+        source = example_file.read_text(encoding="utf-8")
+        assert "setup_logging" not in source
+
+
 def test_napcat_command_example_uses_command_filter() -> None:
     """命令示例应通过订阅过滤器复用项目已有的精确命令匹配."""
     source = (PROJECT_ROOT / "examples" / "napcat_example.py").read_text(

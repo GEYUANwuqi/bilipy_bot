@@ -94,7 +94,7 @@ config = RuntimeConfig.from_yaml(
 
 ## 日志工具使用的环境变量
 
-`butterbot.utils.setup_logging()` 独立读取：
+`BotApp` 的默认 managed 日志模式会自动读取:
 
 | 环境变量 | 默认值 | 作用 |
 | --- | --- | --- |
@@ -105,7 +105,9 @@ config = RuntimeConfig.from_yaml(
 | `BACKUP_COUNT` | `7` | 轮转保留数 |
 | `LOG_REDIRECT_RULES` | `{}` | JSON 格式 logger 重定向规则 |
 
-传给 `setup_logging(console_level=...)` 的值优先于 `LOG_LEVEL`。
+高级用户单独调用 `setup_logging(console_level=...)` 时, 参数值优先于
+`LOG_LEVEL`. 该函数返回 `LoggingLease`, 需要调用 `close()` 或作为
+context manager 使用. 普通 `BotApp` 用户不需要显式调用.
 `BACKUP_COUNT` 不是整数时会记录警告并回退到默认值。
 
 ## Secret 建议

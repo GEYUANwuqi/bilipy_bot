@@ -1,5 +1,5 @@
 from .data_pair import DataPair
-from .logging_config import setup_logging
+from .logging_config import LoggingLease, setup_logging
 from .websocket import (
     AsyncWebSocketClient,
     ConnectionHealth,
@@ -14,6 +14,7 @@ __all__ = [
     "ConnectionHealthState",
     "DataPair",
     "ListenerId",
+    "LoggingLease",
     "MessageType",
     "setup_logging",
 ]

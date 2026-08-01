@@ -1116,7 +1116,8 @@ def test_application_entry_must_accept_bootstrap_dependencies(tmp_path: Path):
         bootstrap_app(config_path, application=invalid_application)
 
 
-def test_application_instance_is_adopted_and_bound(tmp_path: Path):
+@pytest.mark.asyncio
+async def test_application_instance_is_adopted_and_bound(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text("plugins:\n  enabled: false\n", encoding="utf-8")
     app = BotApp(RuntimeConfig())
@@ -1127,3 +1128,4 @@ def test_application_instance_is_adopted_and_bound(tmp_path: Path):
     assert built is app
     assert bootstrap.manager is not None
     assert app._plugin_manager is bootstrap.manager
+    await app.close()

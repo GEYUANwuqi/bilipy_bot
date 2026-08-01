@@ -60,13 +60,19 @@ def run_application(
 
     application_entry = load_application(application_path)
     if config_specified and isinstance(application_entry, BotApp):
+        application_entry._release_logging()
         raise CliError(
             "指定 -config 时必须使用工厂入口注入配置；"
             "请把入口 '%s' 改为 app = BotApp 或 def app(*, config, source_factory_registry)"
             % application_path
         )
     bootstrap = PluginBootstrap(resolved_config_path)
-    app = bootstrap.build(application_entry)
+    try:
+        app = bootstrap.build(application_entry)
+    except BaseException:
+        if isinstance(application_entry, BotApp):
+            application_entry._release_logging()
+        raise
     state = RuntimeState.running(
         pid=os.getpid(),
         debug=debug,
@@ -87,6 +93,7 @@ def run_application(
         exit_code = 0
         return 0
     finally:
+        app._release_logging()
         store.mark_stopped(state.token, exit_code)
 
 

@@ -30,10 +30,7 @@ from butterbot.sources.napcat.events import (
     NapcatPrivateMessageEvent,
 )
 from butterbot.sources.napcat.filters import CommandFilter
-from butterbot.utils import setup_logging
 
-# 设置日志级别
-setup_logging("INFO")
 _log = getLogger("NAPCAT")
 
 
