@@ -193,8 +193,9 @@ stdout 和 stderr 追加到 `.butterbot/butterbot.log`。状态写入
 `.butterbot/runtime.json`，其中记录 PID、应用入口、配置路径、工作目录和时间等
 运行元数据，不保存配置内容、环境变量或 Secret。
 
-后台命令返回成功表示应用入口已经导入且子进程已登记，不代表外部 Source 已通过
-远端健康检查。启动后的连接失败会写入日志。
+后台命令返回成功表示应用入口已经导入且子进程已登记。刚登记时
+`status` 显示 `starting`；进程会定期写入聚合的 Source/插件健康摘要，全部
+就绪后显示 `ready`。摘要不保存配置、Secret 或异常消息。
 
 ## Debug
 
@@ -212,8 +213,10 @@ butterbot status
 butterbot stop
 ```
 
-正在运行或暂停时 `status` 退出码为 `0`；没有记录或已经停止时为 `3`。一个工作
-目录只管理一个进程，管理命令应在启动时的目录执行。
+`status` 会显示 Source ready 数和插件 healthy 数。`starting`、`ready`、
+`stopping` 或暂停时退出码为 `0`；`degraded` 或健康报告超过 5 秒未更新时为
+`1`；没有记录或已经停止时为 `3`。一个工作目录只管理一个进程，管理命令应在
+启动时的目录执行。
 
 `stop` 使用操作系统 `SIGSTOP` 暂停进程，保留 PID、内存和连接。再次执行 `run`
 会发送 `SIGCONT` 并恢复原 PID，不会应用本次命令提供的新入口或配置：

@@ -11,17 +11,18 @@ from pathlib import Path
 
 import click
 
-from butterbot.app import BotApp
+from butterbot.app import AppHealth, BotApp
 
 from .errors import CliError
 from .loader import load_application
-from .state import RuntimeState, StateStore, is_process_alive
+from .state import RuntimeHealth, RuntimeState, StateStore, is_process_alive
 
 _STATE_DIRECTORY = ".butterbot"
 _STATE_FILENAME = "runtime.json"
 _LOG_FILENAME = "butterbot.log"
 _STOP_TIMEOUT = 10.0
 _BACKGROUND_START_TIMEOUT = 5.0
+_HEALTH_STALE_SECONDS = 5.0
 _STATUS_NOT_RUNNING = 3
 _DEFAULT_APPLICATION_PATH = "app.app"
 
@@ -79,8 +80,12 @@ def run_application(
     store.claim(state)
 
     exit_code = 1
+
+    def report_health(health: AppHealth) -> None:
+        store.update_health(state.token, _runtime_health(health))
+
     try:
-        app.run()
+        app.run(health_reporter=report_health)
         exit_code = 0
         return 0
     finally:
@@ -97,8 +102,46 @@ def show_status() -> int:
         click.echo("ButterBot 已暂停（PID %s）" % state.pid)
         return 0
     if is_process_alive(state):
-        click.echo("ButterBot 正在运行（PID %s）" % state.pid)
-        return 0
+        health = state.health
+        source_summary = "Source %s/%s ready" % (
+            health.source_ready,
+            health.source_total,
+        )
+        plugin_summary = "Plugin %s/%s healthy" % (
+            health.plugin_total - health.plugin_unhealthy,
+            health.plugin_total,
+        )
+        if health.state == "starting":
+            if time.time() - health.observed_at > _HEALTH_STALE_SECONDS:
+                click.echo(
+                    "ButterBot 运行降级（PID %s；健康报告已超过 %.0f 秒未更新）"
+                    % (state.pid, _HEALTH_STALE_SECONDS)
+                )
+                return 1
+            click.echo("ButterBot 正在启动（PID %s）" % state.pid)
+            return 0
+        if health.state == "ready":
+            if time.time() - health.observed_at > _HEALTH_STALE_SECONDS:
+                click.echo(
+                    "ButterBot 运行降级（PID %s；%s；%s；"
+                    "失败 HealthReportStale）"
+                    % (state.pid, source_summary, plugin_summary)
+                )
+                return 1
+            click.echo(
+                "ButterBot 已就绪（PID %s；%s；%s）"
+                % (state.pid, source_summary, plugin_summary)
+            )
+            return 0
+        if health.state == "stopping":
+            click.echo("ButterBot 正在停止（PID %s）" % state.pid)
+            return 0
+        failures = ", ".join(health.failure_types) or "无结构化异常"
+        click.echo(
+            "ButterBot 运行降级（PID %s；%s；%s；失败 %s）"
+            % (state.pid, source_summary, plugin_summary, failures)
+        )
+        return 1
     click.echo("ButterBot 已停止")
     return _STATUS_NOT_RUNNING
 
@@ -260,6 +303,32 @@ def _state_store(working_directory: Path) -> StateStore:
 
 def _log_file(working_directory: Path) -> Path:
     return (working_directory / _STATE_DIRECTORY / _LOG_FILENAME).resolve()
+
+
+def _runtime_health(health: AppHealth) -> RuntimeHealth:
+    """把进程内快照压缩为不含配置和异常消息的 CLI 摘要."""
+    source_ready = sum(source.healthy for source in health.sources)
+    source_degraded = sum(not source.healthy for source in health.sources)
+    plugin_unhealthy = sum(not plugin.healthy for plugin in health.plugins)
+    failure_types = tuple(
+        source.last_error_type
+        for source in health.sources
+        if source.last_error_type is not None
+    ) + tuple(
+        failure_type
+        for plugin in health.plugins
+        for failure_type in plugin.failure_types
+    )
+    return RuntimeHealth(
+        state=health.state.value,
+        observed_at=health.observed_at,
+        source_total=len(health.sources),
+        source_ready=source_ready,
+        source_degraded=source_degraded,
+        plugin_total=len(health.plugins),
+        plugin_unhealthy=plugin_unhealthy,
+        failure_types=failure_types,
+    )
 
 
 def _resume_paused_process(store: StateStore, state: RuntimeState) -> int:

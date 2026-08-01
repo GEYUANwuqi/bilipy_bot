@@ -13,9 +13,71 @@ from uuid import uuid4
 
 from .errors import CliError
 
-_STATE_SCHEMA_VERSION = 3
+_STATE_SCHEMA_VERSION = 4
 _LOCK_STALE_SECONDS = 30.0
 _LOCK_WAIT_SECONDS = 2.0
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeHealth:
+    """CLI 状态文件中的非敏感健康摘要."""
+
+    state: Literal["starting", "ready", "degraded", "stopping", "stopped"]
+    observed_at: float
+    source_total: int = 0
+    source_ready: int = 0
+    source_degraded: int = 0
+    plugin_total: int = 0
+    plugin_unhealthy: int = 0
+    failure_types: tuple[str, ...] = ()
+
+    @classmethod
+    def starting(cls) -> RuntimeHealth:
+        return cls(state="starting", observed_at=time.time())
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RuntimeHealth:
+        payload = dict(data)
+        failure_types = payload.get("failure_types", ())
+        if not isinstance(failure_types, (list, tuple)) or not all(
+            isinstance(item, str) and item for item in failure_types
+        ):
+            raise CliError("CLI 健康状态结构无效")
+        payload["failure_types"] = tuple(failure_types)
+        try:
+            health = cls(**payload)
+        except (TypeError, ValueError) as exc:
+            raise CliError("CLI 健康状态结构无效") from exc
+        health._validate()
+        return health
+
+    def _validate(self) -> None:
+        if self.state not in (
+            "starting",
+            "ready",
+            "degraded",
+            "stopping",
+            "stopped",
+        ) or not isinstance(self.observed_at, (int, float)):
+            raise CliError("CLI 健康状态结构无效")
+        counts = (
+            self.source_total,
+            self.source_ready,
+            self.source_degraded,
+            self.plugin_total,
+            self.plugin_unhealthy,
+        )
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in counts
+        ):
+            raise CliError("CLI 健康状态结构无效")
+        if (
+            self.source_ready > self.source_total
+            or self.source_degraded > self.source_total
+            or self.plugin_unhealthy > self.plugin_total
+        ):
+            raise CliError("CLI 健康状态结构无效")
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +95,7 @@ class RuntimeState:
     config_path: str
     log_file: str
     started_at: float
+    health: RuntimeHealth
     stopped_at: float | None = None
     exit_code: int | None = None
 
@@ -59,16 +122,33 @@ class RuntimeState:
             config_path=config_path,
             log_file=log_file,
             started_at=time.time(),
+            health=RuntimeHealth.starting(),
         )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> RuntimeState:
+        payload = dict(data)
+        schema_version = payload.get("schema_version")
+        if schema_version == 3 and "health" not in payload:
+            # v3 只有 PID liveness；升级后保留运行记录，并从
+            # starting 开始等待新进程上报，避免要求用户手删状态文件。
+            migrated_state = (
+                "stopped" if payload.get("status") == "stopped" else "starting"
+            )
+            payload["schema_version"] = _STATE_SCHEMA_VERSION
+            payload["health"] = asdict(
+                RuntimeHealth(state=migrated_state, observed_at=time.time())
+            )
+        elif schema_version != _STATE_SCHEMA_VERSION:
+            raise CliError("不支持的 CLI 状态文件版本: %s" % schema_version)
         try:
-            state = cls(**data)
+            health_data = payload.get("health")
+            if not isinstance(health_data, dict):
+                raise TypeError("health must be a mapping")
+            payload["health"] = RuntimeHealth.from_dict(health_data)
+            state = cls(**payload)
         except (TypeError, ValueError) as exc:
             raise CliError("CLI 状态文件结构无效") from exc
-        if state.schema_version != _STATE_SCHEMA_VERSION:
-            raise CliError("不支持的 CLI 状态文件版本: %s" % state.schema_version)
         state._validate()
         return state
 
@@ -89,6 +169,8 @@ class RuntimeState:
         if self.status not in ("running", "paused", "stopped"):
             raise CliError("CLI 状态文件结构无效")
         if not isinstance(self.started_at, (int, float)):
+            raise CliError("CLI 状态文件结构无效")
+        if not isinstance(self.health, RuntimeHealth):
             raise CliError("CLI 状态文件结构无效")
         if self.stopped_at is not None and not isinstance(
             self.stopped_at, (int, float)
@@ -159,9 +241,29 @@ class StateStore:
                 process_identity=None,
                 stopped_at=time.time(),
                 exit_code=exit_code,
+                health=replace(
+                    state.health,
+                    state="stopped",
+                    observed_at=time.time(),
+                ),
             )
             self._write_unlocked(stopped)
             return stopped
+
+    def update_health(
+        self,
+        token: str,
+        health: RuntimeHealth,
+    ) -> RuntimeState | None:
+        """由当前运行实例原子更新健康摘要."""
+        health._validate()
+        with self._lock():
+            state = self._load_unlocked()
+            if state is None or state.token != token or state.status == "stopped":
+                return state
+            updated = replace(state, health=health)
+            self._write_unlocked(updated)
+            return updated
 
     def refresh(self) -> RuntimeState | None:
         """清理已经退出但仍标记为 running 的陈旧状态."""

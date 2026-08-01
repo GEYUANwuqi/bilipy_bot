@@ -20,7 +20,12 @@ from butterbot.app import BotApp
 from butterbot.cli.errors import CliError
 from butterbot.cli.main import cli, main
 from butterbot.cli.runtime import restart_application, run_application
-from butterbot.cli.state import RuntimeState, StateStore, is_process_alive
+from butterbot.cli.state import (
+    RuntimeHealth,
+    RuntimeState,
+    StateStore,
+    is_process_alive,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PID_PATTERN = re.compile(r"PID (\d+)")
@@ -58,7 +63,7 @@ def test_init_creates_complete_runnable_project(
     assert "butterbot run" in capsys.readouterr().out
 
     monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.setattr(BotApp, "run", lambda self: None)
+    monkeypatch.setattr(BotApp, "run", lambda self, **kwargs: None)
     assert main(["run"]) == 0
 
     assert main(["init"]) == 1
@@ -201,7 +206,7 @@ def test_run_defaults_to_app_app_and_current_config(
     _write_application(tmp_path / "app.py")
     monkeypatch.chdir(tmp_path)
     monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.setattr(BotApp, "run", lambda self: None)
+    monkeypatch.setattr(BotApp, "run", lambda self, **kwargs: None)
 
     assert main(["run"]) == 0
 
@@ -225,7 +230,7 @@ def test_run_accepts_positional_application_path(
     _write_application(tmp_path / "positional_app.py")
     monkeypatch.chdir(tmp_path)
     monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.setattr(BotApp, "run", lambda self: None)
+    monkeypatch.setattr(BotApp, "run", lambda self, **kwargs: None)
 
     assert main(["run", "positional_app.app", "-config", str(config)]) == 0
 
@@ -245,7 +250,7 @@ def test_run_path_option_overrides_positional_and_config(
     _write_application(tmp_path / "override_app.py")
     monkeypatch.chdir(tmp_path)
     monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.setattr(BotApp, "run", lambda self: None)
+    monkeypatch.setattr(BotApp, "run", lambda self, **kwargs: None)
 
     assert (
         main(
@@ -477,6 +482,46 @@ def test_status_without_state(
 
     assert exit_code == 3
     assert "未登记" in capsys.readouterr().out
+
+
+def test_status_reports_aggregated_degraded_health(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    store = StateStore(tmp_path / ".butterbot" / "runtime.json")
+    state = RuntimeState.running(
+        pid=os.getpid(),
+        debug=False,
+        working_directory=str(tmp_path),
+        application_path="app.app",
+        config_path=str(tmp_path / "config.yaml"),
+        log_file=str(tmp_path / ".butterbot" / "butterbot.log"),
+    )
+    store.claim(state)
+    store.update_health(
+        state.token,
+        RuntimeHealth(
+            state="degraded",
+            observed_at=time.time(),
+            source_total=2,
+            source_ready=1,
+            source_degraded=1,
+            plugin_total=1,
+            plugin_unhealthy=1,
+            failure_types=("ConnectionError", "TimeoutError"),
+        ),
+    )
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(["status"])
+
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "运行降级" in output
+    assert "Source 1/2 ready" in output
+    assert "Plugin 0/1 healthy" in output
+    assert "ConnectionError" in output
 
 
 def test_debug_preserves_cli_traceback():
