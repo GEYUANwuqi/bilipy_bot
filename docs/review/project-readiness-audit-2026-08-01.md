@@ -2,18 +2,37 @@
 
 > 审查日期：2026-08-01
 > ButterBot 基线：`dev_main` / `9f920ff2f48e9659ac1e73fc1fff072a1811bc90`
+> 整改复审基线：`dev_main` / `a676263`
 > NcatBot 基线：本地 `dev/NcatBot-main`，包版本 `5.5.6`
 > NoneBot 基线：官方 `nonebot2` 2.5.0 代码、文档与 CI
 > 文档性质：当前唯一有效的项目审查基线；结论是审查时点的快照，不替代缺陷修复后的回归验收。
 
+> **整改状态说明**：第 3～8 节保留原始基线的证据、缺陷描述和竞品比较，
+> 便于追踪“为什么要改”；其中 R0 涉及的问题不能再当作当前代码现状。当前
+> 结论、验收差距和下一步以本节、第 9～11 节的整改复审为准。
+
+### 可靠性整改摘要
+
+| 工作项 | 状态 | 证据 |
+| --- | --- | --- |
+| R0.1 Source 所有权与生命周期 | 已完成 | `95e0643` |
+| R0.2 readiness、health 与状态持久化 | 已完成 | `cd544be`、`036785a` |
+| R0.3 Bilibili 弹幕受管线程 | 已完成 | `7de9b23`；保留一房间一线程 |
+| R0.4 本地协议、脱敏夹具、独立覆盖率门禁 | 已完成 | `c87e401`、`98fc01d` |
+| R0.5 CLI 优雅停止与失败子进程回收 | 已完成 | `98fc01d` |
+| Bilibili 非法轮询间隔 | 已完成 | `a676263` |
+| 24 小时长稳与真实上游联调 | **待完成** | 仍是有限生产 Beta 的发布阻断项 |
+
 ## 1. 结论先行
 
-ButterBot 现在不是“不可用”，但也还不能被描述为“可靠可生产”。更准确的状态是：
+原始审查基线不是“不可用”，但也不能被描述为“可靠可生产”。截至整改复审基线，
+代码层面的 R0.1～R0.5 已完成，更准确的当前状态是：
 
-- **核心事件框架处于 Beta**：事件、订阅、配置、API 注册表、主要应用编排已有较清晰的契约，测试和 CI 基础也不错。
-- **作为完整发行物仍处于 Alpha**：Source 生命周期失败路径存在可复现的资源泄漏；NapCat/WebSocket 会在未连通时报告启动成功；Bilibili 弹幕源的线程、就绪和关闭模型不满足可靠异步服务要求。
+- **核心事件框架处于 Beta**：Source 停止失败可重试，manager 不再丢弃仍有清理责任的句柄，启动部分失败会回滚。
+- **NapCat 与 WebSocket 已达到有限 Beta 的代码门槛**：首连 readiness、失败传播、退化状态、本地真实 socket 故障和 echo/背压均有回归。
+- **Bilibili polling 可进入受控试运行；danmaku 是 Beta 候选**：一房间一线程仍作为上游 WebSocket 缺陷的隔离边界，线程、loop、connect task 与跨线程 Future 已由 worker 管理；尚缺真实上游和 24 小时证据。
 - **插件系统是“契约较成熟、生态尚未验证”**：发现、依赖排序、所有权和回滚设计值得保留，但控制面偏大，超时取消还有竞态，而且真实第三方插件数量不足以证明 API 已稳定。
-- **CLI 是开发者工具，不是运维控制面**：`stop` 实际发送 `SIGSTOP`，`status` 只判断进程存活，配置界面的 Source 部分仍是占位功能。
+- **CLI 已具备最小受管进程语义**：`stop` 发送 `SIGTERM` 并等待生命周期清理，`close` 是兼容别名，`status` 聚合 Source/插件健康；它仍不是完整运维平台。
 
 因此，当前版本适合以下范围：
 
@@ -21,15 +40,16 @@ ButterBot 现在不是“不可用”，但也还不能被描述为“可靠可�
 - 允许人工观察和重启的单进程 NapCat/Bilibili 实验；
 - 可信代码的启动期插件验证。
 
-当前版本不应直接承诺以下能力：
+当前版本仍不应直接承诺以下能力：
 
 - 无人值守长期运行；
-- Source 启动成功即代表外部连接可用；
-- 任意失败后都能无泄漏、可重试地关闭；
-- Bilibili 多房间弹幕的有界异步关闭；
+- 未经真实 NapCat/Bilibili 环境验证的全协议兼容；
+- 24 小时以上无内存、task、thread 或 session 增长；
 - 热更新、不可信插件隔离、稳定插件市场或跨版本插件兼容。
 
-距离“有限生产可用”不是再补几个功能，而是差 **一个专门的可靠性里程碑**；距离 NcatBot 的产品完整度还差 **可靠性里程碑 + 产品化里程碑**；距离 NoneBot 的成熟生态则是长期的契约、工具链和社区积累问题，不应靠复制模块数量来追赶。
+距离“有限生产可用”现在主要差 **24 小时长稳与真实上游验收**，不再是已知
+P0 生命周期设计缺口。距离 NcatBot 的产品完整度仍差产品化工具；距离 NoneBot 的
+成熟生态仍是长期的契约、工具链和社区积累问题，不应靠复制模块数量来追赶。
 
 ## 2. 审查范围、方法与限制
 
@@ -130,6 +150,26 @@ after_failed_connect: False closed
 2. 在 `SourceManager.start()` 前通过公开 API 启动单个 Source，`app.close()` 会清空它但不停止它；
 3. Bilibili 轮询构造器接受 `0` 间隔；
 4. WebSocket `start()` 在连接状态仍为 `disconnected` 时返回，连接失败稍后才异步改变运行状态。
+
+### 3.4 整改复审验证
+
+原始最小复现已转化为正式回归。整改后的完整测试启用 branch coverage，并在 CI
+中分别计算关键 I/O 子系统；不再允许较高的纯模型覆盖率掩盖连接和信号路径。
+
+| 验证项 | 整改复审结果 |
+| --- | --- |
+| 完整 pytest | 717 passed |
+| 全包 branch coverage | 83.31% |
+| Bilibili 独立门禁 | 83.67% |
+| NapCat 独立门禁 | 86.98% |
+| WebSocket 独立门禁 | 82.11% |
+| CLI runtime 独立门禁 | 83.98% |
+| Ruff / format / Pyright | 全部通过，Pyright 0 error / 0 warning |
+
+本地协议回归覆盖首连成功与失败、服务端 close、断线重连、畸形 JSON、echo
+超时、监听器背压和 shutdown；Bilibili DTO/API 通过脱敏 fixture 与 fake API
+离线验证。CLI 使用真实子进程验证 SIGTERM，启动登记超时路径验证
+SIGTERM → bounded wait → SIGKILL → wait。
 
 ## 4. 严重度定义
 
@@ -439,8 +479,8 @@ ButterBot 相对 NcatBot 的缺点：
 
 - adapter 和服务数量少，缺少诊断、测试 harness、调度、权限和可视化工具；
 - 没有热重载，但当前也不应优先实现；
-- CLI 运行/健康管理更弱；
-- 真实连接路径测试明显不足；
+- CLI 的安装、诊断和可视化产品能力仍更弱；
+- 本地协议故障测试已补齐，但真实账号与上游长稳证据仍不足；
 - 插件控制面已经很大，实际生态却远小于 NcatBot。
 
 NcatBot 也不是所有方面都更可靠：其生产 dependencies 中直接包含 Ruff、pre-commit、tox 等开发工具；coverage 配置排除了 NapCat adapter 和 network I/O，恰好避开最高风险路径；CI 没有 coverage/type gate。ButterBot 不应照搬其耦合规模，而应学习它的产品工作流和测试工具。
@@ -465,11 +505,11 @@ NoneBug 能在隔离和集成模式下断言 matcher、rule、permission、send 
 | 代码体量 | 小，约 15.5k 行 | 大，约 38.4k 行 | 核心与生态拆分，不以单仓总量比较 |
 | 平台抽象 | Source + Event + ApiRegistry | 多 adapter/API，但产品耦合较高 | Adapter + Bot + Event + Message + Driver |
 | 插件 | 启动期可信插件、依赖与事务清理 | 插件、mixin、热重载、内置服务 | 成熟 loader、hook、matcher、DI、市场 |
-| 测试门禁 | coverage/type/build/wheel/plugin smoke 强 | 常规测试较多，CI 无 coverage/type gate | 跨 OS/Python/Pydantic，NoneBug 行为测试 |
-| 运维 | 基础进程控制，无真实 health | 安装/诊断/测试 WebUI 更完整 | 成熟 CLI、driver 与部署生态 |
+| 测试门禁 | 关键 I/O 独立 branch coverage/type/build/wheel/plugin smoke | 常规测试较多，CI 无 coverage/type gate | 跨 OS/Python/Pydantic，NoneBug 行为测试 |
+| 运维 | health、优雅停止和受控重启，产品诊断仍少 | 安装/诊断/测试 WebUI 更完整 | 成熟 CLI、driver 与部署生态 |
 | adapter 交付 | 全部随主 wheel | 多数随主包 | 通常独立发行、按需安装 |
 | 生态 | 尚未形成 | 已有实际用户路径 | 成熟社区、商店与大量 adapter/plugin |
-| 当前最大风险 | 生命周期与 I/O 就绪 | 体量、耦合、关键路径门禁 | 复杂度和兼容矩阵成本，但已有规模验证 |
+| 当前最大风险 | 长稳证据、插件取消竞态与真实生态 | 体量、耦合、关键路径门禁 | 复杂度和兼容矩阵成本，但已有规模验证 |
 
 ### 8.2 ButterBot 相对 NoneBot 的优势
 
@@ -485,36 +525,37 @@ NoneBug 能在隔离和集成模式下断言 matcher、rule、permission、send 
 - 没有独立 adapter 发行和兼容矩阵；
 - 没有 NoneBug 等行为测试工具；
 - 跨 OS、Python 下限和依赖兼容范围更窄；
-- 缺少 readiness、health、结构化诊断、部署和长期运行证据；
+- 已有 readiness、health 和最小结构化诊断，但部署与长期运行证据不足；
 - 插件和 adapter 生态还不能验证 API 稳定性。
 
 ## 9. 距离可靠可用还有多远
 
-以下评分是基于本次证据的工程判断，0 表示缺失，3 表示有限场景可靠，5 表示经过广泛生产验证：
+以下评分已经按整改复审证据更新。0 表示缺失，3 表示有限场景可靠，5 表示经过
+广泛生产验证；自动测试提升的是工程可信度，不能替代真实用户规模和长稳时间：
 
 | 层面 | 评分 | 状态 |
 | --- | ---: | --- |
-| 核心事件/数据契约 | 3.5 / 5 | Beta，结构好，需补失败语义 |
-| 应用与 Source 生命周期 | 2 / 5 | Alpha，存在可复现资源所有权丢失 |
+| 核心事件/数据契约 | 4 / 5 | Beta，失败和取消回归较完整 |
+| 应用与 Source 生命周期 | 4 / 5 | Beta，所有权、失败重试和回滚已修复 |
 | 插件契约与发现 | 3 / 5 | Beta，控制面完整但真实生态不足 |
 | 插件异常生命周期 | 2.5 / 5 | Alpha/Beta，取消竞态待修 |
-| CLI 开发体验 | 2.5 / 5 | 可用但不完整 |
-| CLI 运维能力 | 1.5 / 5 | liveness 与命令语义不足 |
+| CLI 开发体验 | 3 / 5 | 默认工厂脚手架与插件流程可用 |
+| CLI 运维能力 | 3 / 5 | health、SIGTERM 与失败子进程回收已覆盖 |
 | NapCat 数据模型 | 3.5 / 5 | 接近 Beta |
-| NapCat 连接层 | 2 / 5 | Alpha，无首连就绪保证 |
-| Bilibili polling | 2 / 5 | Alpha，缺少真实路径测试 |
-| Bilibili danmaku | 1 / 5 | 原型，需加固受管线程生命周期 |
-| 单元测试与 CI | 3.5 / 5 | 门禁较强，但分布不均 |
-| 集成/长稳/故障测试 | 1 / 5 | 基本缺失 |
+| NapCat 连接层 | 3.5 / 5 | 有 readiness 与本地协议故障回归，待真实联调 |
+| Bilibili polling | 3 / 5 | fixture/fake API 与状态转换已覆盖，待长稳 |
+| Bilibili danmaku | 3 / 5 | 受管多线程生命周期已完成，待真实上游长稳 |
+| 单元测试与 CI | 4 / 5 | 关键 I/O 各自启用 80% branch 门禁 |
+| 集成/长稳/故障测试 | 2.5 / 5 | 本地协议与真实信号已补，24 小时长稳缺失 |
 | 生态与兼容证明 | 0.5 / 5 | 尚未形成 |
 
 综合判断：
 
 - **框架内核：Beta**；
-- **NapCat 单一受控部署：完成 R0 后可进入有限生产 Beta**；
-- **Bilibili polling：完成 R0 后可试运行**；
-- **Bilibili danmaku：受管线程生命周期加固前不进入生产范围**；
-- **整个 PyPI 发行物：目前仍是 Alpha**。
+- **NapCat 单一受控部署：有限生产 Beta 候选，需完成真实联调与长稳**；
+- **Bilibili polling：可进入受控试运行**；
+- **Bilibili danmaku：可进入真实上游 Beta 验证，不应直接无人值守发布**；
+- **整个 PyPI 发行物：R0 代码完成，仍保持 Alpha/预发布标签直到长稳门槛通过**。
 
 “追上 NcatBot”不应以 adapter 数量衡量。ButterBot 先完成 R0，再补一轮产品化工具，就能在“小而可靠的通用事件框架”这一定位上形成自己的优势。NoneBot 的差距则包括多年兼容矩阵、行为测试设施、adapter/plugin 生态和用户反馈，无法用一两个版本消除，也没有必要完全消除。
 
@@ -528,7 +569,9 @@ NoneBug 能在隔离和集成模式下断言 matcher、rule、permission、send 
 > `cd544be` 和 `036785a` 完成；R0.3 已由 `7de9b23` 完成，并保留
 > “一房间一线程”作为上游 WebSocket 缺陷的隔离边界。R0.4 已加入本地
 > `aiohttp` 真实 socket 回归、Bilibili 脱敏夹具与 fake API，并启用 branch
-> coverage；独立覆盖率门禁和 24 小时长稳证据仍待补齐。
+> coverage，提交为 `c87e401`；四个关键子系统的独立 80% 门禁随
+> `98fc01d` 进入 CI。R0.5 同样由 `98fc01d` 完成。至此 R0 代码项全部完成，
+> 但 24 小时长稳和真实上游联调尚未完成，因此还不能宣告 R0 发布验收通过。
 
 #### R0.1 修复 Source 所有权与状态
 
@@ -576,17 +619,18 @@ NoneBug 能在隔离和集成模式下断言 matcher、rule、permission、send 
 
 ### R0 验收门槛
 
-只有同时满足以下条件，才建议标记“有限生产 Beta”：
+只有同时满足以下条件，才建议标记“有限生产 Beta”。当前状态如下：
 
-- 本报告 P0 全部关闭，并有回归测试；
-- Source 停止失败后可重试，manager 不丢失资源句柄；
-- NapCat start 成功代表首次连接 ready，失败能同步传播；
-- Bilibili 弹幕不再阻塞主 loop，或从正式支持范围暂时移除；
-- fake server 覆盖连接、重连、半关闭、取消和背压；
-- 关键 I/O 模块行覆盖率至少 80%，并启用 branch coverage 基线；
-- 24 小时长稳运行无 task/thread/session 泄漏或持续内存增长趋势；
-- SIGTERM 关闭在设定预算内完成，日志中无 `Task was destroyed`、未关闭 session 或遗留线程；
-- wheel 安装和两个仓外插件契约测试持续通过。
+- ✅ 本报告 P0 全部关闭，并有回归测试；
+- ✅ Source 停止失败后可重试，manager 不丢失资源句柄；
+- ✅ NapCat start 成功代表首次连接 ready，失败能同步传播；
+- ✅ Bilibili 弹幕线程关闭不再同步阻塞主 loop；
+- ✅ fake server 覆盖连接、重连、服务端关闭、取消和背压；
+- ✅ Bilibili、NapCat、WebSocket、CLI runtime 的 branch coverage 均至少 80%；
+- ⏳ 24 小时长稳运行无 task/thread/session 泄漏或持续内存增长趋势；
+- ✅ 本地真实 SIGTERM 关闭在预算内完成，无遗留受管子进程；
+- ✅ wheel 安装和三个隔离插件契约 fixture 持续通过；
+- ⏳ 使用真实 NapCat 与 Bilibili 上游完成故障注入和协议兼容验收。
 
 ### R1：收敛维护面
 
@@ -612,13 +656,13 @@ NoneBug 能在隔离和集成模式下断言 matcher、rule、permission、send 
 
 ## 11. 建议的执行顺序
 
-1. 修 `BaseSource` / `SourceManager` P0，并添加回归测试；
-2. 为 WebSocket/NapCat 增加 readiness 和 fake server；
-3. 暂停发布或按受管线程模型加固 Bilibili danmaku；
-4. 修插件超时取消竞态；
-5. 修 CLI stop/close 与子进程回收；
-6. 完成 24 小时长稳和故障注入；
-7. 再做依赖、公开 API 和终端工具的收敛；
+1. ✅ 修 `BaseSource` / `SourceManager` P0，并添加回归测试；
+2. ✅ 为 WebSocket/NapCat 增加 readiness 和 fake server；
+3. ✅ 按受管 worker 模型加固 Bilibili danmaku，保留一房间一线程；
+4. ✅ 修 CLI stop/close、状态聚合与失败子进程回收；
+5. **下一步：修插件超时取消竞态**；
+6. **下一步：完成真实 NapCat/Bilibili 故障注入和 24 小时长稳**；
+7. 长稳通过后再做依赖、公开 API 和终端工具的 R1 收敛；
 8. 最后决定 adapter 拆包和产品化功能。
 
 顺序的核心原则是：先让资源“能正确拥有、能知道是否 ready、能可靠关闭”，再扩展功能和生态。
@@ -627,6 +671,11 @@ NoneBug 能在隔离和集成模式下断言 matcher、rule、permission、send 
 
 ButterBot 的优势不是功能比 NcatBot 多，也不是生态接近 NoneBot，而是已经有一个较小、依赖方向清楚、生命周期意识较强、CI 门禁扎实的内核。这个基础值得继续投入。
 
-当前最危险的误区是把 601 tests passed 和 77.90% coverage 等同于生产可靠。测试主要证明纯模型、正常路径和部分回滚逻辑，而真正决定机器人能否长期运行的连接就绪、线程退出、失败重试、信号和背压路径仍然薄弱。
+原始审查中最危险的误区，是把 601 tests passed 和 77.90% coverage 等同于
+生产可靠。整改后，连接就绪、线程退出、失败重试、真实信号和背压已经有直接
+回归，关键 I/O 也有独立门禁；现在不能跨越的证据缺口是 **真实上游兼容与持续
+24 小时的资源稳定性**。
 
-下一版本应是可靠性版本，不是功能版本。完成 R0 后，ButterBot 可以成为一个有明确边界的“小而可靠的事件框架”；继续堆 adapter、插件功能和 CLI 界面，只会让当前的资源泄漏与可观测性缺口更难修复。
+因此下一步不是继续堆 adapter、插件功能和 CLI 界面，而是冻结 R0 候选版本，修复
+插件取消竞态，执行长稳与故障注入。两项证据通过后，ButterBot 才适合标记为有
+明确边界的“有限生产 Beta”；随后进入 R1 收敛冗余维护面。
