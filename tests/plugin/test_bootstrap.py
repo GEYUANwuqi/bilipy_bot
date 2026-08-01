@@ -9,7 +9,7 @@ from typing import Any, ClassVar
 
 import pytest
 
-from butterbot.app import BotApp
+from butterbot.app import BotApp, RuntimeConfig
 from butterbot.core.api import BaseApi
 from butterbot.core.data import BaseDataMixin
 from butterbot.core.event import Event
@@ -1114,3 +1114,16 @@ def test_application_entry_must_accept_bootstrap_dependencies(tmp_path: Path):
 
     with pytest.raises(ConfigError, match="必须接受关键字参数"):
         bootstrap_app(config_path, application=invalid_application)
+
+
+def test_application_instance_is_adopted_and_bound(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("plugins:\n  enabled: false\n", encoding="utf-8")
+    app = BotApp(RuntimeConfig())
+    bootstrap = PluginBootstrap(config_path)
+
+    built = bootstrap.build(app)
+
+    assert built is app
+    assert bootstrap.manager is not None
+    assert app._plugin_manager is bootstrap.manager

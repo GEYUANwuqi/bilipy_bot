@@ -55,17 +55,16 @@ def cli(ctx: click.Context) -> None:
     "-config",
     "--config",
     "config_path",
-    default=Path("config.yaml"),
-    show_default="当前目录的 config.yaml",
+    default=None,
     type=_CONFIG_PATH_TYPE,
-    help="YAML 配置文件",
+    help="YAML 配置文件；指定时必须使用工厂入口",
 )
 @click.option("--background", is_flag=True, help="在后台启动并立即返回")
 @click.option("--debug", is_flag=True, help="保留完整异常信息")
 def run_command(
     application: str | None,
     application_override: str | None,
-    config_path: Path,
+    config_path: Path | None,
     background: bool,
     debug: bool,
 ) -> int:

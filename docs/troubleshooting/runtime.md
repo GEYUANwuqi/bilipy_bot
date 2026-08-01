@@ -15,6 +15,10 @@ cp examples/config.example.yaml config.yaml
 
 不需要外部配置时显式传 `BotApp(RuntimeConfig())`。
 
+CLI 显式指定 `-config` 时必须使用工厂入口注入配置；对象入口
+`app = BotApp()` 只适用于不指定 `-config`、由 `BotApp()` 构造时自动读取
+`config.yaml` 的场景。
+
 ## `ConfigError: 缺少配置键`
 
 确认：

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from butterbot.app import BotApp
 from butterbot.cli.errors import CliError
 from butterbot.cli.loader import load_application, resolve_entrypoint
 
@@ -41,6 +42,22 @@ def test_load_application_without_calling_it(
     assert callable(application)
 
 
+def test_load_application_accepts_botapp_instance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _write_module(
+        tmp_path,
+        "from butterbot.app import BotApp, RuntimeConfig\n"
+        "app = BotApp(RuntimeConfig())\n",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    application = load_application("test_cli_app.app")
+
+    assert isinstance(application, BotApp)
+
+
 def test_load_application_rejects_constructed_object(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -48,7 +65,7 @@ def test_load_application_rejects_constructed_object(
     _write_module(tmp_path, "app = object()\n")
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    with pytest.raises(CliError, match="必须可调用"):
+    with pytest.raises(CliError, match="必须是 BotApp 实例或可调用工厂"):
         load_application("test_cli_app.app")
 
 

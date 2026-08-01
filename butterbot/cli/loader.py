@@ -10,12 +10,21 @@ from butterbot.app import BotApp
 
 from .errors import CliError
 
+ApplicationEntry = BotApp | Callable[..., BotApp]
 
-def load_application(entrypoint: str) -> Callable[..., BotApp]:
-    """加载应用入口，但把配置注入和应用构造留给 bootstrap."""
+
+def load_application(entrypoint: str) -> ApplicationEntry:
+    """加载应用入口，但把配置注入和应用构造留给 bootstrap.
+
+    支持两种入口：
+    - 已构造的 ``BotApp`` 实例（例如 ``app = BotApp()``）；
+    - 同步工厂，接受 ``config`` 与 ``source_factory_registry`` 并返回 ``BotApp``。
+    """
     target = resolve_entrypoint(entrypoint)
+    if isinstance(target, BotApp):
+        return target
     if not callable(target):
-        raise CliError("应用入口 '%s' 必须可调用" % entrypoint)
+        raise CliError("应用入口 '%s' 必须是 BotApp 实例或可调用工厂" % entrypoint)
     return cast(Callable[..., BotApp], target)
 
 
@@ -46,4 +55,4 @@ def resolve_entrypoint(entrypoint: str) -> Any:
     return target
 
 
-__all__ = ["load_application", "resolve_entrypoint"]
+__all__ = ["ApplicationEntry", "load_application", "resolve_entrypoint"]

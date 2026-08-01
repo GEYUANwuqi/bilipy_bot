@@ -43,13 +43,18 @@ app.run()
 `run()` 自己调用 `asyncio.run()`，适合没有现成事件循环的顶层脚本。不要在
 Jupyter、ASGI 服务或其他已运行的协程中调用它。
 
-部署入口也可以使用 [ButterBot 命令行](./cli.md)。CLI 构造 `BotApp` 后仍调用同一个
-`BotApp.run()`，不会改变关闭顺序。
+部署入口也可以使用 [ButterBot 命令行](./cli.md)。CLI 采用或构造 `BotApp` 后仍
+调用同一个 `BotApp.run()`，不会改变关闭顺序。
 
 ::: warning CLI 入口不能在导入时运行
 单 Bot 项目推荐由 CLI 管理进程。供 CLI 导入的 `app.py` 只提供应用入口，不要在
 模块顶层调用 `app.run()`。
 :::
+
+`butterbot init` 生成的 `app = BotApp()` 就是这种对象入口：不指定 `-config` 时，
+配置由 `BotApp()` 构造时的 `RuntimeConfig.from_yaml()` 读取 `config.yaml`，CLI
+直接采用该实例，只在其上绑定插件控制面并调用同一个 `BotApp.run()`。显式指定
+`-config` 时必须改用工厂入口（见 [命令行](./cli.md)）。
 
 如果选择直接执行 Python 文件，而不是把它作为 CLI 入口，使用主模块保护：
 

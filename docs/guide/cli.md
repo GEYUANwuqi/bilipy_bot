@@ -57,7 +57,28 @@ butterbot run \
 工作目录解析；相对 `plugins.plugin_path` 则以该 YAML 所在目录解析。`--path` 和
 `--config` 也是等价写法。
 
-`app.py` 提供一个同步应用入口。`butterbot init` 生成的版本如下：
+`app.py` 提供应用入口，入口选择遵循固定约定：
+
+- 显式指定 `-config` 时，必须使用工厂入口注入配置。CLI 会把解析好的
+  `RuntimeConfig` 和 Source 注册表作为关键字参数传给工厂；
+- 不指定 `-config` 时，推荐使用对象入口 `app = BotApp()`，配置由 `BotApp()`
+  构造时的 `RuntimeConfig.from_yaml()` 读取当前工作目录的 `config.yaml`，
+  CLI 只负责绑定插件控制面。
+
+`butterbot init` 默认生成对象入口：
+
+```python
+from butterbot.app import BotApp
+
+app = BotApp()
+```
+
+对象入口在模块导入时已经读取当前工作目录的 `config.yaml`，因此显式给出
+`-config`（即使路径就是 `config.yaml`）时 CLI 会直接报错，要求改用工厂入口。
+示例插件的 Handler 仍会在 `app.start()` 时注册。
+
+工厂入口（指定 `-config` 时必选；插件需要在 `RuntimeConfig` 解析前注册配置
+builder，或在配置 Source 构造前注册 Source factory 时也必须使用）：
 
 ```python
 from butterbot.app import BotApp, RuntimeConfig, SourceFactoryRegistry
@@ -74,9 +95,9 @@ def app(
     )
 ```
 
-CLI 无论插件总开关是否启用，都通过同一入口注入同一份 YAML 配置。入口必须接受
-`config` 和 `source_factory_registry` 两个关键字参数，并返回 `BotApp`。不要在模块
-导入时调用 `app.run()`；运行与关闭生命周期由 CLI 持有。
+最简工厂也可以直接引用类本身：`app = BotApp`。工厂入口必须接受 `config` 和
+`source_factory_registry` 两个关键字参数，并返回 `BotApp`。不要在模块导入时调用
+`app.run()`；运行与关闭生命周期由 CLI 持有。
 
 ::: danger 导入阶段不要启动应用
 如果入口模块在顶层执行 `app.run()`，模块导入会阻塞，CLI 无法登记后台状态，也

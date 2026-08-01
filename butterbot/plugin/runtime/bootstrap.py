@@ -24,7 +24,7 @@ from butterbot.plugin.errors import PluginRegistrationError
 
 from .manager import PluginManager
 
-ApplicationEntry = Callable[..., BotApp]
+ApplicationEntry = BotApp | Callable[..., BotApp]
 
 
 class PluginBootstrap:
@@ -114,11 +114,15 @@ class PluginBootstrap:
                 resolved_data,
                 builder_registry=builder_registry,
             )
-            app = _call_application(
-                application,
-                config=config,
-                source_factory_registry=factory_registry,
-            )
+            if isinstance(application, BotApp):
+                # 对象入口：实例已在导入阶段自带配置，CLI 只负责绑定插件控制面。
+                app = application
+            else:
+                app = _call_application(
+                    application,
+                    config=config,
+                    source_factory_registry=factory_registry,
+                )
         except BaseException:
             manager.abort_before_bind()
             raise

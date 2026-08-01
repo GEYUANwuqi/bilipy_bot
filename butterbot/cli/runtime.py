@@ -11,6 +11,8 @@ from pathlib import Path
 
 import click
 
+from butterbot.app import BotApp
+
 from .errors import CliError
 from .loader import load_application
 from .state import RuntimeState, StateStore, is_process_alive
@@ -28,16 +30,21 @@ def run_application(
     *,
     application: str | None,
     application_override: str | None,
-    config_path: Path,
+    config_path: Path | None,
     background: bool,
     debug: bool,
 ) -> int:
-    """构建应用，并在前台运行或委托给后台子进程."""
+    """构建应用，并在前台运行或委托给后台子进程.
+
+    约定：显式指定 ``-config`` 时必须使用工厂入口注入配置；不指定时推荐
+    对象入口 ``app = BotApp()``，配置由 ``BotApp()`` 构造时读取 ``config.yaml``。
+    """
     from butterbot.plugin import PluginBootstrap
 
     working_directory = Path.cwd()
     application_path = application_override or application or _DEFAULT_APPLICATION_PATH
-    resolved_config_path = config_path.resolve()
+    config_specified = config_path is not None
+    resolved_config_path = (config_path or Path("config.yaml")).resolve()
     store = _state_store(working_directory)
     existing = store.refresh()
     if existing is not None and existing.status == "paused":
@@ -45,7 +52,7 @@ def run_application(
     if background:
         pid = _spawn_background(
             application_path=application_path,
-            config_path=resolved_config_path,
+            config_path=resolved_config_path if config_specified else None,
             debug=debug,
             working_directory=working_directory,
         )
@@ -53,6 +60,12 @@ def run_application(
         return 0
 
     application_entry = load_application(application_path)
+    if config_specified and isinstance(application_entry, BotApp):
+        raise CliError(
+            "指定 -config 时必须使用工厂入口注入配置；"
+            "请把入口 '%s' 改为 app = BotApp 或 def app(*, config, source_factory_registry)"
+            % application_path
+        )
     bootstrap = PluginBootstrap(resolved_config_path)
     app = bootstrap.build(application_entry)
     state = RuntimeState.running(
@@ -137,9 +150,14 @@ def restart_application() -> int:
         _stop_managed_process(store)
 
     # 必须等旧 PID 完全消失后才创建新解释器，不复用任何运行时对象。
+    default_config_path = (Path(state.working_directory) / "config.yaml").resolve()
     pid = _spawn_background(
         application_path=state.application_path,
-        config_path=Path(state.config_path),
+        config_path=(
+            None
+            if Path(state.config_path).resolve() == default_config_path
+            else Path(state.config_path)
+        ),
         debug=state.debug,
         working_directory=Path(state.working_directory),
     )
@@ -176,7 +194,7 @@ def _stop_managed_process(store: StateStore) -> RuntimeState:
 def _spawn_background(
     *,
     application_path: str,
-    config_path: Path,
+    config_path: Path | None,
     debug: bool,
     working_directory: Path,
 ) -> int:
@@ -192,9 +210,9 @@ def _spawn_background(
         "run",
         "-path",
         application_path,
-        "-config",
-        str(config_path),
     ]
+    if config_path is not None:
+        command.extend(["-config", str(config_path)])
     if debug:
         command.append("--debug")
 

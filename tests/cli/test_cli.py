@@ -19,7 +19,8 @@ from butterbot import __version__
 from butterbot.app import BotApp
 from butterbot.cli.errors import CliError
 from butterbot.cli.main import cli, main
-from butterbot.cli.state import StateStore, is_process_alive
+from butterbot.cli.runtime import restart_application, run_application
+from butterbot.cli.state import RuntimeState, StateStore, is_process_alive
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PID_PATTERN = re.compile(r"PID (\d+)")
@@ -46,7 +47,7 @@ def test_init_creates_complete_runnable_project(
     assert config["plugins"]["plugin_list"] == ["HelloPlugin"]
     assert config["plugins"]["plugin_path"] == "./plugins"
     assert config["sources"] == {}
-    assert "def app(" in (tmp_path / "app.py").read_text(encoding="utf-8")
+    assert "app = BotApp()" in (tmp_path / "app.py").read_text(encoding="utf-8")
     plugin_root = tmp_path / "plugins" / "example.hello"
     assert 'plugin_name = "HelloPlugin"' in plugin_root.joinpath(
         "plugin.toml"
@@ -62,6 +63,124 @@ def test_init_creates_complete_runnable_project(
 
     assert main(["init"]) == 1
     assert "拒绝覆盖" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("config_name", ["other.yaml", "config.yaml"])
+def test_run_object_entry_rejects_config_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    config_name: str,
+):
+    (tmp_path / "config.yaml").write_text(
+        "generation: default\nplugins:\n  enabled: false\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / config_name
+    if config_name != "config.yaml":
+        config_path.write_text(
+            "generation: other\nplugins:\n  enabled: false\n",
+            encoding="utf-8",
+        )
+    (tmp_path / "app.py").write_text(
+        "from butterbot.app import BotApp\napp = BotApp()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with pytest.raises(CliError, match="工厂入口"):
+        main(["run", "-config", str(config_path), "--debug"])
+
+
+def test_background_spawn_omits_config_when_not_specified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    (tmp_path / "config.yaml").write_text(
+        "plugins:\n  enabled: false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "butterbot.cli.runtime._spawn_background",
+        lambda **kwargs: captured.update(kwargs) or 42,
+    )
+
+    assert (
+        run_application(
+            application=None,
+            application_override=None,
+            config_path=None,
+            background=True,
+            debug=False,
+        )
+        == 0
+    )
+
+    assert captured["config_path"] is None
+
+
+def test_restart_spawn_omits_config_when_state_used_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = StateStore(tmp_path / ".butterbot" / "runtime.json")
+    store.claim(
+        RuntimeState.running(
+            pid=os.getpid(),
+            debug=False,
+            working_directory=str(tmp_path),
+            application_path="app.app",
+            config_path=str((tmp_path / "config.yaml").resolve()),
+            log_file=str(tmp_path / ".butterbot" / "butterbot.log"),
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "butterbot.cli.runtime._spawn_background",
+        lambda **kwargs: captured.update(kwargs) or 99,
+    )
+    monkeypatch.setattr(
+        "butterbot.cli.runtime._stop_managed_process",
+        lambda store: None,
+    )
+
+    assert restart_application() == 0
+
+    assert captured["config_path"] is None
+
+
+def test_restart_spawn_passes_custom_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = StateStore(tmp_path / ".butterbot" / "runtime.json")
+    store.claim(
+        RuntimeState.running(
+            pid=os.getpid(),
+            debug=False,
+            working_directory=str(tmp_path),
+            application_path="app.app",
+            config_path=str((tmp_path / "deploy.yaml").resolve()),
+            log_file=str(tmp_path / ".butterbot" / "butterbot.log"),
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "butterbot.cli.runtime._spawn_background",
+        lambda **kwargs: captured.update(kwargs) or 99,
+    )
+    monkeypatch.setattr(
+        "butterbot.cli.runtime._stop_managed_process",
+        lambda store: None,
+    )
+
+    assert restart_application() == 0
+
+    assert captured["config_path"] == (tmp_path / "deploy.yaml").resolve()
 
 
 def test_version_prints_exact_installed_version() -> None:
