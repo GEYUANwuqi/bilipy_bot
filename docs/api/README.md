@@ -11,6 +11,7 @@ title: API 参考
 - [核心扩展 API](./core.md)：`butterbot.core` 及其子模块
 - [内置事件源 API](./builtin-sources.md)
 - [异常参考](./exceptions.md)
+- [API 稳定性](./stability.md)
 
 ## 导入约定
 
@@ -32,11 +33,5 @@ from butterbot.core.source import BaseSource
 
 ## 稳定性说明
 
-项目版本为 `3.0.2`。仓库没有单独的 API 稳定性分级；因此本文只陈述当前行为，
-不推测未来兼容周期。升级前应查看 Git 变更和测试，并关注：
-
-- 导入路径；
-- 方法签名；
-- `BaseType` 状态字符串；
-- Data 模型公开字段；
-- 生命周期和异常传播。
+项目当前处于 `3.1.0.dev2` 的 R1 clean-break 收敛窗口. Stable、provisional 和
+internal 的边界以及 R1 后的 SemVer 规则见 [API 稳定性](./stability.md).
