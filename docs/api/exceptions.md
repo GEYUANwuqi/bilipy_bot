@@ -15,6 +15,7 @@ title: 异常参考
 | `LifecycleError` | `RuntimeError` | 在已关闭 manager 上添加/启动 Source |
 | `SourceError` | `ButterError` | Source 通用错误、未注册 Source |
 | `SourceStartError` | `SourceError` | 批量启动一个或多个 Source 失败 |
+| `SourceStopError` | `SourceError` | 批量停止一个或多个 Source 失败 |
 | `ApiError` | `ButterError` | 扩展可使用的 API 领域错误 |
 | `SubscriptionError` | `ValueError` | 状态规则没有匹配任何具体状态 |
 
@@ -30,6 +31,21 @@ except SourceStartError as exc:
 
 `failures: dict[str, BaseException]` 保留事件源描述到原始异常对象的映射。抛出前
 已成功启动的 Source 已回滚。
+
+## `SourceStopError`
+
+```python
+try:
+    await app.close()
+except SourceStopError as exc:
+    for source_name, cause in exc.failures.items():
+        print(source_name, repr(cause))
+    # 处理瞬时故障后可以再次 await app.close()
+```
+
+`failures` 保留每个停止失败的原始异常。失败 Source 仍由 manager 持有，
+`cleanup_required` 保持为 true；`BotApp.close()` 此时不会关闭 EventBus 和 API，
+以便 Source 依赖它们重试清理。
 
 ## 不属于 ButterError 的错误
 
@@ -49,6 +65,6 @@ except SourceStartError as exc:
 
 - Handler 异常由 EventBus 记录，不传播给 `publish()`；
 - API 关闭异常由 registry 记录并忽略；
-- Source 启动异常会聚合；
+- Source 启动和批量停止异常会分别聚合；
 - 内置轮询的单目标运行异常被记录后继续；
 - `CancelledError` 在清理完成后可能继续传播。

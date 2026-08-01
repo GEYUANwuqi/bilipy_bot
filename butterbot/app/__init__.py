@@ -11,6 +11,7 @@ from butterbot.core.exceptions import (
     LifecycleError,
     SourceError,
     SourceStartError,
+    SourceStopError,
     SubscriptionError,
 )
 from butterbot.core.filter import AndFilter, BaseFilter, OrFilter
@@ -57,5 +58,6 @@ __all__ = [
     "LifecycleError",
     "SourceError",
     "SourceStartError",
+    "SourceStopError",
     "SubscriptionError",
 ]

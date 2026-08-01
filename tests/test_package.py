@@ -17,12 +17,19 @@ class TestPackage:
 
     def test_app_facade_importable(self):
         """公开门面 butterbot.app 的核心导出可用."""
-        from butterbot.app import BotApp, Event, RuntimeConfig, SourceFactoryRegistry
+        from butterbot.app import (
+            BotApp,
+            Event,
+            RuntimeConfig,
+            SourceFactoryRegistry,
+            SourceStopError,
+        )
 
         assert BotApp is not None
         assert Event is not None
         assert RuntimeConfig is not None
         assert SourceFactoryRegistry is not None
+        assert SourceStopError is not None
 
     def test_builtin_sources_importable(self):
         """内置事件源包可通过常规包路径导入."""

@@ -450,19 +450,44 @@ class BotApp:
            先排空回调，回调里才不会用到下一步已经关掉的 API。
         4. ``ApiRegistry.aclose_all()`` — 释放各 API 持有的连接与后台任务。
 
-        任一步因取消而抛出时，后续步骤仍会通过嵌套 ``finally`` 获得清理机会。
+        插件关闭失败会被延迟到 Source、EventBus 与 API 完成清理后传播。
+        Source 关闭失败时不会继续关闭 EventBus 与 API，因为失败 Source 仍由
+        manager 持有并可能依赖这些对象完成下一次清理；调用方修正瞬时故障后可
+        再次调用 ``close()``。Source 全部停止后，EventBus 即使关闭失败也仍会
+        尝试释放 API。
         """
-        try:
-            if self._plugin_manager is not None:
-                await self._plugin_manager.aclose()
-        finally:
+        deferred_error: BaseException | None = None
+        if self._plugin_manager is not None:
             try:
-                await self._manager.close()
-            finally:
-                try:
-                    await self.bus.close(timeout=self._close_timeout)
-                finally:
-                    await self.api_ctx.aclose_all()
+                await self._plugin_manager.aclose()
+            except BaseException as exc:
+                deferred_error = exc
+
+        try:
+            await self._manager.close()
+        except BaseException as manager_error:
+            if isinstance(deferred_error, asyncio.CancelledError):
+                deferred_error.add_note(
+                    "SourceManager 关闭同时失败: %s: %s"
+                    % (type(manager_error).__name__, manager_error)
+                )
+                raise deferred_error
+            raise
+
+        try:
+            await self.bus.close(timeout=self._close_timeout)
+        except BaseException as exc:
+            if deferred_error is None:
+                deferred_error = exc
+
+        try:
+            await self.api_ctx.aclose_all()
+        except BaseException as exc:
+            if deferred_error is None:
+                deferred_error = exc
+
+        if deferred_error is not None:
+            raise deferred_error
 
     # ============ 阻塞式入口 ============ #
 

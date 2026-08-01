@@ -47,8 +47,9 @@ class SourceError(ButterError):
 class SourceStartError(SourceError):
     """一个或多个事件源启动失败.
 
-    由 ``SourceManager.start()`` 在批量启动结束后抛出。抛出前所有已成功启动的
-    事件源都已被回滚（stop），因此捕获到该异常时应用处于"未启动"状态。
+    由 ``SourceManager.start()`` 在批量启动结束后抛出。抛出前会尝试回滚所有
+    已成功启动的事件源；回滚失败也会加入 ``failures``，且 Source 仍由 manager
+    持有以便重试清理。
 
     Attributes:
         failures: ``{事件源描述: 原始异常}``，保留每个失败源的真实异常对象
@@ -65,6 +66,24 @@ class SourceStartError(SourceError):
             "%s: %s" % (name, exc) for name, exc in self.failures.items()
         )
         super().__init__("以下事件源启动失败: %s" % detail)
+
+
+class SourceStopError(SourceError):
+    """一个或多个事件源停止失败.
+
+    失败的 Source 仍由 ``SourceManager`` 持有，调用方可以在修正瞬时故障后
+    再次调用 ``stop()`` 或 ``close()`` 重试清理。
+
+    Attributes:
+        failures: ``{事件源描述: 原始异常}``
+    """
+
+    def __init__(self, failures: Mapping[str, BaseException]) -> None:
+        self.failures: dict[str, BaseException] = dict(failures)
+        detail = "; ".join(
+            "%s: %s" % (name, exc) for name, exc in self.failures.items()
+        )
+        super().__init__("以下事件源停止失败: %s" % detail)
 
 
 class ApiError(ButterError):
@@ -86,5 +105,6 @@ __all__ = [
     "LifecycleError",
     "SourceError",
     "SourceStartError",
+    "SourceStopError",
     "SubscriptionError",
 ]

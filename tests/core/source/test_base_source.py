@@ -4,7 +4,8 @@ import asyncio
 
 import pytest
 
-from butterbot.core.source import BaseSource
+from butterbot.core.exceptions import LifecycleError
+from butterbot.core.source import BaseSource, SourceState
 from butterbot.core.types import BaseType
 
 
@@ -50,6 +51,8 @@ class TestBaseSourceLifecycle:
         source = StubSource()
         await source.start()
         assert source.running
+        assert source.state is SourceState.RUNNING
+        assert source.cleanup_required
         assert source.start_calls == 1
 
     @pytest.mark.asyncio
@@ -67,6 +70,8 @@ class TestBaseSourceLifecycle:
         await source.start()
         await source.stop()
         assert not source.running
+        assert source.state is SourceState.STOPPED
+        assert not source.cleanup_required
         assert source.stop_calls == 1
 
     @pytest.mark.asyncio
@@ -90,6 +95,9 @@ class TestBaseSourceStartFailure:
             await source.start()
 
         assert not source.running
+        assert source.state is SourceState.STOPPED
+        assert not source.cleanup_required
+        assert source.stop_calls == 1
 
     @pytest.mark.asyncio
     async def test_start_failure_propagates_original_exception(self):
@@ -127,3 +135,107 @@ class TestBaseSourceStartFailure:
         await source.start()
         assert source.running
         assert source.start_calls == 2
+
+
+class TestBaseSourceStopFailure:
+    """停止失败必须保留清理责任并允许重试."""
+
+    @pytest.mark.asyncio
+    async def test_stop_failure_can_be_retried(self):
+        source = StubSource()
+        await source.start()
+        source.stop_exception = RuntimeError("第一次清理失败")
+
+        with pytest.raises(RuntimeError, match="第一次清理失败"):
+            await source.stop()
+
+        assert not source.running
+        assert source.state is SourceState.STOP_FAILED
+        assert source.cleanup_required
+        assert source.stop_calls == 1
+
+        source.stop_exception = None
+        await source.stop()
+
+        assert source.state is SourceState.STOPPED
+        assert not source.cleanup_required
+        assert source.stop_calls == 2
+
+    @pytest.mark.asyncio
+    async def test_start_is_rejected_until_failed_cleanup_succeeds(self):
+        source = StubSource()
+        source.start_exception = RuntimeError("启动失败")
+        source.stop_exception = RuntimeError("回滚失败")
+
+        with pytest.raises(RuntimeError, match="启动失败") as exc_info:
+            await source.start()
+
+        assert source.state is SourceState.STOP_FAILED
+        assert source.cleanup_required
+        assert any("启动回滚失败" in note for note in exc_info.value.__notes__)
+
+        with pytest.raises(LifecycleError, match="重试 stop"):
+            await source.start()
+
+        source.stop_exception = None
+        await source.stop()
+        source.start_exception = None
+        await source.start()
+        assert source.state is SourceState.RUNNING
+
+
+class GatedSource(BaseSource):
+    """用于验证并发生命周期调用只执行一次."""
+
+    supported_types = StubType
+
+    def __init__(self):
+        super().__init__()
+        self.start_calls = 0
+        self.stop_calls = 0
+        self.start_entered = asyncio.Event()
+        self.start_release = asyncio.Event()
+        self.stop_entered = asyncio.Event()
+        self.stop_release = asyncio.Event()
+
+    async def on_start(self):
+        self.start_calls += 1
+        self.start_entered.set()
+        await self.start_release.wait()
+
+    async def on_stop(self):
+        self.stop_calls += 1
+        self.stop_entered.set()
+        await self.stop_release.wait()
+
+
+class TestBaseSourceConcurrency:
+    """同一 Source 的生命周期调用必须串行且幂等."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_start_runs_callback_once(self):
+        source = GatedSource()
+        first = asyncio.create_task(source.start())
+        second = asyncio.create_task(source.start())
+
+        await source.start_entered.wait()
+        source.start_release.set()
+        await asyncio.gather(first, second)
+
+        assert source.start_calls == 1
+        assert source.state is SourceState.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_concurrent_stop_runs_callback_once(self):
+        source = GatedSource()
+        source.start_release.set()
+        await source.start()
+
+        first = asyncio.create_task(source.stop())
+        second = asyncio.create_task(source.stop())
+        await source.stop_entered.wait()
+        source.stop_release.set()
+        await asyncio.gather(first, second)
+
+        assert source.stop_calls == 1
+        assert source.state is SourceState.STOPPED

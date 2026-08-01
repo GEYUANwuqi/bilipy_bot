@@ -8,8 +8,13 @@ import pytest
 from butterbot.app.config import RuntimeConfig
 from butterbot.app.source_manager import SourceManager
 from butterbot.core.context import AppContext
-from butterbot.core.exceptions import LifecycleError, SourceError, SourceStartError
-from butterbot.core.source import BaseSource
+from butterbot.core.exceptions import (
+    LifecycleError,
+    SourceError,
+    SourceStartError,
+    SourceStopError,
+)
+from butterbot.core.source import BaseSource, SourceState
 from butterbot.core.types import BaseType
 from butterbot.plugin import SourceRef
 
@@ -393,6 +398,29 @@ class TestSourceManagerStartFailure:
         assert not cancelled.running
         assert not manager.running
 
+    @pytest.mark.asyncio
+    async def test_rollback_failure_is_reported_and_can_be_retried(self, manager):
+        """启动回滚失败时 manager 保留 Source 和清理责任."""
+        first = manager.add_source(StubSource)
+        failed = manager.add_source(StubSource)
+        first.stop_exception = RuntimeError("回滚清理失败")
+        failed.start_exception = RuntimeError("启动失败")
+
+        with pytest.raises(SourceStartError) as exc_info:
+            await manager.start()
+
+        assert len(exc_info.value.failures) == 2
+        assert first.cleanup_required
+        assert first.state is SourceState.STOP_FAILED
+        assert manager.running
+        assert manager.stop_failed
+
+        first.stop_exception = None
+        await manager.stop()
+        assert not manager.running
+        assert not manager.stop_failed
+        assert not first.cleanup_required
+
 
 class TestSourceManagerStopResilience:
     """停止流程必须尽力清理完所有事件源（ASYNC-005）."""
@@ -405,10 +433,25 @@ class TestSourceManagerStopResilience:
         first.stop_exception = RuntimeError("清理失败")
 
         await manager.start()
-        await manager.stop()
+        with pytest.raises(SourceStopError) as exc_info:
+            await manager.stop()
 
         assert second.stopped
+        assert first.cleanup_required
+        assert first.state is SourceState.STOP_FAILED
+        assert manager.running
+        assert manager.stop_failed
+        assert first.stop_exception in exc_info.value.failures.values()
+        with pytest.raises(LifecycleError, match="停止失败"):
+            manager.add_source(StubSource)
+        with pytest.raises(LifecycleError, match="停止失败"):
+            await manager.start_source(first)
+
+        first.stop_exception = None
+        await manager.stop()
         assert not manager.running
+        assert not manager.stop_failed
+        assert first.stop_calls == 2
 
     @pytest.mark.asyncio
     async def test_stop_continues_after_cancelled_error(self, manager):
@@ -422,11 +465,18 @@ class TestSourceManagerStopResilience:
             await manager.stop()
 
         assert second.stopped  # 关键：第二个源没有被跳过
+        assert first.cleanup_required
+        assert manager.running
+        assert manager.stop_failed
+
+        first.stop_exception = None
+        await manager.stop()
         assert not manager.running
+        assert not manager.stop_failed
 
     @pytest.mark.asyncio
-    async def test_close_completes_cleanup_despite_cancellation(self, manager):
-        """stop 因取消而抛出时，close 仍应完成清理与状态置位."""
+    async def test_close_retains_cleanup_ownership_after_cancellation(self, manager):
+        """stop 被取消时 close 必须保留 Source，以便后续重试."""
         source = manager.add_source(StubSource)
         source.stop_exception = asyncio.CancelledError()
 
@@ -434,8 +484,62 @@ class TestSourceManagerStopResilience:
         with pytest.raises(asyncio.CancelledError):
             await manager.close()
 
+        assert not manager.closed
+        assert manager.closing
+        assert manager.get_source(source.uuid) is source
+        assert source.cleanup_required
+        assert manager.stop_failed
+
+        source.stop_exception = None
+        await manager.close()
         assert manager.closed
         assert manager.sources == {}
+
+    @pytest.mark.asyncio
+    async def test_close_failure_blocks_new_work_and_can_be_retried(self, manager):
+        """关闭失败后只允许清理，不允许再接入或启动 Source."""
+        source = manager.add_source(StubSource)
+        source.stop_exception = RuntimeError("清理失败")
+        await manager.start()
+
+        with pytest.raises(SourceStopError):
+            await manager.close()
+
+        assert manager.closing
+        assert manager.get_source(source.uuid) is source
+        with pytest.raises(LifecycleError, match="正在关闭"):
+            manager.add_source(StubSource)
+        with pytest.raises(LifecycleError, match="正在关闭"):
+            await manager.start_source(source)
+
+        source.stop_exception = None
+        await manager.close()
+        assert manager.closed
+
+    @pytest.mark.asyncio
+    async def test_concurrent_close_stops_each_source_once(self, manager):
+        """并发 close 由 manager 锁串行化，不重复执行 on_stop."""
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        class GatedStopSource(StubSource):
+            async def on_stop(self):
+                self.stop_calls += 1
+                entered.set()
+                await release.wait()
+                self.stopped = True
+
+        source = manager.add_source(GatedStopSource)
+        await manager.start()
+
+        first = asyncio.create_task(manager.close())
+        await entered.wait()
+        second = asyncio.create_task(manager.close())
+        release.set()
+        await asyncio.gather(first, second)
+
+        assert source.stop_calls == 1
+        assert manager.closed
 
 
 class TestSourceManagerDynamicSources:
@@ -484,6 +588,20 @@ class TestSourceManagerDynamicSources:
         assert source.running
 
     @pytest.mark.asyncio
+    async def test_close_stops_source_started_before_manager_start(self, manager):
+        """单独启动 Source 后 close 也必须执行清理."""
+        source = manager.add_source(StubSource)
+        await manager.start_source(source)
+        assert source.running
+        assert not manager.running
+
+        await manager.close()
+
+        assert source.stopped
+        assert not source.cleanup_required
+        assert manager.closed
+
+    @pytest.mark.asyncio
     async def test_start_source_unregistered_raises(self, manager):
         """启动未注册的事件源应抛 SourceError."""
         orphan = StubSource()
@@ -512,6 +630,28 @@ class TestSourceManagerDynamicSources:
 
         await manager.start_source(source)
         assert source.running
+
+    @pytest.mark.asyncio
+    async def test_stop_source_failure_blocks_new_work_until_retry(self, manager):
+        """单源停止失败后保留 manager 运行语义，但禁止接入新工作."""
+        source = manager.add_source(StubSource)
+        await manager.start()
+        source.stop_exception = RuntimeError("清理失败")
+
+        with pytest.raises(RuntimeError, match="清理失败"):
+            await manager.stop_source(source)
+
+        assert manager.running
+        assert manager.stop_failed
+        assert source.cleanup_required
+        with pytest.raises(LifecycleError, match="停止失败"):
+            manager.add_source(StubSource)
+
+        source.stop_exception = None
+        await manager.stop_source(source)
+        assert manager.running
+        assert not manager.stop_failed
+        assert not source.cleanup_required
 
     @pytest.mark.asyncio
     async def test_stop_source_unregistered_raises(self, manager):
@@ -555,19 +695,28 @@ class TestSourceManagerDynamicSources:
         )
 
     @pytest.mark.asyncio
-    async def test_remove_source_survives_stop_failure(self, manager):
-        """停止失败也应完成摘除与退订."""
+    async def test_remove_source_retains_registration_on_stop_failure(self, manager):
+        """停止失败时不得摘除最后一个清理句柄."""
         source = manager.add_source(StubSource)
         source.stop_exception = RuntimeError("清理失败")
         await manager.start()
 
+        with pytest.raises(RuntimeError, match="清理失败"):
+            await manager.remove_source(source.uuid)
+
+        assert manager.get_source(source.uuid) is source
+        assert source.cleanup_required
+        assert manager.stop_failed
+
+        source.stop_exception = None
         removed = await manager.remove_source(source.uuid)
         assert removed is source
         assert source.uuid not in manager.sources
+        assert not manager.stop_failed
 
     @pytest.mark.asyncio
-    async def test_remove_source_cancellation_still_purges_registration(self, manager):
-        """停止被取消时也必须完成退订和摘除，再传播取消."""
+    async def test_remove_source_cancellation_retains_registration(self, manager):
+        """停止被取消时保留注册与订阅，再传播取消."""
         source = manager.add_source(StubSource)
         await manager.start()
 
@@ -585,7 +734,22 @@ class TestSourceManagerDynamicSources:
         with pytest.raises(asyncio.CancelledError):
             await manager.remove_source(source.uuid)
 
+        assert source.uuid in manager.sources
+        assert manager.stop_failed
+        assert (
+            len(
+                manager.ctx.bus._subscriber_group.get_callbacks(
+                    source.uuid,
+                    StubType.EVENT,
+                )
+            )
+            == 1
+        )
+
+        source.stop_exception = None
+        await manager.remove_source(source.uuid)
         assert source.uuid not in manager.sources
+        assert not manager.stop_failed
         assert (
             manager.ctx.bus._subscriber_group.get_callbacks(
                 source.uuid,

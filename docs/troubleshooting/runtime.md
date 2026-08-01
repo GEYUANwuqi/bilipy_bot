@@ -69,6 +69,16 @@ CLI 显式指定 `-config` 时必须使用工厂入口注入配置；对象入�
 检查 `failures` 中每个原始异常。框架已回滚成功启动的 Source，可以修复配置后
 重试。常见原因是连接不可达、凭证缺失或 Source `on_start()` 抛异常。
 
+如果 `failures` 中包含 `rollback`，说明某个已启动 Source 的停止回调也失败；
+先修正清理故障并调用 `await app.stop()`，再重新启动。
+
+## `SourceStopError`
+
+框架已经尝试停止全部 Source，但至少一个 `on_stop()` 失败。失败 Source 仍在
+`app.manager.sources` 中，且 `cleanup_required=True`，不会被静默摘除。处理瞬时
+故障后再次调用 `await app.stop()` 或 `await app.close()`。关闭重试完成前不要
+创建新的 app 来复用同一组外部资源。
+
 ## Handler 抛错但发布方没有异常
 
 这是 EventBus 的设计：Handler 在独立 task 中执行，异常记录到日志。启用日志：

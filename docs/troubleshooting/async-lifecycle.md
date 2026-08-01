@@ -48,6 +48,11 @@ async with app:
 `stop_source()` 依赖扩展的 `on_stop()`。检查它是否关闭连接、listener、线程并
 等待 task。`stop_source()` 保留订阅是预期行为；彻底摘除用 `remove_source()`。
 
+如果 Source 状态为 `stop_failed`，框架仍持有其清理责任；检查第一次停止异常，
+修正后再次调用 `stop_source()`、`remove_source()` 或应用 `close()`。不要手工从
+manager 字典删除它，否则会丢失最后一个资源句柄。`on_stop()` 必须同时支持完整
+启动后的正常关闭和 `on_start()` 部分失败后的回滚。
+
 ## NapCat 请求超时
 
 `send_request()` 等待 `receive_timeout`，超时后 pending Future 会清理。检查

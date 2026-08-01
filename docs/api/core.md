@@ -59,7 +59,7 @@ async close(timeout: float = 5.0) -> None
 
 ## `BaseSource`
 
-导入：`from butterbot.core.source import BaseSource`
+导入：`from butterbot.core.source import BaseSource, SourceState`
 
 ```python
 BaseSource(uuid: UUID | None = None, *, config_key: str | None = None)
@@ -71,8 +71,15 @@ bind(ctx: AppContext) -> None
 ```
 
 子类必须实现 `on_start()`/`on_stop()` 并设置 `supported_types`。属性：
-`uuid`、`running`、`is_running`、`source_kind`、`config_key`、`ctx`。未绑定访问
-`ctx` 抛 `RuntimeError`。参与逻辑路由的 Source 还需声明非空 `source_kind`。
+`uuid`、`running`、`is_running`、`state`、`cleanup_required`、`source_kind`、
+`config_key`、`ctx`。未绑定访问 `ctx` 抛 `RuntimeError`。参与逻辑路由的 Source
+还需声明非空 `source_kind`。
+
+`state` 是 `SourceState`，可能为 `stopped`、`starting`、`running`、`stopping`
+或 `stop_failed`。`on_start()` 失败时框架会调用 `on_stop()` 回滚部分资源，再传播
+原始启动异常，因此 `on_stop()` 必须容忍部分初始化。`on_stop()` 失败或被取消时，
+`cleanup_required` 保持为 true，下一次 `stop()` 会重试清理；清理完成前再次
+`start()` 抛 `LifecycleError`。同一 Source 的 start/stop 调用由生命周期锁串行化。
 
 ## `BaseApi`
 

@@ -106,9 +106,10 @@ finally:
 顺序执行。任一 Source 启动失败时：
 
 - 失败源的 `running` 会回滚为 `False`；
+- 框架调用失败源的 `on_stop()` 回滚部分初始化，因此该方法必须容忍未完整启动；
 - 已成功启动的 Source 会被停止；
 - 抛出 `SourceStartError`，其 `failures` 保存原始异常；
-- manager 不进入运行状态。
+- 回滚停止失败的 Source 会保留 `cleanup_required`，manager 不丢失其句柄。
 
 启动协程被取消时也会停止此前已成功启动的 Source，再传播
 `asyncio.CancelledError`，不会留下半启动 manager。
@@ -123,6 +124,8 @@ finally:
 `await app.stop()` 先按依赖逆序执行插件 `on_stop()`，再停止已注册 Source，但保留
 Source、插件 Handler 注册、EventBus 与 API 缓存，因此可以再次启动。下一次
 `start()` 不会重复注册 Handler，但会在 Source 重新就绪后再次执行 `on_start()`。
+停止会尝试全部 Source；普通失败聚合为 `SourceStopError`，取消在其余 Source
+处理后传播。失败 Source 进入 `stop_failed`，再次 `stop()` 会重试。
 
 `await app.close()` 是终态操作，顺序固定：
 
@@ -133,6 +136,11 @@ Source、插件 Handler 注册、EventBus 与 API 缓存，因此可以再次启
 4. `ApiRegistry.aclose_all()`：关闭 API 连接和任务。
 
 关闭后不要再次启动或添加 Source。
+
+如果 Source 停止失败，`SourceManager.close()` 不会清空注册或进入 closed；
+`BotApp.close()` 也不会继续关闭 EventBus/API。manager 会进入只允许清理的
+closing 阶段，禁止添加和启动新 Source。修正瞬时故障后再次调用 `close()` 即可
+重试。这样 Source 不会失去最后一个资源句柄，也不会在 API 已关闭后才被迫清理。
 
 ## 回调超时
 
@@ -156,9 +164,9 @@ Handler 若捕获 `asyncio.CancelledError`，完成必要清理后应重新抛�
 `BaseSource.start()` 捕获 `BaseException` 来保证启动取消时回滚状态，然后原样
 传播。`SourceManager.stop()` 会继续清理其余 Source，最后重新抛出观察到的
 `CancelledError`。插件 `on_stop()` 被取消时，`PluginManager` 也会继续调用其余
-插件的停止回调。动态移除 Source 时，即使停止被取消，也会完成退订和摘除。
-`BotApp.close()` 使用嵌套 `finally`，manager 或 EventBus 清理被取消时仍会继续
-关闭后续资源；`ApiRegistry` 也会继续处理其余 API，最后再传播取消。
+插件的停止回调。动态移除 Source 时，停止被取消会保留订阅与注册，下一次调用
+继续清理。`BotApp.close()` 只有在 Source 全部停止后才关闭 EventBus 和 API；
+EventBus 关闭被取消时仍会尝试关闭 API，最后再传播取消。
 
 ## 常见误用
 

@@ -3,7 +3,12 @@ from logging import getLogger
 from typing import TYPE_CHECKING, Callable, ParamSpec, overload
 from uuid import UUID
 
-from butterbot.core.exceptions import LifecycleError, SourceError, SourceStartError
+from butterbot.core.exceptions import (
+    LifecycleError,
+    SourceError,
+    SourceStartError,
+    SourceStopError,
+)
 from butterbot.core.source import BaseSource, BaseSourceT
 from butterbot.plugin.contracts.routing import SourceRef
 
@@ -28,6 +33,8 @@ class SourceManager:
     Attributes:
         sources: 事件源集合（UUID -> Source）
         running: 是否正在运行
+        stop_failed: 是否有 Source 停止失败并仍需重试
+        closing: 是否已进入只允许清理的关闭阶段
         closed: 是否已关闭
     """
 
@@ -46,7 +53,10 @@ class SourceManager:
 
         # 生命周期状态
         self._running = False
+        self._stop_failed = False
+        self._closing = False
         self._closed = False
+        self._lifecycle_lock = asyncio.Lock()
 
     # ============ 属性 ============ #
 
@@ -57,13 +67,23 @@ class SourceManager:
 
     @property
     def running(self) -> bool:
-        """检查是否正在运行."""
-        return self._running
+        """检查是否正在运行或仍有未完成的停止清理."""
+        return self._running or self._stop_failed
 
     @property
     def closed(self) -> bool:
         """检查是否已关闭."""
         return self._closed
+
+    @property
+    def closing(self) -> bool:
+        """是否已进入只允许清理和重试的关闭阶段."""
+        return self._closing and not self._closed
+
+    @property
+    def stop_failed(self) -> bool:
+        """是否有 Source 停止失败并仍需重试清理."""
+        return self._stop_failed
 
     @property
     def sources(self) -> dict[UUID, BaseSource]:
@@ -123,8 +143,10 @@ class SourceManager:
         **kwargs: _SourceP.kwargs,
     ) -> BaseSourceT:
         """实例化 Source，并原子登记 UUID 与逻辑目录."""
-        if self._closed:
-            raise LifecycleError("SourceManager 已关闭，无法添加事件源")
+        if self._closed or self._closing or self._stop_failed:
+            raise LifecycleError(
+                "SourceManager 正在关闭、已关闭或存在停止失败，无法添加事件源"
+            )
 
         source = source_cls(*args, **kwargs)
         if source.uuid in self._sources:
@@ -153,6 +175,7 @@ class SourceManager:
         完整的移除序列：停止事件源 → 清理它在 EventBus 上的全部订阅 →
         从集合中摘除。只 pop 不做前两步会留下"幽灵源"：
         后台任务仍在跑，且派发表里的回调永久残留。
+        停止失败或被取消时不修改注册与订阅，保留清理入口并传播异常。
 
         Args:
             source_id: 事件源的 UUID
@@ -160,35 +183,40 @@ class SourceManager:
         Returns:
             被移除的事件源，如果不存在则返回 None
         """
-        source = self._sources.get(source_id)
-        if source is None:
-            _log.warning("事件源 %s 不存在", source_id)
-            return None
+        async with self._lifecycle_lock:
+            source = self._sources.get(source_id)
+            if source is None:
+                _log.warning("事件源 %s 不存在", source_id)
+                return None
 
-        cancelled: asyncio.CancelledError | None = None
-        try:
-            await source.stop()
-        except asyncio.CancelledError as exc:
-            cancelled = exc
-            _log.warning(
-                "移除前停止 %s 时被取消，继续退订并摘除",
-                source.__class__.__name__,
-            )
-        except Exception:
-            _log.exception("移除前停止 %s 失败", source.__class__.__name__)
-        finally:
+            try:
+                await source.stop()
+            except asyncio.CancelledError:
+                self._mark_source_cleanup_failure(source)
+                _log.warning(
+                    "移除前停止 %s 时被取消，保留注册以便重试",
+                    source.__class__.__name__,
+                )
+                raise
+            except Exception:
+                self._mark_source_cleanup_failure(source)
+                _log.exception(
+                    "移除前停止 %s 失败，保留注册以便重试",
+                    source.__class__.__name__,
+                )
+                raise
+
             removed_callbacks = self._ctx.bus.remove_subscribers(source_id)
             self._sources.pop(source_id, None)
             self._source_catalog.remove(source_id)
-        _log.info(
-            "移除事件源: %s (uuid=%s)，同时清理 %s 个订阅回调",
-            source.__class__.__name__,
-            source_id,
-            removed_callbacks,
-        )
-        if cancelled is not None:
-            raise cancelled
-        return source
+            self._refresh_failed_stop_state()
+            _log.info(
+                "移除事件源: %s (uuid=%s)，同时清理 %s 个订阅回调",
+                source.__class__.__name__,
+                source_id,
+                removed_callbacks,
+            )
+            return source
 
     def discard_unstarted_source(self, source_id: UUID) -> BaseSource | None:
         """同步撤销一个尚未启动的 Source.
@@ -199,7 +227,7 @@ class SourceManager:
         source = self._sources.get(source_id)
         if source is None:
             return None
-        if source.running:
+        if source.cleanup_required:
             raise LifecycleError("运行中的 Source 不能同步撤销")
         self._ctx.bus.remove_subscribers(source_id)
         self._source_catalog.remove(source_id)
@@ -310,14 +338,23 @@ class SourceManager:
             LifecycleError: SourceManager 已关闭
             SourceError: 事件源未注册
         """
-        if self._closed:
-            raise LifecycleError("SourceManager 已关闭，无法启动事件源")
+        async with self._lifecycle_lock:
+            if self._closed or self._closing or self._stop_failed:
+                raise LifecycleError(
+                    "SourceManager 正在关闭、已关闭或存在停止失败，无法启动事件源"
+                )
 
-        resolved = self._require_source(source)
-        resolved.bind(self._ctx)
-        await resolved.start()
-        _log.info("启动事件源: %s (uuid=%s)", type(resolved).__name__, resolved.uuid)
-        return resolved
+            resolved = self._require_source(source)
+            resolved.bind(self._ctx)
+            try:
+                await resolved.start()
+            except BaseException:
+                self._mark_source_cleanup_failure(resolved)
+                raise
+            _log.info(
+                "启动事件源: %s (uuid=%s)", type(resolved).__name__, resolved.uuid
+            )
+            return resolved
 
     async def stop_source(self, source: BaseSource | UUID) -> BaseSource:
         """停止单个事件源，但保留注册与订阅（可再次 :meth:`start_source`）.
@@ -331,14 +368,27 @@ class SourceManager:
         Raises:
             SourceError: 事件源未注册
         """
-        resolved = self._require_source(source)
-        await resolved.stop()
-        _log.info("停止事件源: %s (uuid=%s)", type(resolved).__name__, resolved.uuid)
-        return resolved
+        async with self._lifecycle_lock:
+            resolved = self._require_source(source)
+            try:
+                await resolved.stop()
+            except BaseException:
+                self._mark_source_cleanup_failure(resolved)
+                raise
+            self._refresh_failed_stop_state()
+            _log.info(
+                "停止事件源: %s (uuid=%s)", type(resolved).__name__, resolved.uuid
+            )
+            return resolved
 
     # ============ 生命周期 ============ #
 
     async def start(self) -> None:
+        """串行启动全部 Source."""
+        async with self._lifecycle_lock:
+            await self._start()
+
+    async def _start(self) -> None:
         """启动 SourceManager.
 
         生命周期顺序：
@@ -347,16 +397,19 @@ class SourceManager:
         2. 为每个 source 注入上下文 (bind)
         3. 启动每个 source
 
-        任一事件源启动失败时不留半启动状态：已成功启动的会被回滚（stop），
-        然后把全部失败聚合成 :class:`SourceStartError` 上抛，``running`` 保持
-        ``False``。启动被取消时同样回滚，再传播 ``CancelledError``。
+        任一事件源启动失败时会回滚已成功启动的 Source，再把启动和回滚失败
+        聚合成 :class:`SourceStartError`。回滚全部成功时 ``running=False``；
+        回滚失败时保留清理责任。启动被取消时同样回滚，再传播
+        ``CancelledError``。
 
         Raises:
             LifecycleError: SourceManager 已关闭
             SourceStartError: 一个或多个事件源启动失败
         """
-        if self._closed:
-            raise LifecycleError("SourceManager 已关闭，无法启动")
+        if self._closed or self._closing or self._stop_failed:
+            raise LifecycleError(
+                "SourceManager 正在关闭、已关闭或存在停止失败，无法启动"
+            )
 
         if self._running:
             _log.warning("SourceManager 已在运行中")
@@ -401,8 +454,18 @@ class SourceManager:
                         "回滚 %s 时被取消，继续清理其余事件源",
                         source.__class__.__name__,
                     )
-                except Exception:
+                except Exception as exc:
                     _log.exception("回滚 %s 时出错", source.__class__.__name__)
+                    failures[
+                        "%s(uuid=%s, rollback)"
+                        % (source.__class__.__name__, source.uuid)
+                    ] = exc
+
+            self._running = False
+            self._stop_failed = any(
+                source.cleanup_required and not source.running
+                for source in self._sources.values()
+            )
 
             if cancelled is not None:
                 raise cancelled
@@ -411,12 +474,19 @@ class SourceManager:
             raise SourceStartError(failures)
 
         self._running = True
+        self._stop_failed = False
         _log.info("SourceManager 已启动")
 
     async def stop(self) -> None:
+        """串行停止所有仍持有清理责任的 Source."""
+        async with self._lifecycle_lock:
+            await self._stop()
+
+    async def _stop(self) -> None:
         """停止 SourceManager.
 
-        依次停止所有事件源；单个事件源停止失败只记录日志，不影响其余事件源。
+        依次停止所有仍持有清理责任的事件源；单个事件源停止失败不影响其余
+        Source，普通失败最终聚合为 :class:`SourceStopError`。
 
         ``CancelledError`` 被单独接住：Ctrl+C 路径下 ``await source.stop()``
         会在取消态抛出它，而它不是 ``Exception`` 的子类——不单独处理就会
@@ -424,17 +494,24 @@ class SourceManager:
 
         Raises:
             asyncio.CancelledError: 停止过程中被取消（在清理完成后重抛）
+            SourceStopError: 一个或多个 Source 停止失败
         """
-        if not self._running:
+        targets = [
+            source for source in self._sources.values() if source.cleanup_required
+        ]
+        if not targets:
+            self._running = False
+            self._stop_failed = False
             _log.warning("SourceManager 未在运行")
             return
 
         _log.info("正在停止 SourceManager...")
 
         cancelled: asyncio.CancelledError | None = None
+        failures: dict[str, BaseException] = {}
 
         # 停止所有 source
-        for source in self._sources.values():
+        for source in targets:
             try:
                 await source.stop()
                 _log.debug("停止 %s", source.__class__.__name__)
@@ -444,31 +521,58 @@ class SourceManager:
                     "停止 %s 时被取消，继续清理其余事件源",
                     source.__class__.__name__,
                 )
-            except Exception:
+            except Exception as exc:
                 _log.exception("停止 %s 失败", source.__class__.__name__)
+                failures["%s(uuid=%s)" % (source.__class__.__name__, source.uuid)] = exc
 
         self._running = False
-        _log.info("SourceManager 已停止")
+        self._stop_failed = any(
+            source.cleanup_required and not source.running
+            for source in self._sources.values()
+        )
+        if self._stop_failed:
+            _log.warning("SourceManager 停止未完成，仍有事件源需要清理")
+        else:
+            _log.info("SourceManager 已停止")
 
         if cancelled is not None:
             raise cancelled
+        if failures:
+            raise SourceStopError(failures)
 
     async def close(self) -> None:
         """关闭 SourceManager.
 
-        关闭后无法再使用。即使 :meth:`stop` 因取消而抛出，
-        集合清理与状态置位仍会完成（在 ``finally`` 中）。
+        关闭后无法再使用。停止失败或被取消时保留全部注册并进入 closing，
+        禁止新工作但允许再次调用 ``stop``、``remove_source`` 或 ``close``
+        重试清理；只有全部 Source 停止成功后才清空集合并进入 closed。
         """
-        if self._closed:
-            return
+        async with self._lifecycle_lock:
+            if self._closed:
+                return
 
-        try:
-            # 先停止
-            if self._running:
-                await self.stop()
-        finally:
-            # 清理资源
+            self._closing = True
+            # 即使 manager.start() 从未调用，start_source() 也可能已经启动单个
+            # Source，因此关闭必须扫描每个 Source 的 cleanup_required。
+            await self._stop()
+
             self._sources.clear()
             self._source_catalog.clear()
+            self._running = False
+            self._stop_failed = False
             self._closed = True
             _log.info("SourceManager 已关闭")
+
+    def _refresh_failed_stop_state(self) -> None:
+        """单源清理后刷新 manager 的失败停止状态."""
+        if not self._stop_failed:
+            return
+        self._stop_failed = any(
+            source.cleanup_required and not source.running
+            for source in self._sources.values()
+        )
+
+    def _mark_source_cleanup_failure(self, source: BaseSource) -> None:
+        """记录单源操作留下的清理责任."""
+        if source.cleanup_required and not source.running:
+            self._stop_failed = True

@@ -13,7 +13,8 @@ ButterError
 ├── ConfigError (同时继承 ValueError)
 ├── LifecycleError (同时继承 RuntimeError)
 ├── SourceError
-│   └── SourceStartError
+│   ├── SourceStartError
+│   └── SourceStopError
 ├── ApiError
 └── SubscriptionError (同时继承 ValueError)
 ```
@@ -29,6 +30,15 @@ ButterError
 
 单个 `BaseSource.start()` 原样传播 `on_start()` 的异常。批量启动由
 `SourceManager` 聚合为 `SourceStartError`，并在 `failures` 中保留每个原异常。
+启动回调失败时会先调用 `on_stop()` 回滚部分资源；若回滚也失败，Source 保留
+清理责任，原启动异常会附加回滚失败说明。
+
+### Source 停止
+
+`SourceManager.stop()` 会尝试停止全部 Source，再把普通失败聚合为
+`SourceStopError`。失败 Source 和注册信息不会被删除，可以修正瞬时故障后再次
+调用 `stop()` 或 `close()`。`remove_source()` 的停止阶段失败时同样保留 Source
+及订阅，并原样传播异常。
 
 ### Source 运行
 

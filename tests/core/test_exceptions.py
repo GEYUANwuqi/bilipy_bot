@@ -9,6 +9,7 @@ from butterbot.core.exceptions import (
     LifecycleError,
     SourceError,
     SourceStartError,
+    SourceStopError,
     SubscriptionError,
 )
 
@@ -34,6 +35,11 @@ class TestExceptionHierarchy:
         """SourceStartError 应归属 SourceError 分支."""
         assert issubclass(SourceStartError, SourceError)
         assert issubclass(SourceStartError, ButterError)
+
+    def test_source_stop_error_is_source_error(self):
+        """SourceStopError 应归属 SourceError 分支."""
+        assert issubclass(SourceStopError, SourceError)
+        assert issubclass(SourceStopError, ButterError)
 
     def test_config_error_is_value_error(self):
         """ConfigError 同时继承 ValueError，兼容原有 except ValueError 的调用方."""
@@ -78,3 +84,17 @@ class TestSourceStartError:
         err = SourceStartError(source)
         source.clear()
         assert "A" in err.failures
+
+
+class TestSourceStopError:
+    """SourceStopError 需保留每个失败源的原始异常."""
+
+    def test_failures_preserved(self):
+        original = RuntimeError("连接未关闭")
+        err = SourceStopError({"StubSource(uuid=1)": original})
+        assert err.failures["StubSource(uuid=1)"] is original
+
+    def test_message_lists_all_failures(self):
+        err = SourceStopError({"A": RuntimeError("a"), "B": RuntimeError("b")})
+        assert "A" in str(err)
+        assert "B" in str(err)

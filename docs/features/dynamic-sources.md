@@ -50,7 +50,9 @@ removed = await app.remove_source(source.uuid)
 2. 删除该 UUID 的全部订阅；
 3. 从 manager 中摘除。
 
-停止失败会记录日志，但仍继续清理订阅和注册。不存在的 UUID 返回 `None`。
+停止失败或被取消时不会删除订阅和注册，异常原样传播；Source 保持
+`cleanup_required`，修正瞬时故障后可再次调用 `remove_source()`。只有停止成功后
+才执行退订和摘除。不存在的 UUID 返回 `None`。
 
 ## 查找多实例
 

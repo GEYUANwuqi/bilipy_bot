@@ -12,6 +12,7 @@ from butterbot.app import (
     ConfigBuilderRegistry,
     ConfigError,
     SourceFactoryRegistry,
+    SourceStopError,
 )
 from butterbot.app.config import RuntimeConfig
 from butterbot.core.api import BaseApi
@@ -430,18 +431,23 @@ class TestBotAppCloseOrder:
         assert app.closed
 
     @pytest.mark.asyncio
-    async def test_close_releases_apis_even_if_source_stop_cancelled(self, config):
-        """停源被取消时，总线与 API 仍应在 finally 中被释放."""
+    async def test_close_retains_dependencies_if_source_stop_cancelled(self, config):
+        """停源被取消时保留总线与 API，修正后可重试 close."""
         closed: list[str] = []
 
         class CancellingSource(BaseSource):
             supported_types = MockType
 
+            def __init__(self):
+                super().__init__()
+                self.should_cancel = True
+
             async def on_start(self):
                 pass
 
             async def on_stop(self):
-                raise asyncio.CancelledError()
+                if self.should_cancel:
+                    raise asyncio.CancelledError()
 
         class ClosableApi(BaseApi):
             def __init__(self):
@@ -455,15 +461,74 @@ class TestBotAppCloseOrder:
                 closed.append("api")
 
         app = BotApp(config)
-        app.add_source(CancellingSource)
+        source = app.add_source(CancellingSource)
         app.get_api(ClosableApi, "test")
         await app.start()
 
         with pytest.raises(asyncio.CancelledError):
             await app.close()
 
+        assert not app.bus.closed
+        assert closed == []
+        assert not app.closed
+        assert app.get_source(source.uuid) is source
+
+        source.should_cancel = False
+        await app.close()
         assert app.bus.closed
         assert closed == ["api"]
+        assert app.closed
+
+    @pytest.mark.asyncio
+    async def test_close_retains_dependencies_if_source_stop_fails(self, config):
+        """普通停止异常必须传播并保留依赖，允许再次清理."""
+        closed: list[str] = []
+
+        class FailingSource(BaseSource):
+            supported_types = MockType
+
+            def __init__(self):
+                super().__init__()
+                self.should_fail = True
+
+            async def on_start(self):
+                pass
+
+            async def on_stop(self):
+                if self.should_fail:
+                    raise RuntimeError("清理失败")
+
+        class ClosableApi(BaseApi):
+            def __init__(self):
+                pass
+
+            @classmethod
+            def create(cls, ctx, config_key):
+                return cls()
+
+            async def aclose(self) -> None:
+                closed.append("api")
+
+        app = BotApp(config)
+        source = app.add_source(FailingSource)
+        app.get_api(ClosableApi, "test")
+        await app.start()
+
+        with pytest.raises(SourceStopError) as exc_info:
+            await app.close()
+
+        assert any(
+            isinstance(error, RuntimeError)
+            for error in exc_info.value.failures.values()
+        )
+        assert not app.bus.closed
+        assert closed == []
+        assert app.get_source(source.uuid) is source
+
+        source.should_fail = False
+        await app.close()
+        assert closed == ["api"]
+        assert app.closed
 
     @pytest.mark.asyncio
     async def test_close_releases_apis_even_if_bus_close_cancelled(self, config):

@@ -113,9 +113,12 @@ async __aexit__(exc_type, exc_val, exc_tb) -> None
 回滚此前已启动的 Source 和插件注册，完成后传播 `CancelledError`。存在
 PluginManager 时，会在 Source 启动前解析并注册插件 Handler，并在全部 Source
 启动后按依赖顺序调用插件 `on_start()`。`stop()` 先逆依赖调用插件 `on_stop()`，
-再停止 Source。`close()` 同样先执行仍在运行的插件停止回调，再撤销插件 Handler、
-callback、Source 和 registry，最后按 Source、EventBus、API 顺序尽力释放其余
-资源。`run()` 是拥有事件循环的同步入口，内部使用 `asyncio.run()`。
+再停止 Source；一个或多个 Source 停止失败时抛 `SourceStopError`，但仍会尝试
+停止其余 Source。`close()` 同样先执行仍在运行的插件停止回调，再撤销插件
+Handler、callback、Source 和 registry，最后按 Source、EventBus、API 顺序释放
+其余资源。Source 关闭失败时保留 manager、EventBus 与 API，允许再次调用
+`close()`；只有 Source 全部清理成功后才继续关闭下游依赖。`run()` 是拥有事件
+循环的同步入口，内部使用 `asyncio.run()`。
 
 ## `RuntimeConfig`
 
