@@ -7,11 +7,9 @@ import sys
 import tomllib
 from pathlib import Path
 
-from butterbot.plugin import (
-    ButterPlugin,
-    LocalPluginSettings,
-    PluginCatalog,
-)
+from butterbot.plugin import ButterPlugin
+from butterbot.plugin.discovery.catalog import PluginCatalog
+from butterbot.plugin.discovery.settings import LocalPluginSettings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MANAGER_PLUGIN_ROOT = PROJECT_ROOT / "examples" / "plugins" / "example.bilibili-manager"

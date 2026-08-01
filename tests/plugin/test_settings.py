@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from butterbot.core.exceptions import ConfigError
-from butterbot.plugin import PluginSettings
+from butterbot.plugin.discovery.settings import PluginSettings
 
 
 def test_empty_settings_disable_discovery():

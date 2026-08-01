@@ -12,15 +12,15 @@ import pytest
 from butterbot.core.exceptions import ConfigError
 from butterbot.plugin import (
     ButterPlugin,
-    LocalPluginSettings,
-    PluginBootstrap,
-    PluginCatalog,
     PluginDependencyError,
     PluginDescriptor,
     PluginDiscoveryError,
     PluginRegistrationError,
     configure,
 )
+from butterbot.plugin.discovery.catalog import PluginCatalog
+from butterbot.plugin.discovery.settings import LocalPluginSettings
+from butterbot.plugin.runtime.bootstrap import PluginBootstrap
 
 CORE_VERSION = "3.1.0.dev2"
 

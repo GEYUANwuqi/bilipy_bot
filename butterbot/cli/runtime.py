@@ -41,7 +41,7 @@ def run_application(
     约定：新项目统一使用工厂入口注入配置；不指定 ``-config`` 时仍兼容
     ``app = BotApp()`` 对象入口。
     """
-    from butterbot.plugin import PluginBootstrap
+    from butterbot.plugin._internal import PluginBootstrap
 
     working_directory = Path.cwd()
     application_path = application_override or application or _DEFAULT_APPLICATION_PATH

@@ -8,7 +8,9 @@ from butterbot.core.event import Event
 from butterbot.core.exceptions import LifecycleError, SourceError
 from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
-from butterbot.plugin import ExtensionRegistrar, SourceRef, SubscriptionSpec
+from butterbot.plugin import SourceRef
+from butterbot.plugin.contracts.routing import SubscriptionSpec
+from butterbot.plugin.runtime.extension import ExtensionRegistrar
 
 
 class PrototypeType(BaseType):

@@ -44,8 +44,8 @@ def test_app_and_plugin_public_api_import_in_fresh_process() -> None:
         (
             "from butterbot.core import Event",
             "from butterbot.plugin import (",
-            "    ButterPlugin, PluginBootstrap, PluginConfig, PluginContext,",
-            "    PluginRegistrar, PluginScope, SourceRef, SubscriptionSpec, register,",
+            "    ButterPlugin, ConfigRegistrar, PluginConfig, PluginContext,",
+            "    PluginScope, SourceRef, configure, register,",
             ")",
         )
     )
@@ -91,7 +91,7 @@ def test_core_types_are_not_exported_from_plugin() -> None:
 def test_plugin_package_is_grouped_by_responsibility() -> None:
     root_modules = {path.name for path in PLUGIN_ROOT.glob("*.py")}
 
-    assert root_modules == {"__init__.py", "errors.py"}
+    assert root_modules == {"__init__.py", "_internal.py", "errors.py"}
     assert {
         "contracts",
         "discovery",
@@ -148,13 +148,48 @@ def test_plugin_internal_imports_follow_directory_boundaries() -> None:
                     assert target_dir != path.parent, (path, module_name)
 
 
-def test_lazy_plugin_exports_use_absolute_module_paths() -> None:
+def test_plugin_author_api_snapshot() -> None:
     import butterbot.plugin as plugin
 
-    assert all(
-        module_name.startswith("butterbot.plugin.")
-        for module_name, _ in plugin._LAZY_EXPORTS.values()
-    )
+    assert plugin.__all__ == [
+        "ButterPlugin",
+        "ConfigRegistrar",
+        "PluginCompatibilityError",
+        "PluginConfig",
+        "PluginContext",
+        "PluginDependencyError",
+        "PluginDescriptor",
+        "PluginDiscoveryError",
+        "PluginError",
+        "PluginRegistrationError",
+        "PluginScope",
+        "SourceRef",
+        "configure",
+        "register",
+    ]
+
+
+def test_framework_control_plane_is_not_exported_from_plugin_root() -> None:
+    import butterbot.plugin as plugin
+
+    for name in (
+        "CleanupRegistration",
+        "ExtensionRegistrar",
+        "LocalPluginSettings",
+        "PluginBootstrap",
+        "PluginCatalog",
+        "PluginFailure",
+        "PluginManager",
+        "PluginRegistrar",
+        "PluginSettings",
+        "PluginState",
+        "PluginStatus",
+        "RegistrationReceipt",
+        "SubscriptionSpec",
+        "bootstrap_app",
+        "validate_plugin_config",
+    ):
+        assert not hasattr(plugin, name)
 
 
 def test_core_does_not_import_plugin_package() -> None:

@@ -9,12 +9,12 @@ import pytest
 
 from butterbot.plugin import (
     ButterPlugin,
-    PluginCatalog,
     PluginCompatibilityError,
     PluginDependencyError,
     PluginDescriptor,
     PluginDiscoveryError,
 )
+from butterbot.plugin.discovery.catalog import PluginCatalog
 
 CORE_VERSION = "3.1.0.dev2"
 

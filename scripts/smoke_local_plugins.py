@@ -9,7 +9,8 @@ import tempfile
 from importlib.metadata import version
 from pathlib import Path
 
-from butterbot.plugin import PluginBootstrap, PluginState
+from butterbot.plugin.runtime.bootstrap import PluginBootstrap
+from butterbot.plugin.runtime.manager import PluginState
 
 FIXTURES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "local_plugins"
 PLUGIN_IDS = {

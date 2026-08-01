@@ -13,11 +13,11 @@ from typing import Iterator, cast
 
 from butterbot.core.exceptions import SourceStartError
 from butterbot.plugin import (
-    PluginBootstrap,
     PluginDiscoveryError,
     PluginRegistrationError,
-    PluginState,
 )
+from butterbot.plugin.runtime.bootstrap import PluginBootstrap
+from butterbot.plugin.runtime.manager import PluginState
 
 PLUGIN_IDS = (
     "contract.combined",

@@ -23,18 +23,19 @@ from butterbot.core.source import BaseSource
 from butterbot.core.types import BaseType
 from butterbot.plugin import (
     ButterPlugin,
-    PluginBootstrap,
     PluginConfig,
     PluginDescriptor,
-    PluginFailurePhase,
     PluginRegistrationError,
-    PluginState,
     SourceRef,
-    bootstrap_app,
     configure,
     register,
+)
+from butterbot.plugin.runtime.bootstrap import (
+    PluginBootstrap,
+    bootstrap_app,
     validate_plugin_config,
 )
+from butterbot.plugin.runtime.manager import PluginFailurePhase, PluginState
 
 CORE_VERSION = "3.1.0.dev2"
 

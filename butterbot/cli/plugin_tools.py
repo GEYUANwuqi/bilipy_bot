@@ -7,7 +7,8 @@ from pathlib import Path
 import click
 
 from butterbot import __version__
-from butterbot.plugin import PluginBootstrap, PluginError
+from butterbot.plugin import PluginError
+from butterbot.plugin._internal import PluginBootstrap
 from butterbot.plugin.discovery.directory import validate_distribution_requirements
 
 

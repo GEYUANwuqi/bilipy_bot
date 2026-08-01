@@ -309,21 +309,10 @@ butterbot run
 `plugin list` 只读取候选元数据；`plugin check` 按 YAML 模拟导入，并分别报告成功
 加载和被配置拦截的插件。真正的配置解析、应用构造和运行阶段注册由 `run` 完成。
 
-代码内也可显式拥有 bootstrap：
-
-```python
-from butterbot.plugin import PluginBootstrap
-from mybot.application import app as application_entry
-
-bootstrap = PluginBootstrap("config.yaml")
-application = bootstrap.build(application_entry)
-manager = bootstrap.manager
-assert manager is not None
-```
-
 不要在模块导入时先构造全局 `BotApp` 对象；那会早于插件 builder 和 Source
 factory 注册。CLI 始终走同一个 bootstrap，只有 `plugins.enabled: true` 才会导入
-和注册 `plugin_list` 中的插件。关闭总开关时可以继续保留插件选择、检索路径和
+和注册 `plugin_list` 中的插件. bootstrap/manager 是框架 internal 控制面,
+不从 `butterbot.plugin` 导出. 关闭总开关时可以继续保留插件选择、检索路径和
 私有配置；`plugin list` 和交互配置仍会索引路径以展示候选。
 
 创建包含示例插件的完整项目模板：

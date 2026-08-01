@@ -167,31 +167,26 @@ plugins:
 订阅会在 Source 启动前从 `@register` 声明构造，因此不能等到 `on_start()` 再决定
 基础路由。长期连接通常仍应实现为 Source，Handler task 由 EventBus 管理。
 
-## 身份与低层原语
+## 稳定作者 API
 
 - `ButterPlugin`：本地目录和 distribution 共用的唯一插件基类。
 - `PluginConfig`：可选的只读私有配置 schema。
 - `PluginContext`、`PluginScope`：框架绑定的窄化能力和资源所有权。
 - `PluginDescriptor`：插件的稳定 ID、版本、依赖和 capability；本地插件 ID 由
   目录名生成。
-- `SourceRef`、`SubscriptionSpec`：应用和手工扩展使用的低层路由声明。
-- `PluginRegistrar`、`ExtensionRegistrar`：框架控制面和手工事务扩展使用。
+- `ConfigRegistrar`、`configure`：Source provider 的配置阶段契约。
+- `SourceRef`：覆盖默认路由时使用的逻辑 Source 引用。
+- `register`：Handler 声明装饰器。
+- `PluginError` 及其公开子类：启动器和调用方可捕获的错误契约。
+
+精确名称以 `butterbot.plugin.__all__` 的 snapshot 测试为准.
+`SubscriptionSpec`、registrar 收据、discovery/bootstrap/manager 与运行状态
+都是框架 internal 控制面, 不再从 `butterbot.plugin` 根包导出.
 
 本地入口模块必须且只能定义一个具体 `ButterPlugin` 子类。distribution entry point
 可以直接指向插件实例、无参类或返回实例的无参 factory，并在子类上提供
 `PluginDescriptor`。
 
 插件没有 `@start` 或 `@stop` 装饰器，只有可覆盖的 `on_start()` 和
-`on_stop()` 基类回调。
-
-## 控制面
-
-`PluginBootstrap`、`PluginCatalog`、`PluginManager`、来源模型、状态模型和插件异常
-目前仍从同一包导出。它们是 3.x provisional API，不代表热重载、安全沙箱或运行期
-安装。
-
-`PluginStatus.failures` 和 `PluginManager.failures` 返回不包含异常消息及配置值的
-结构化失败记录：`plugin_id`、`phase`、`error_type`、`timed_out` 和
-`cancelled`。`PluginStatus.healthy` 表示记录是否为空。停止阶段失败会继续清理；
-状态会变为 `failed`，并拒绝在同一进程内再次启动，避免在未完整停止的资源上重复
-初始化。
+`on_stop()` 基类回调。应用诊断通过 `BotApp.health` 读取, 不直接暴露
+`PluginManager` 或可变的插件运行状态.
