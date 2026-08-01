@@ -108,12 +108,23 @@ def test_polling_configuration_rejects_invalid_interval_and_is_idempotent(
 
     source.add_members([1, 2])
     source.remove_members([3, 2])
-    source.set_poll_interval(0)
+    with pytest.raises(ValueError, match="有限正数"):
+        source.set_poll_interval(0)
     assert source.poll_interval == 60
     source.set_poll_interval(30)
 
     assert source.poll_interval == 30
     assert source.watch_targets == [1]
+
+
+@pytest.mark.parametrize("interval", [0, -1, True, float("nan"), float("inf")])
+@pytest.mark.parametrize("source_type", [BiliDynamicSource, BiliLiveSource])
+def test_polling_constructor_rejects_invalid_interval(
+    source_type: type[BiliDynamicSource] | type[BiliLiveSource],
+    interval: object,
+) -> None:
+    with pytest.raises(ValueError, match="有限正数"):
+        source_type(poll_interval=interval)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

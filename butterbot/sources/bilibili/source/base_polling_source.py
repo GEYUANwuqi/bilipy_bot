@@ -1,6 +1,7 @@
 """Bilibili 轮询事件源的共享生命周期与调度实现."""
 
 import asyncio
+import math
 from abc import ABC, abstractmethod
 from logging import Logger, getLogger
 from uuid import UUID
@@ -29,7 +30,7 @@ class BasePollingSource(BaseSource, ABC):
         config_key: str | None = None,
     ) -> None:
         super().__init__(uuid=uuid, config_key=config_key)
-        self.poll_interval: float | int = poll_interval
+        self.poll_interval = self._validate_poll_interval(poll_interval)
         self._watch_targets: list[int] = []
         self._poll_num = 0
         self._task: asyncio.Task[None] | None = None
@@ -73,13 +74,23 @@ class BasePollingSource(BaseSource, ABC):
 
     def set_poll_interval(self, interval: float | int) -> None:
         """更新每轮轮询间隔."""
-        if interval <= 0:
-            self._log.error("非法参数，轮询间隔时间不可小于或等于0")
-            return
+        interval = self._validate_poll_interval(interval)
         if interval <= 30:
             self._log.warning("将轮询间隔时间设置为30s及以下，可能导致请求频率过高")
         self.poll_interval = interval
         self._log.info("轮询间隔时间已设置为 %s 秒", self.poll_interval)
+
+    @staticmethod
+    def _validate_poll_interval(interval: float | int) -> float | int:
+        """拒绝会导致忙循环或不可预测 sleep 行为的间隔."""
+        if (
+            isinstance(interval, bool)
+            or not isinstance(interval, (int, float))
+            or not math.isfinite(interval)
+            or interval <= 0
+        ):
+            raise ValueError("轮询间隔必须是有限正数")
+        return interval
 
     @property
     def watch_targets(self) -> list[int]:
