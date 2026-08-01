@@ -43,7 +43,13 @@ app.run()
 `run()` 自己调用 `asyncio.run()`，适合没有现成事件循环的顶层脚本。不要在
 Jupyter、ASGI 服务或其他已运行的协程中调用它。
 
-部署入口也可以使用 [ButterBot 命令行](./cli.md)。CLI 采用或构造 `BotApp` 后仍
+::: danger 默认调用会持续阻塞
+`app.run()` 是同步阻塞入口. 默认 `duration=None`, 不会自行返回. 它会一直运行到
+收到 `SIGINT`, `SIGTERM`, `KeyboardInterrupt`, 遇到未处理异常或进程被外部终止.
+后续 Python 语句在正常服务期间不会执行.
+:::
+
+部署入口也可以使用 [ButterBot 命令行](./cli.md). CLI 通过同步工厂构造 `BotApp` 后仍
 调用同一个 `BotApp.run()`，不会改变关闭顺序。
 
 ::: warning CLI 入口不能在导入时运行
@@ -51,9 +57,8 @@ Jupyter、ASGI 服务或其他已运行的协程中调用它。
 模块顶层调用 `app.run()`。
 :::
 
-`butterbot init` 默认生成工厂入口，由 CLI 在插件完成配置 builder 和 Source
-factory 注册后传入 `RuntimeConfig` 与注册表。已有的 `app = BotApp()` 对象入口仍
-兼容不指定 `-config` 的简单项目，但不再是脚手架默认值（见[命令行](./cli.md)）。
+`butterbot init` 默认生成具名同步工厂入口. CLI 入口只推荐这一种官方协议.
+见[命令行](./cli.md).
 
 如果选择直接执行 Python 文件，而不是把它作为 CLI 入口，使用主模块保护：
 

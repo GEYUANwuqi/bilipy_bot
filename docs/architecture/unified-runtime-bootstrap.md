@@ -37,6 +37,7 @@ CLI 和直接运行必须共享一条装配路线:
 10. `BotApp` 公开只读的 `plugin_enabled` 和 `cli_mode` 状态.
 11. `core` 保持插件无关. 运行时装配属于 `app`, 不能让 core 导入 plugin, CLI 或
     adapter 实现.
+12. 官方 CLI 入口只使用具名同步工厂.
 
 ## 2. 当前问题
 
@@ -319,6 +320,10 @@ app.run(
 - `duration=None` 时持续运行;
 - `health_interval=1.0`.
 
+`run()` 是同步阻塞入口. 默认 `duration=None` 时不会自行返回, 只有收到受支持的停止
+信号, 发生 `KeyboardInterrupt`, 抛出未处理异常或外部终止进程才会结束. 只有明确
+需要限时运行时才传入 `duration`; CLI 服务进程保持默认值.
+
 嵌入已有 asyncio 应用时应使用 `await app.start()` / `await app.close()` 或
 `async with app`, 不在已有 loop 中调用基于 `asyncio.run()` 的 `app.run()`.
 
@@ -340,7 +345,7 @@ butterbot run
   -> finally 标记停止
 ```
 
-应用入口统一为同步工厂或 `BotApp` 类:
+官方应用入口统一为具名同步工厂:
 
 ```python
 from butterbot.app import BotApp, RuntimeConfig
@@ -350,8 +355,8 @@ def app(*, config: RuntimeConfig, cli_mode: bool = True) -> BotApp:
     return BotApp(config=config, cli_mode=cli_mode)
 ```
 
-CLI 不再注入 `SourceFactoryRegistry`. 已构造对象入口 `app = BotApp()` 在 clean break
-中删除, 因为它在 CLI 决定配置路径前已经读取配置, 无法满足统一顺序.
+CLI 不再注入 `SourceFactoryRegistry`. CLI loader, 官方文档和脚手架只接受并展示
+符合签名的具名同步工厂.
 
 后台启动只改变进程边界, 子进程继续执行同一条前台装配路线.
 
@@ -450,7 +455,7 @@ NEW -> PREPARING -> PREPARED -> RUNNING -> CLOSING -> CLOSED
 6. 新增统一 assembler 和准备状态;
 7. 根据 config 动态导入可选插件运行时;
 8. 修改 CLI 为"先 RuntimeConfig, 后应用工厂";
-9. 删除 CLI 的 `source_factory_registry` 注入和对象入口;
+9. 将 CLI loader 收敛为只接受具名同步工厂;
 10. 延迟导入 CLI 插件工具和异常;
 11. 让 `plugin check` 使用隔离子进程;
 12. 增加 `plugin_enabled`, `cli_mode` 和 run 执行参数;

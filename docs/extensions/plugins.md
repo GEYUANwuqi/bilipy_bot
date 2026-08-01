@@ -267,21 +267,8 @@ cwd。`plugin_list` 是唯一插件白名单；没有写或显式写成空列表
 `plugins` 是 bootstrap 保留段，不会进入 `RuntimeConfig.get_config()`。可以使用
 `BUTTERBOT__PLUGINS__PLUGIN_LIST='[HelloPlugin, ExampleHandlerPlugin]'` 覆盖插件列表。
 
-CLI 接受两种应用入口，选择规则固定为：显式指定 `-config` 时必须使用工厂入口；
-不指定时推荐对象入口 `app = BotApp()`，配置由 `BotApp()` 构造时的
-`RuntimeConfig.from_yaml()` 读取 `config.yaml`。`butterbot init` 默认生成对象入口：
-
-```python
-from butterbot.app import BotApp
-
-app = BotApp()
-```
-
-对象入口在导入阶段已解析 `config.yaml`，CLI 只负责绑定插件控制面；没有配置
-builder/factory 注册需求的插件（如 HelloPlugin）可以正常加载。插件需要在
-`RuntimeConfig` 解析前注册配置 builder，或在配置 Source 构造前注册 Source
-factory 时，必须改用同步工厂入口（显式指定 `-config` 时同样强制要求），让
-bootstrap 在构造应用前注入这些依赖：
+CLI 官方入口只使用 `butterbot init` 生成的具名同步工厂. bootstrap 在构造应用前
+注入配置和当前 Source registry:
 
 ```python
 from butterbot.app import BotApp, RuntimeConfig, SourceFactoryRegistry

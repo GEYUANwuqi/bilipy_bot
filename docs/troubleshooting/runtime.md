@@ -6,7 +6,8 @@ title: 配置、订阅与启动问题
 
 ## `配置文件不存在`
 
-`BotApp()` 从当前工作目录读取 `config.yaml`，不是从 Python 文件所在目录读取。
+直接运行脚本时, `BotApp()` 从当前工作目录读取 `config.yaml`, 不是从 Python 文件
+所在目录读取.
 
 ```bash
 pwd
@@ -15,9 +16,8 @@ cp examples/config.example.yaml config.yaml
 
 不需要外部配置时显式传 `BotApp(RuntimeConfig())`。
 
-CLI 显式指定 `-config` 时必须使用工厂入口注入配置；对象入口
-`app = BotApp()` 只适用于不指定 `-config`、由 `BotApp()` 构造时自动读取
-`config.yaml` 的场景。
+CLI 项目使用 `butterbot init` 生成的同步工厂入口, 由 CLI 读取并注入配置. 直接运行
+Python 脚本时才由开发者构造 `BotApp()` 或显式传入 `RuntimeConfig`.
 
 ## `ConfigError: 缺少配置键`
 

@@ -57,12 +57,9 @@ butterbot run \
 工作目录解析；相对 `plugins.plugin_path` 则以该 YAML 所在目录解析。`--path` 和
 `--config` 也是等价写法。
 
-`app.py` 提供应用入口，入口选择遵循固定约定：
-
-- 显式指定 `-config` 时，必须使用工厂入口注入配置。CLI 会把解析好的
-  `RuntimeConfig` 和 Source 注册表作为关键字参数传给工厂；
-- 不指定 `-config` 时仍兼容对象入口 `app = BotApp()`；新项目统一使用工厂入口，
-  这样插件注册的配置 builder 和 Source factory 一定先于应用构造生效。
+`app.py` 使用具名同步工厂. 无论是否显式指定 `-config`, 官方项目都只采用这一种
+入口. CLI 会把解析好的 `RuntimeConfig` 和当前 Source 注册表作为关键字参数传给
+工厂.
 
 `butterbot init` 默认生成工厂入口：
 
@@ -81,16 +78,11 @@ def app(
     )
 ```
 
-对象入口在模块导入时已经读取当前工作目录的 `config.yaml`，因此显式给出
-`-config`（即使路径就是 `config.yaml`）时 CLI 会直接报错。它只作为已有简单项目
-的兼容入口保留。
-
-最简工厂也可以直接引用类本身：`app = BotApp`。工厂入口必须接受 `config` 和
-`source_factory_registry` 两个关键字参数，并返回 `BotApp`。不要在模块导入时调用
-`app.run()`；运行与关闭生命周期由 CLI 持有。
+工厂入口必须接受 `config` 和 `source_factory_registry` 两个关键字参数, 并返回
+`BotApp`. 不要在模块导入时构造或运行 Bot, 运行与关闭生命周期由 CLI 持有.
 
 ::: danger 导入阶段不要启动应用
-如果入口模块在顶层执行 `app.run()`，模块导入会阻塞，CLI 无法登记后台状态，也
+如果入口模块在顶层执行 `run()`, 模块导入会阻塞, CLI 无法登记后台状态, 也
 无法可靠执行 `status`、`restart` 和 `stop`.
 :::
 

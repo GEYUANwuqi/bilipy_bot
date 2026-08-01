@@ -123,6 +123,12 @@ async __aenter__() -> BotApp
 async __aexit__(exc_type, exc_val, exc_tb) -> None
 ```
 
+::: danger `run()` 默认同步阻塞
+`run()` 内部使用 `asyncio.run()`. 默认 `duration=None` 时不会自行返回, 会持续运行到
+收到停止信号, 发生 `KeyboardInterrupt`, 抛出未处理异常或进程被外部终止. 调用方
+不能期待它在正常服务期间继续执行后续同步语句.
+:::
+
 `start()` 可能抛 `SourceStartError` 或 `PluginRegistrationError`。启动被取消时会
 回滚此前已启动的 Source 和插件注册，完成后传播 `CancelledError`。存在
 PluginManager 时，会在 Source 启动前解析并注册插件 Handler，并在全部 Source
