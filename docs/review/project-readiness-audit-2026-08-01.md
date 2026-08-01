@@ -752,7 +752,7 @@ R1 不增加 adapter、热重载、市场、暂停/恢复命令或新的插件�
 | 议题 | 决策 |
 | --- | --- |
 | 日志 | 保留 `setup_logging()`, 由 `BotApp` 自动调用; managed 模式统一管理 root, external 模式明确 opt-out |
-| aiohttp | NapCat、Bilibili 和通用 WebSocket extra 都显式声明, 不假设只有 NapCat 需要 |
+| aiohttp | NapCat 和 Bilibili extra 都显式声明, 不依赖上游包的传递安装 |
 | 中文文本 | 内容继续使用中文, 项目自有文本的标点统一改为英文 ASCII 半角符号 |
 | 当前兼容 | `3.1.0.dev2` 的 R1 是 clean break, 不保留旧 alias、warning 或转发层; R1 后的新 stable API 才开始遵守 SemVer |
 
@@ -905,13 +905,12 @@ provider 最多再依赖 `configure`/`ConfigRegistrar`。框架内部控制面�
 
 #### R1.5 将 adapter 依赖改为 extras，再评估独立发行
 
-**实施状态: 已完成 (`65a3320`).** 基础 wheel 只保留核心依赖; `websocket`、
-`napcat`、`bilibili`、`all` 可独立安装, 缺少 extra 时返回可执行的安装命令.
+**实施状态: 已完成 (`65a3320`).** 基础 wheel 只保留核心依赖; `napcat`、
+`bilibili`、`all` 可独立安装, 缺少 extra 时返回可执行的安装命令.
 
 先做同 wheel extras，不立即拆仓。建议基础依赖只保留 Click、Packaging、Pydantic
 和 PyYAML；可选依赖定义为：
 
-- `websocket`：通用 WebSocket 工具所需的 `aiohttp`；
 - `napcat`：`aiohttp`, NapCat 连接层直接依赖它；
 - `bilibili`：`aiohttp` 与 `bilibili-api-python`. Bilibili 的 HTTP/WebSocket 运行
   路径同样需要 aiohttp, 不能只依赖上游包当前的元数据间接提供；
@@ -926,7 +925,7 @@ provider 最多再依赖 `configure`/`ConfigRegistrar`。框架内部控制面�
    WebSocket 模块; 内部调用改为具体模块导入, 不保留原门面的延迟兼容导出;
 3. 缺少 extra 时抛出带安装命令的 `ConfigError`，例如
    `pip install 'butterbot-python[bilibili]'`，不能只暴露底层 `ModuleNotFoundError`；
-4. CI 增加四类安装：基础 wheel、`[websocket]`、`[napcat]`、`[bilibili]`/`[all]`；
+4. CI 增加四类安装：基础 wheel、`[napcat]`、`[bilibili]`、`[all]`；
    基础 wheel 必须能 import `butterbot.app`、运行空 `BotApp` 和插件契约 smoke；
 5. 文档所有 adapter 示例标明 extra 安装命令，锁文件和 release smoke 使用
    `--all-extras` 跑完整套件。

@@ -4,7 +4,7 @@ import asyncio
 import importlib.util
 import subprocess
 import sys
-from importlib.metadata import requires, version
+from importlib.metadata import metadata, requires, version
 from pathlib import Path
 
 import butterbot
@@ -25,6 +25,8 @@ async def _smoke() -> None:
 def main() -> None:
     installed_version = version("butterbot-python")
     assert butterbot.__version__ == installed_version
+    provided_extras = set(metadata("butterbot-python").get_all("Provides-Extra") or ())
+    assert provided_extras == {"all", "bilibili", "napcat"}
     requirements = requires("butterbot-python") or ()
     base_requirements = tuple(
         requirement for requirement in requirements if "extra ==" not in requirement

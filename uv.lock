@@ -251,9 +251,6 @@ bilibili = [
 napcat = [
     { name = "aiohttp" },
 ]
-websocket = [
-    { name = "aiohttp" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -272,7 +269,6 @@ requires-dist = [
     { name = "aiohttp", marker = "extra == 'all'", specifier = ">=3.14.1" },
     { name = "aiohttp", marker = "extra == 'bilibili'", specifier = ">=3.14.1" },
     { name = "aiohttp", marker = "extra == 'napcat'", specifier = ">=3.14.1" },
-    { name = "aiohttp", marker = "extra == 'websocket'", specifier = ">=3.14.1" },
     { name = "bilibili-api-python", marker = "extra == 'all'", specifier = ">=17.4.2" },
     { name = "bilibili-api-python", marker = "extra == 'bilibili'", specifier = ">=17.4.2" },
     { name = "click", specifier = ">=8.1" },
@@ -280,7 +276,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
-provides-extras = ["websocket", "napcat", "bilibili", "all"]
+provides-extras = ["napcat", "bilibili", "all"]
 
 [package.metadata.requires-dev]
 dev = [

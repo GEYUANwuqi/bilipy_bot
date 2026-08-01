@@ -8,13 +8,13 @@ from importlib.util import find_spec
 
 def main() -> None:
     if len(sys.argv) != 2:
-        raise SystemExit("usage: smoke_extra.py websocket|napcat|bilibili|all")
+        raise SystemExit("usage: smoke_extra.py napcat|bilibili|all")
     extra = sys.argv[1]
-    if extra not in {"websocket", "napcat", "bilibili", "all"}:
+    if extra not in {"napcat", "bilibili", "all"}:
         raise SystemExit("unknown extra: %s" % extra)
 
     assert find_spec("aiohttp") is not None
-    if extra in {"websocket", "all"}:
+    if extra in {"napcat", "all"}:
         from butterbot.utils.websocket import AsyncWebSocketClient
 
         assert AsyncWebSocketClient is not None

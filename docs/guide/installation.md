@@ -29,7 +29,6 @@ uv add butterbot-python
 基础安装只包含核心、CLI 和插件契约. 按实际 adapter 选择 extra:
 
 ```bash
-uv add "butterbot-python[websocket]"  # 通用 aiohttp WebSocket 工具
 uv add "butterbot-python[napcat]"     # NapCat, 显式安装 aiohttp
 uv add "butterbot-python[bilibili]"  # Bilibili SDK 和 aiohttp
 uv add "butterbot-python[all]"        # 全部内置 adapter

@@ -11,7 +11,7 @@
 - `BotApp` 默认自动管理日志格式, 并提供 `external` 模式保留宿主配置.
 - `setup_logging()` 返回可共享且可恢复宿主状态的 `LoggingLease`.
 - `butterbot.plugin` 只保留插件作者契约和可捕获异常.
-- 内置 adapter 改为 `websocket`、`napcat`、`bilibili` 和 `all` extras;
+- 内置 adapter 改为 `napcat`、`bilibili` 和 `all` extras;
   NapCat 与 Bilibili 均显式依赖 `aiohttp`.
 - 项目自有中文文本将统一使用 ASCII 半角标点.
 
