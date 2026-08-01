@@ -51,10 +51,9 @@ Jupyter、ASGI 服务或其他已运行的协程中调用它。
 模块顶层调用 `app.run()`。
 :::
 
-`butterbot init` 生成的 `app = BotApp()` 就是这种对象入口：不指定 `-config` 时，
-配置由 `BotApp()` 构造时的 `RuntimeConfig.from_yaml()` 读取 `config.yaml`，CLI
-直接采用该实例，只在其上绑定插件控制面并调用同一个 `BotApp.run()`。显式指定
-`-config` 时必须改用工厂入口（见 [命令行](./cli.md)）。
+`butterbot init` 默认生成工厂入口，由 CLI 在插件完成配置 builder 和 Source
+factory 注册后传入 `RuntimeConfig` 与注册表。已有的 `app = BotApp()` 对象入口仍
+兼容不指定 `-config` 的简单项目，但不再是脚手架默认值（见[命令行](./cli.md)）。
 
 如果选择直接执行 Python 文件，而不是把它作为 CLI 入口，使用主模块保护：
 
@@ -77,8 +76,8 @@ if __name__ == "__main__":
 | 同步宿主且没有现有事件循环 | 由宿主调用 `app.run()` |
 | ASGI/Jupyter/现有 asyncio 应用 | `async with app` 或手动 `start()`/`close()` |
 
-CLI 的 `stop` 是操作系统级进程暂停，不调用 `BotApp.stop()`。两者的资源和恢复语义
-不同，详见[命令行的状态、暂停和恢复](./cli.md#状态、暂停和恢复)。
+CLI 的 `stop` 向受管进程发送 `SIGTERM`，由 `BotApp.run()` 进入 `close()` 清理；
+它不是 `BotApp.stop()` 的远程调用。详见[命令行的状态与优雅停止](./cli.md#状态与优雅停止)。
 
 传入 `duration` 可以在指定秒数后正常关闭：
 

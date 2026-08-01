@@ -39,16 +39,6 @@ def test_claim_load_and_mark_stopped(tmp_path: Path):
     assert loaded == state
     assert is_process_alive(loaded)
 
-    paused = store.mark_paused(state.token)
-    assert paused is not None
-    assert paused.status == "paused"
-    assert paused.pid == state.pid
-    assert is_process_alive(paused)
-
-    running = store.mark_running(state.token)
-    assert running is not None
-    assert running.status == "running"
-
     stopped = store.mark_stopped(state.token, 0)
     assert stopped is not None
     assert stopped.status == "stopped"
@@ -86,7 +76,7 @@ def test_required_state_reports_missing_file(tmp_path: Path):
 def test_rejects_invalid_running_pid(tmp_path: Path, pid: object):
     store = StateStore(tmp_path / "runtime.json")
     data = {
-        "schema_version": 4,
+        "schema_version": 5,
         "token": "token",
         "status": "running",
         "pid": pid,
@@ -149,5 +139,21 @@ def test_schema_v3_state_is_migrated_with_starting_health(tmp_path: Path):
     migrated = store.load(required=True)
 
     assert migrated is not None
-    assert migrated.schema_version == 4
+    assert migrated.schema_version == 5
     assert migrated.health.state == "starting"
+
+
+def test_schema_v4_paused_state_is_migrated_for_safe_shutdown(tmp_path: Path):
+    store = StateStore(tmp_path / "runtime.json")
+    payload = asdict(_running_state(tmp_path))
+    payload["schema_version"] = 4
+    payload["status"] = "paused"
+    payload.pop("legacy_suspended")
+    store.path.write_text(json.dumps(payload), encoding="utf-8")
+
+    migrated = store.load(required=True)
+
+    assert migrated is not None
+    assert migrated.schema_version == 5
+    assert migrated.status == "running"
+    assert migrated.legacy_suspended

@@ -22,6 +22,7 @@ _STATE_FILENAME = "runtime.json"
 _LOG_FILENAME = "butterbot.log"
 _STOP_TIMEOUT = 10.0
 _BACKGROUND_START_TIMEOUT = 5.0
+_BACKGROUND_CLEANUP_TIMEOUT = 2.0
 _HEALTH_STALE_SECONDS = 5.0
 _STATUS_NOT_RUNNING = 3
 _DEFAULT_APPLICATION_PATH = "app.app"
@@ -37,8 +38,8 @@ def run_application(
 ) -> int:
     """构建应用，并在前台运行或委托给后台子进程.
 
-    约定：显式指定 ``-config`` 时必须使用工厂入口注入配置；不指定时推荐
-    对象入口 ``app = BotApp()``，配置由 ``BotApp()`` 构造时读取 ``config.yaml``。
+    约定：新项目统一使用工厂入口注入配置；不指定 ``-config`` 时仍兼容
+    ``app = BotApp()`` 对象入口。
     """
     from butterbot.plugin import PluginBootstrap
 
@@ -47,9 +48,6 @@ def run_application(
     config_specified = config_path is not None
     resolved_config_path = (config_path or Path("config.yaml")).resolve()
     store = _state_store(working_directory)
-    existing = store.refresh()
-    if existing is not None and existing.status == "paused":
-        return _resume_paused_process(store, existing)
     if background:
         pid = _spawn_background(
             application_path=application_path,
@@ -98,10 +96,13 @@ def show_status() -> int:
     if state is None:
         click.echo("ButterBot 未登记")
         return _STATUS_NOT_RUNNING
-    if state.status == "paused" and is_process_alive(state):
-        click.echo("ButterBot 已暂停（PID %s）" % state.pid)
-        return 0
     if is_process_alive(state):
+        if state.legacy_suspended:
+            click.echo(
+                "ButterBot 仍处于旧版本暂停状态（PID %s）；"
+                "请执行 stop 完成优雅停止" % state.pid
+            )
+            return 1
         health = state.health
         source_summary = "Source %s/%s ready" % (
             health.source_ready,
@@ -146,41 +147,16 @@ def show_status() -> int:
     return _STATUS_NOT_RUNNING
 
 
-def pause_application() -> int:
-    """暂停当前工作目录登记的应用进程."""
-    store = _state_store(Path.cwd())
-    state = store.refresh()
-    if state is None:
-        raise CliError("没有找到运行状态: %s" % store.path)
-    if state.status == "paused" and is_process_alive(state):
-        click.echo("ButterBot 已处于暂停状态（PID %s）" % state.pid)
-        return 0
-    if not is_process_alive(state) or state.pid is None:
-        raise CliError("ButterBot 当前未运行", exit_code=_STATUS_NOT_RUNNING)
-
-    stop_signal = getattr(signal, "SIGSTOP", None)
-    if stop_signal is None:
-        raise CliError("当前平台不支持暂停进程")
-    store.mark_paused(state.token)
-    try:
-        os.kill(state.pid, stop_signal)
-    except ProcessLookupError:
-        store.mark_running(state.token)
-        store.refresh()
-        raise CliError("ButterBot 当前未运行", exit_code=_STATUS_NOT_RUNNING) from None
-    except PermissionError as exc:
-        store.mark_running(state.token)
-        raise CliError("没有权限暂停 ButterBot 进程（PID %s）" % state.pid) from exc
-
-    click.echo("ButterBot 已暂停（PID %s）" % state.pid)
+def stop_application() -> int:
+    """向受管进程发送 SIGTERM 并等待应用生命周期清理."""
+    state = _stop_managed_process(_state_store(Path.cwd()))
+    click.echo("ButterBot 已停止（配置 %s）" % state.config_path)
     return 0
 
 
 def close_application() -> int:
-    """优雅关闭当前工作目录登记的应用进程."""
-    state = _stop_managed_process(_state_store(Path.cwd()))
-    click.echo("ButterBot 已关闭（配置 %s）" % state.config_path)
-    return 0
+    """兼容旧命令；关闭行为与 :func:`stop_application` 完全一致."""
+    return stop_application()
 
 
 def restart_application() -> int:
@@ -215,8 +191,8 @@ def _stop_managed_process(store: StateStore) -> RuntimeState:
     if not is_process_alive(state) or state.pid is None:
         raise CliError("ButterBot 当前未运行", exit_code=_STATUS_NOT_RUNNING)
 
-    if state.status == "paused":
-        _resume_process(store, state)
+    if state.legacy_suspended:
+        _continue_process(state.pid)
     try:
         os.kill(state.pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -281,6 +257,7 @@ def _spawn_background(
     while time.monotonic() < deadline:
         return_code = process.poll()
         if return_code is not None:
+            _cleanup_background_process(process)
             raise CliError(
                 "ButterBot 后台启动失败（退出码 %s），请检查日志 %s"
                 % (return_code, log_file)
@@ -290,11 +267,55 @@ def _spawn_background(
             return process.pid
         time.sleep(0.05)
 
-    try:
-        process.terminate()
-    except ProcessLookupError:
-        pass
+    _cleanup_background_process(process)
     raise CliError("等待 ButterBot 后台进程登记状态超时")
+
+
+def _cleanup_background_process(process: subprocess.Popen[bytes]) -> None:
+    """回收启动失败的独立进程组，超时后升级到 SIGKILL."""
+    _signal_background_process(process, signal.SIGTERM)
+    leader_exited = False
+    try:
+        process.wait(timeout=_BACKGROUND_CLEANUP_TIMEOUT)
+        leader_exited = True
+    except subprocess.TimeoutExpired:
+        pass
+
+    # 即使主进程已经退出，独立进程组中仍可能留下它创建的子进程；POSIX 下继续
+    # 对同一受管进程组发送 SIGKILL，进程组不存在时会安静返回。
+    kill_signal = getattr(signal, "SIGKILL", None)
+    if kill_signal is None:
+        if not leader_exited:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+    else:
+        _signal_background_process(process, kill_signal)
+    if leader_exited:
+        return
+    try:
+        process.wait(timeout=_BACKGROUND_CLEANUP_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        raise CliError(
+            "后台启动失败且无法回收子进程组（PID %s）" % process.pid
+        ) from exc
+
+
+def _signal_background_process(
+    process: subprocess.Popen[bytes],
+    process_signal: signal.Signals,
+) -> None:
+    """只向由 ``start_new_session`` 创建的受管进程组发信号."""
+    try:
+        os.killpg(process.pid, process_signal)
+    except ProcessLookupError:
+        return
+    except (AttributeError, NotImplementedError):
+        try:
+            process.send_signal(process_signal)
+        except ProcessLookupError:
+            pass
 
 
 def _state_store(working_directory: Path) -> StateStore:
@@ -331,45 +352,22 @@ def _runtime_health(health: AppHealth) -> RuntimeHealth:
     )
 
 
-def _resume_paused_process(store: StateStore, state: RuntimeState) -> int:
-    if state.pid is None or not is_process_alive(state):
-        store.mark_stopped(state.token, state.exit_code)
-        raise CliError("暂停的 ButterBot 进程已经退出")
-    _resume_process(store, state)
-    click.echo(
-        "检测到暂停的实例，已恢复原进程（PID %s）；"
-        "未创建新实例，如需新实例请使用 restart，或先 close 再 run" % state.pid
-    )
-    return 0
-
-
 def _continue_process(pid: int) -> None:
     continue_signal = getattr(signal, "SIGCONT", None)
     if continue_signal is None:
-        raise CliError("当前平台不支持恢复暂停进程")
+        raise CliError("当前平台无法恢复旧版本暂停的进程")
     try:
         os.kill(pid, continue_signal)
     except ProcessLookupError:
-        raise CliError("暂停的 ButterBot 进程已经退出") from None
+        raise CliError("旧版本暂停的 ButterBot 进程已经退出") from None
     except PermissionError as exc:
-        raise CliError("没有权限恢复 ButterBot 进程（PID %s）" % pid) from exc
-
-
-def _resume_process(store: StateStore, state: RuntimeState) -> None:
-    if state.pid is None:
-        raise CliError("暂停的 ButterBot 进程已经退出")
-    store.mark_running(state.token)
-    try:
-        _continue_process(state.pid)
-    except BaseException:
-        store.mark_paused(state.token)
-        raise
+        raise CliError("没有权限恢复旧版本 ButterBot 进程（PID %s）" % pid) from exc
 
 
 __all__ = [
     "close_application",
-    "pause_application",
     "restart_application",
     "run_application",
     "show_status",
+    "stop_application",
 ]

@@ -68,7 +68,12 @@ jobs:
           uv run pytest
           --cov=butterbot
           --cov-report=term-missing
+          --cov-report=json:coverage.json
           --cov-fail-under=70
+
+      - name: Check critical module coverage
+        if: matrix.python-version == '3.12'
+        run: uv run python scripts/check_critical_coverage.py coverage.json
 
       - name: Test
         if: matrix.python-version != '3.12'

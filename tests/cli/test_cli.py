@@ -17,6 +17,7 @@ from click.testing import CliRunner
 
 from butterbot import __version__
 from butterbot.app import BotApp
+from butterbot.cli import runtime as runtime_module
 from butterbot.cli.errors import CliError
 from butterbot.cli.main import cli, main
 from butterbot.cli.runtime import restart_application, run_application
@@ -52,7 +53,9 @@ def test_init_creates_complete_runnable_project(
     assert config["plugins"]["plugin_list"] == ["HelloPlugin"]
     assert config["plugins"]["plugin_path"] == "./plugins"
     assert config["sources"] == {}
-    assert "app = BotApp()" in (tmp_path / "app.py").read_text(encoding="utf-8")
+    app_source = (tmp_path / "app.py").read_text(encoding="utf-8")
+    assert "def app(" in app_source
+    assert "source_factory_registry=source_factory_registry" in app_source
     plugin_root = tmp_path / "plugins" / "example.hello"
     assert 'plugin_name = "HelloPlugin"' in plugin_root.joinpath(
         "plugin.toml"
@@ -595,30 +598,9 @@ def test_background_full_restart_and_close(tmp_path: Path):
         assert state.application_path == "managed_app.app"
         assert state.config_path == str(config.resolve())
 
-        paused = cli("stop")
-        assert paused.returncode == 0, paused.stderr
-        _wait_until_process_paused(first_pid)
-
-        status = cli("status")
-        assert status.returncode == 0
-        assert "已暂停" in status.stdout
-
-        resumed = cli("run", "--background")
-        assert resumed.returncode == 0, resumed.stderr
-        assert "已恢复原进程" in resumed.stdout
-        assert "未创建新实例" in resumed.stdout
-        assert _extract_pid(resumed.stdout) == first_pid
-        assert (tmp_path / "starts.log").read_text(encoding="utf-8").splitlines() == [
-            "first"
-        ]
-
         duplicate = cli("run", "--background")
         assert duplicate.returncode == 1
         assert "正在运行" in duplicate.stderr
-
-        paused_again = cli("stop")
-        assert paused_again.returncode == 0, paused_again.stderr
-        _wait_until_process_paused(first_pid)
 
         config.write_text(
             "generation: second\nplugins:\n  enabled: false\n",
@@ -635,8 +617,9 @@ def test_background_full_restart_and_close(tmp_path: Path):
             "second",
         ]
 
-        closed = cli("close")
-        assert closed.returncode == 0, closed.stderr
+        stopped = cli("stop")
+        assert stopped.returncode == 0, stopped.stderr
+        assert "已停止" in stopped.stdout
         _wait_until_process_exits(second_pid)
 
         status = cli("status")
@@ -657,20 +640,52 @@ def test_background_full_restart_and_close(tmp_path: Path):
             "third",
         ]
 
-        paused_third = cli("stop")
-        assert paused_third.returncode == 0, paused_third.stderr
-        _wait_until_process_paused(third_pid)
-
         closed_again = cli("close")
         assert closed_again.returncode == 0, closed_again.stderr
+        assert "已停止" in closed_again.stdout
         _wait_until_process_exits(third_pid)
     finally:
         state = StateStore(state_file).refresh()
         if state is not None and is_process_alive(state) and state.pid is not None:
-            if state.status == "paused":
-                os.kill(state.pid, signal.SIGCONT)
             os.kill(state.pid, signal.SIGTERM)
             _wait_until_process_exits(state.pid)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="依赖 POSIX 进程组信号")
+def test_background_start_timeout_kills_and_reaps_child(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """导入阶段卡死且忽略 SIGTERM 时，启动方必须升级 SIGKILL 并 wait."""
+    (tmp_path / "slow_app.py").write_text(
+        "import os\n"
+        "import signal\n"
+        "import time\n"
+        "from pathlib import Path\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "Path('slow.pid').write_text(str(os.getpid()), encoding='utf-8')\n"
+        "time.sleep(60)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(
+        "PYTHONPATH",
+        os.pathsep.join(
+            [str(PROJECT_ROOT), str(tmp_path), os.environ.get("PYTHONPATH", "")]
+        ),
+    )
+    monkeypatch.setattr(runtime_module, "_BACKGROUND_START_TIMEOUT", 1.0)
+    monkeypatch.setattr(runtime_module, "_BACKGROUND_CLEANUP_TIMEOUT", 0.1)
+
+    with pytest.raises(CliError, match="登记状态超时"):
+        runtime_module._spawn_background(
+            application_path="slow_app.app",
+            config_path=None,
+            debug=False,
+            working_directory=tmp_path,
+        )
+
+    pid = int((tmp_path / "slow.pid").read_text(encoding="utf-8"))
+    _wait_until_process_exits(pid)
 
 
 def _write_application(path: Path) -> None:
@@ -752,20 +767,3 @@ def _wait_until_process_exits(pid: int) -> None:
             return
         time.sleep(0.05)
     pytest.fail("进程 %s 未完全退出" % pid)
-
-
-def _wait_until_process_paused(pid: int) -> None:
-    deadline = time.monotonic() + 5
-    stat_path = Path("/proc") / str(pid) / "stat"
-    while time.monotonic() < deadline:
-        try:
-            stat = stat_path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            pytest.fail("进程 %s 在暂停前退出" % pid)
-        closing_parenthesis = stat.rfind(")")
-        if closing_parenthesis >= 0:
-            fields = stat[closing_parenthesis + 2 :].split()
-            if fields and fields[0] in ("T", "t"):
-                return
-        time.sleep(0.05)
-    pytest.fail("进程 %s 未进入暂停状态" % pid)

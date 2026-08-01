@@ -50,3 +50,4 @@ config.json
 
 # === Coverage ===
 .coverage
+coverage.json

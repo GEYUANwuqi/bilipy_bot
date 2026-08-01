@@ -19,10 +19,10 @@ from .plugin_tools import check_plugins, list_plugins
 from .project import initialize_project
 from .runtime import (
     close_application,
-    pause_application,
     restart_application,
     run_application,
     show_status,
+    stop_application,
 )
 
 _CONFIG_PATH_TYPE = click.Path(
@@ -166,13 +166,13 @@ def restart_command() -> int:
 
 @cli.command("stop")
 def stop_command() -> int:
-    """暂停应用进程."""
-    return pause_application()
+    """优雅停止应用进程."""
+    return stop_application()
 
 
 @cli.command("close")
 def close_command() -> int:
-    """优雅关闭应用进程."""
+    """优雅停止应用进程（stop 的兼容别名）."""
     return close_application()
 
 

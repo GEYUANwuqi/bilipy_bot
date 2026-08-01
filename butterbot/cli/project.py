@@ -32,11 +32,19 @@ _INITIAL_CONFIG: dict[str, object] = {
 
 _APP_TEMPLATE = '''"""ButterBot 应用入口."""
 
-from butterbot.app import BotApp
+from butterbot.app import BotApp, RuntimeConfig, SourceFactoryRegistry
 
-# 对象入口：CLI 直接采用该实例。插件需要注册配置 builder 或 Source factory 时，
-# 请改用 def app(*, config, source_factory_registry) 工厂形式。
-app = BotApp()
+
+def app(
+    *,
+    config: RuntimeConfig,
+    source_factory_registry: SourceFactoryRegistry,
+) -> BotApp:
+    """在插件完成配置与 Source 工厂注册后构建应用."""
+    return BotApp(
+        config=config,
+        source_factory_registry=source_factory_registry,
+    )
 '''
 
 _PLUGIN_MANIFEST = """\

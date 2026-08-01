@@ -5,11 +5,15 @@
 """
 
 import asyncio
+import logging
 import socket
+from types import SimpleNamespace
 
 import pytest
+from aiohttp import WSMsgType
 
 from butterbot.utils.websocket import (
+    AioHttpWebSocketConnection,
     AsyncWebSocketClient,
     ConnectionHealthState,
     ListenerClosedError,
@@ -17,6 +21,7 @@ from butterbot.utils.websocket import (
     MessageType,
     ReconnectionStrategy,
     WebSocketConfig,
+    WebSocketError,
     WebSocketListener,
     WebSocketState,
 )
@@ -111,6 +116,18 @@ class TestWebSocketListenerClose:
         assert msg_type is MessageType.Text
 
     @pytest.mark.asyncio
+    async def test_closed_listener_rejects_put(self):
+        listener = WebSocketListener()
+        listener.close()
+
+        assert not await listener.put("late", MessageType.Text)
+
+    def test_get_nowait_returns_none_when_empty(self):
+        listener = WebSocketListener()
+
+        assert listener.get_nowait() is None
+
+    @pytest.mark.asyncio
     async def test_async_iteration_stops_on_close(self):
         """异步迭代应在 close 后正常终止（StopAsyncIteration）."""
         listener = WebSocketListener()
@@ -199,6 +216,17 @@ class TestListenerEviction:
             assert message == "payload"
             assert msg_type is MessageType.Text
 
+    def test_get_message_nowait_delivers_and_rejects_unknown_listener(self):
+        client = _client()
+        listener = WebSocketListener()
+        client._listeners[listener.id] = listener
+        listener.queue.put_nowait(("ready", MessageType.Text))
+
+        assert client.get_message_nowait(listener.id) == ("ready", MessageType.Text)
+        client._listeners.clear()
+        with pytest.raises(ListenerEvictedError):
+            client.get_message_nowait(listener.id)
+
 
 class TestReconnectionStrategy:
     """reconnect_attempts=0 的语义必须与文档一致（ASYNC-003）."""
@@ -263,6 +291,9 @@ class TestReconnectionStrategy:
 @pytest.mark.parametrize(
     ("field", "value"),
     [
+        ("uri", "http://localhost:1"),
+        ("heartbeat", 0),
+        ("reconnect_attempts", -1),
         ("receive_timeout", 0),
         ("connect_timeout", 0),
         ("send_queue_size", 0),
@@ -389,6 +420,15 @@ class TestClientShutdown:
             await client.send("hi")
 
     @pytest.mark.asyncio
+    async def test_send_queue_full_raises(self):
+        client = _client(send_queue_size=1)
+        client._running = True
+        await client.send("first")
+
+        with pytest.raises(WebSocketError, match="queue is full"):
+            await client.send("second")
+
+    @pytest.mark.asyncio
     async def test_metrics_report_failed_connections(self):
         """指标应记录失败的连接尝试."""
         client = _client(reconnect_attempts=2)
@@ -472,3 +512,130 @@ class TestClientReadiness:
         assert not client.running
         assert client._main_task is None
         assert client.connection.session is None
+
+
+class _FakeSocket:
+    def __init__(self) -> None:
+        self.closed = False
+        self.sent: list[tuple[str, object]] = []
+        self.messages: list[object] = []
+        self.send_error: BaseException | None = None
+        self.close_error: BaseException | None = None
+
+    async def send_str(self, data: str) -> None:
+        if self.send_error is not None:
+            raise self.send_error
+        self.sent.append(("text", data))
+
+    async def send_bytes(self, data: bytes) -> None:
+        if self.send_error is not None:
+            raise self.send_error
+        self.sent.append(("binary", data))
+
+    async def receive(self, *, timeout: float) -> object:
+        return self.messages.pop(0)
+
+    async def close(self) -> None:
+        self.closed = True
+        if self.close_error is not None:
+            raise self.close_error
+
+
+class _FakeSession:
+    def __init__(self, close_error: BaseException | None = None) -> None:
+        self.close_error = close_error
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+        if self.close_error is not None:
+            raise self.close_error
+
+
+def _connection() -> tuple[AioHttpWebSocketConnection, _FakeSocket]:
+    connection = AioHttpWebSocketConnection(
+        WebSocketConfig(uri="ws://localhost:1"),
+        logging.getLogger("test.websocket.connection"),
+    )
+    websocket = _FakeSocket()
+    connection.websocket = websocket  # type: ignore[assignment]
+    connection.state = WebSocketState.CONNECTED
+    return connection, websocket
+
+
+class TestAioHttpConnectionProtocolMapping:
+    @pytest.mark.asyncio
+    async def test_send_formats_dict_text_and_binary(self) -> None:
+        connection, websocket = _connection()
+
+        await connection.send({"value": 1})
+        await connection.send("42")
+        await connection.send(b"raw")
+
+        assert websocket.sent == [
+            ("text", '{"value": 1}'),
+            ("text", "42"),
+            ("binary", b"raw"),
+        ]
+        assert connection.metrics["messages_sent"] == 3
+
+    @pytest.mark.asyncio
+    async def test_send_failure_updates_error_metric(self) -> None:
+        connection, websocket = _connection()
+        websocket.send_error = RuntimeError("send failed")
+
+        with pytest.raises(RuntimeError, match="send failed"):
+            await connection.send("payload")
+
+        assert connection.metrics["errors"] == 1
+
+    @pytest.mark.parametrize(
+        ("wire_type", "expected"),
+        [
+            (WSMsgType.BINARY, MessageType.Binary),
+            (WSMsgType.PING, MessageType.Ping),
+            (WSMsgType.PONG, MessageType.Pong),
+            (WSMsgType.CLOSE, MessageType.Close),
+            (WSMsgType.ERROR, MessageType.Error),
+            (WSMsgType.CLOSED, MessageType.NONE),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_receive_maps_aiohttp_message_types(
+        self,
+        wire_type: WSMsgType,
+        expected: MessageType,
+    ) -> None:
+        connection, websocket = _connection()
+        payload = b"binary" if wire_type is WSMsgType.BINARY else "payload"
+        websocket.messages.append(SimpleNamespace(type=wire_type, data=payload))
+
+        message, message_type = await connection.receive()
+
+        assert message == payload
+        assert message_type is expected
+
+    @pytest.mark.asyncio
+    async def test_receive_failure_updates_error_metric(self) -> None:
+        connection, websocket = _connection()
+        websocket.messages.append(None)
+
+        with pytest.raises(AttributeError):
+            await connection.receive()
+
+        assert connection.metrics["errors"] == 1
+
+    @pytest.mark.asyncio
+    async def test_close_clears_handles_even_when_both_closes_fail(self) -> None:
+        connection, websocket = _connection()
+        websocket.close_error = RuntimeError("socket close failed")
+        session = _FakeSession(RuntimeError("session close failed"))
+        connection.session = session  # type: ignore[assignment]
+
+        await connection.close()
+
+        assert websocket.closed
+        assert session.closed
+        assert connection.websocket is None
+        assert connection.session is None
+        assert connection.state is WebSocketState.Closed

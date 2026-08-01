@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from .errors import CliError
 
-_STATE_SCHEMA_VERSION = 4
+_STATE_SCHEMA_VERSION = 5
 _LOCK_STALE_SECONDS = 30.0
 _LOCK_WAIT_SECONDS = 2.0
 
@@ -86,7 +86,7 @@ class RuntimeState:
 
     schema_version: int
     token: str
-    status: Literal["running", "paused", "stopped"]
+    status: Literal["running", "stopped"]
     pid: int | None
     process_identity: str | None
     debug: bool
@@ -96,6 +96,7 @@ class RuntimeState:
     log_file: str
     started_at: float
     health: RuntimeHealth
+    legacy_suspended: bool = False
     stopped_at: float | None = None
     exit_code: int | None = None
 
@@ -135,10 +136,14 @@ class RuntimeState:
             migrated_state = (
                 "stopped" if payload.get("status") == "stopped" else "starting"
             )
-            payload["schema_version"] = _STATE_SCHEMA_VERSION
             payload["health"] = asdict(
                 RuntimeHealth(state=migrated_state, observed_at=time.time())
             )
+        if schema_version in (3, 4):
+            payload["schema_version"] = _STATE_SCHEMA_VERSION
+            payload["legacy_suspended"] = payload.get("status") == "paused"
+            if payload["legacy_suspended"]:
+                payload["status"] = "running"
         elif schema_version != _STATE_SCHEMA_VERSION:
             raise CliError("不支持的 CLI 状态文件版本: %s" % schema_version)
         try:
@@ -166,7 +171,9 @@ class RuntimeState:
             raise CliError("CLI 状态文件结构无效")
         if not isinstance(self.debug, bool):
             raise CliError("CLI 状态文件结构无效")
-        if self.status not in ("running", "paused", "stopped"):
+        if self.status not in ("running", "stopped"):
+            raise CliError("CLI 状态文件结构无效")
+        if not isinstance(self.legacy_suspended, bool):
             raise CliError("CLI 状态文件结构无效")
         if not isinstance(self.started_at, (int, float)):
             raise CliError("CLI 状态文件结构无效")
@@ -181,7 +188,7 @@ class RuntimeState:
         ):
             raise CliError("CLI 状态文件结构无效")
 
-        if self.status in ("running", "paused"):
+        if self.status == "running":
             if (
                 isinstance(self.pid, bool)
                 or not isinstance(self.pid, int)
@@ -220,14 +227,6 @@ class StateStore:
                 raise CliError("已有 ButterBot 实例正在运行（PID %s）" % existing.pid)
             self._write_unlocked(state)
 
-    def mark_paused(self, token: str) -> RuntimeState | None:
-        """仅由持有相同 token 的进程记录暂停状态."""
-        return self._mark_active_status(token, "paused")
-
-    def mark_running(self, token: str) -> RuntimeState | None:
-        """仅由持有相同 token 的进程记录恢复运行."""
-        return self._mark_active_status(token, "running")
-
     def mark_stopped(self, token: str, exit_code: int | None) -> RuntimeState | None:
         """仅由持有相同 token 的进程把记录标记为停止."""
         with self._lock():
@@ -241,6 +240,7 @@ class StateStore:
                 process_identity=None,
                 stopped_at=time.time(),
                 exit_code=exit_code,
+                legacy_suspended=False,
                 health=replace(
                     state.health,
                     state="stopped",
@@ -271,19 +271,6 @@ class StateStore:
         if state is None or state.status == "stopped" or is_process_alive(state):
             return state
         return self.mark_stopped(state.token, state.exit_code)
-
-    def _mark_active_status(
-        self,
-        token: str,
-        status: Literal["running", "paused"],
-    ) -> RuntimeState | None:
-        with self._lock():
-            state = self._load_unlocked()
-            if state is None or state.token != token or state.pid is None:
-                return state
-            updated = replace(state, status=status)
-            self._write_unlocked(updated)
-            return updated
 
     def _load_unlocked(self) -> RuntimeState | None:
         try:

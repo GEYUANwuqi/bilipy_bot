@@ -50,8 +50,7 @@ uv run butterbot plugin check
 uv run butterbot run --background
 uv run butterbot status
 uv run butterbot stop
-uv run butterbot run --background  # 恢复暂停的同一进程
-uv run butterbot close
+uv run butterbot restart
 ```
 
 `run` 默认加载 `app.app` 和当前目录的 `config.yaml`。可以用位置参数或

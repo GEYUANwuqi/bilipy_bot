@@ -61,24 +61,10 @@ butterbot run \
 
 - 显式指定 `-config` 时，必须使用工厂入口注入配置。CLI 会把解析好的
   `RuntimeConfig` 和 Source 注册表作为关键字参数传给工厂；
-- 不指定 `-config` 时，推荐使用对象入口 `app = BotApp()`，配置由 `BotApp()`
-  构造时的 `RuntimeConfig.from_yaml()` 读取当前工作目录的 `config.yaml`，
-  CLI 只负责绑定插件控制面。
+- 不指定 `-config` 时仍兼容对象入口 `app = BotApp()`；新项目统一使用工厂入口，
+  这样插件注册的配置 builder 和 Source factory 一定先于应用构造生效。
 
-`butterbot init` 默认生成对象入口：
-
-```python
-from butterbot.app import BotApp
-
-app = BotApp()
-```
-
-对象入口在模块导入时已经读取当前工作目录的 `config.yaml`，因此显式给出
-`-config`（即使路径就是 `config.yaml`）时 CLI 会直接报错，要求改用工厂入口。
-示例插件的 Handler 仍会在 `app.start()` 时注册。
-
-工厂入口（指定 `-config` 时必选；插件需要在 `RuntimeConfig` 解析前注册配置
-builder，或在配置 Source 构造前注册 Source factory 时也必须使用）：
+`butterbot init` 默认生成工厂入口：
 
 ```python
 from butterbot.app import BotApp, RuntimeConfig, SourceFactoryRegistry
@@ -94,6 +80,10 @@ def app(
         source_factory_registry=source_factory_registry,
     )
 ```
+
+对象入口在模块导入时已经读取当前工作目录的 `config.yaml`，因此显式给出
+`-config`（即使路径就是 `config.yaml`）时 CLI 会直接报错。它只作为已有简单项目
+的兼容入口保留。
 
 最简工厂也可以直接引用类本身：`app = BotApp`。工厂入口必须接受 `config` 和
 `source_factory_registry` 两个关键字参数，并返回 `BotApp`。不要在模块导入时调用
@@ -206,43 +196,31 @@ butterbot run --background --debug
 `--debug` 让配置和入口加载错误保留完整 traceback。后台状态会记录该设置，
 `restart` 沿用它。
 
-## 状态、暂停和恢复
+## 状态与优雅停止
 
 ```bash
 butterbot status
 butterbot stop
 ```
 
-`status` 会显示 Source ready 数和插件 healthy 数。`starting`、`ready`、
-`stopping` 或暂停时退出码为 `0`；`degraded` 或健康报告超过 5 秒未更新时为
+`status` 会显示 Source ready 数和插件 healthy 数。`starting`、`ready` 或
+`stopping` 时退出码为 `0`；`degraded` 或健康报告超过 5 秒未更新时为
 `1`；没有记录或已经停止时为 `3`。一个工作目录只管理一个进程，管理命令应在
 启动时的目录执行。
 
-`stop` 使用操作系统 `SIGSTOP` 暂停进程，保留 PID、内存和连接。再次执行 `run`
-会发送 `SIGCONT` 并恢复原 PID，不会应用本次命令提供的新入口或配置：
+`stop` 发送 `SIGTERM`，等待 `BotApp.close()` 按插件、Source、EventBus、API 的
+顺序释放资源。固定等待上限为 10 秒；超时只报告错误，不会强制终止一个已经进入
+正常运行阶段的应用。
 
-```text
-run -> PID 100
-stop -> PID 100 暂停
-run -> PID 100 恢复，不创建新实例
-```
-
-::: warning 暂停不会释放资源
-暂停期间事件循环、Handler 和心跳全部冻结，socket 也不会主动关闭。需要释放
-Source、EventBus 和 API 资源时应使用 `close`。
-:::
-
-`SIGSTOP/SIGCONT` 不可用的平台会明确报错。重复暂停是幂等操作。
-
-## 关闭与完整重启
+## 兼容关闭命令与完整重启
 
 ```bash
 butterbot close
 butterbot restart
 ```
 
-`close` 对暂停实例先发送 `SIGCONT`，再发送 `SIGTERM` 并等待 `BotApp.close()`。
-固定等待上限为 10 秒；超时只报告错误，不发送 `SIGKILL`。
+`close` 暂时作为 `stop` 的兼容别名，行为和输出一致；新脚本应使用 `stop`。
+旧版本留下的暂停状态会在执行 `stop` 时先恢复，再进入同一优雅停止路径。
 
 `restart` 不做热重载。它等待旧 PID 完全退出，再创建新解释器，并复用状态文件中
 记录的应用入口、配置文件和 debug 设置。即使上次进程已经停止，只要运行状态仍在，
