@@ -18,6 +18,7 @@ class TestPackage:
     def test_app_facade_importable(self):
         """公开门面 butterbot.app 的核心导出可用."""
         from butterbot.app import (
+            AppHealth,
             BotApp,
             Event,
             RuntimeConfig,
@@ -25,6 +26,7 @@ class TestPackage:
             SourceStopError,
         )
 
+        assert AppHealth is not None
         assert BotApp is not None
         assert Event is not None
         assert RuntimeConfig is not None

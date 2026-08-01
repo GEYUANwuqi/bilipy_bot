@@ -8,6 +8,7 @@ import threading
 import time
 import uuid
 from asyncio import QueueFull
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, NewType
@@ -39,6 +40,27 @@ class WebSocketState(Enum):
     Rconnecting = "reconnecting"
     Closing = "closing"
     Closed = "closed"
+
+
+class ConnectionHealthState(str, Enum):
+    """WebSocket 客户端对外暴露的连接健康状态."""
+
+    STOPPED = "stopped"
+    STARTING = "starting"
+    READY = "ready"
+    DEGRADED = "degraded"
+    STOPPING = "stopping"
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectionHealth:
+    """不携带异常对象的 WebSocket 连接健康快照."""
+
+    state: ConnectionHealthState
+    last_success_at: float | None
+    last_error_at: float | None
+    last_error_type: str | None
+    last_error_message: str | None
 
 
 class WebSocketError(Exception):
@@ -116,8 +138,28 @@ class WebSocketConfig:
             raise ValueError("URI must start with ws:// or wss://")
         if self.heartbeat <= 0:
             raise ValueError("Heartbeat must be positive")
+        if self.receive_timeout <= 0:
+            raise ValueError("Receive timeout must be positive")
         if self.reconnect_attempts < 0:
             raise ValueError("Reconnect attempts cannot be negative")
+        if self.connect_timeout <= 0:
+            raise ValueError("Connect timeout must be positive")
+        if self.send_queue_size <= 0:
+            raise ValueError("Send queue size must be positive")
+        if self.session_timeout <= 0:
+            raise ValueError("Session timeout must be positive")
+        if self.backoff_base < 0:
+            raise ValueError("Backoff base cannot be negative")
+        if self.backoff_max < self.backoff_base:
+            raise ValueError("Backoff max cannot be less than backoff base")
+        if self.jitter_factor < 0:
+            raise ValueError("Jitter factor cannot be negative")
+        if not 0 <= self.compression <= 15:
+            raise ValueError("Compression must be between 0 and 15")
+        if self.max_listeners <= 0:
+            raise ValueError("Max listeners must be positive")
+        if self.listener_buffer_size <= 0:
+            raise ValueError("Listener buffer size must be positive")
 
 
 _CLOSE_SENTINEL = object()
@@ -681,6 +723,17 @@ class AsyncWebSocketClient:
         # 状态控制
         self._running = False
         self._main_task: asyncio.Task | None = None
+        self._lifecycle_lock = asyncio.Lock()
+        self._shutdown_lock = asyncio.Lock()
+        self._ready = False
+        self._ever_ready = False
+        self._ready_event = asyncio.Event()
+        self._startup_error: ConnectionError | None = None
+        self._health_state = ConnectionHealthState.STOPPED
+        self._last_success_at: float | None = None
+        self._last_error_at: float | None = None
+        self._last_error: BaseException | None = None
+        self._health_handler: Callable[[ConnectionHealth], None] | None = None
 
         # 发送队列
         self._send_queue = asyncio.Queue(maxsize=self.config.send_queue_size)
@@ -693,6 +746,30 @@ class AsyncWebSocketClient:
             bool: 正在运行返回 True
         """
         return self._running
+
+    @property
+    def ready(self) -> bool:
+        """首次连接已成功且当前底层连接仍可用."""
+        return self._ready and self.connection.is_connected()
+
+    @property
+    def health(self) -> ConnectionHealth:
+        """返回当前连接健康快照."""
+        error = self._last_error
+        return ConnectionHealth(
+            state=self._health_state,
+            last_success_at=self._last_success_at,
+            last_error_at=self._last_error_at,
+            last_error_type=type(error).__name__ if error is not None else None,
+            last_error_message=str(error) if error is not None else None,
+        )
+
+    def set_health_handler(
+        self,
+        handler: Callable[[ConnectionHealth], None] | None,
+    ) -> None:
+        """设置连接健康变化的同步回调."""
+        self._health_handler = handler
 
     async def __aenter__(self):
         """异步上下文管理器入口
@@ -713,18 +790,60 @@ class AsyncWebSocketClient:
         """
         await self.stop()
 
-    async def start(self) -> None:
+    async def start(
+        self,
+        *,
+        wait_ready: bool = False,
+        ready_timeout: float | None = None,
+    ) -> None:
         """启动客户端
 
-        启动主事件循环，开始处理连接、发送和接收。
-        如果已经在运行，直接返回。
+        ``wait_ready=False`` 只保证主任务已创建；``True`` 则等待
+        首次 WebSocket 连接成功。有限重连用尽或就绪超时会同步
+        抛出 :class:`ConnectionError`，且本次新启动的客户端会完整停止。
         """
-        if self._running:
-            return
+        started_here = False
+        async with self._lifecycle_lock:
+            if not self._running:
+                self.reconnection.on_success()
+                self._ready = False
+                self._ever_ready = False
+                self._ready_event.clear()
+                self._startup_error = None
+                self._running = True
+                self._set_health(ConnectionHealthState.STARTING)
+                self._main_task = asyncio.create_task(self._main_loop())
+                started_here = True
+                self.logger.info("WebSocket client started")
 
-        self._running = True
-        self._main_task = asyncio.create_task(self._main_loop())
-        self.logger.info("WebSocket client started")
+        if not wait_ready:
+            return
+        try:
+            await self.wait_until_ready(timeout=ready_timeout)
+        except BaseException:
+            if started_here:
+                await self.stop()
+            raise
+
+    async def wait_until_ready(self, timeout: float | None = None) -> None:
+        """等待首次连接就绪，或传播最终首连失败."""
+        if self._ever_ready:
+            return
+        try:
+            if timeout is None:
+                await self._ready_event.wait()
+            else:
+                await asyncio.wait_for(self._ready_event.wait(), timeout=timeout)
+        except TimeoutError as exc:
+            error = ConnectionError("WebSocket ready timeout after %ss" % timeout)
+            self._record_error(error)
+            raise error from exc
+
+        if self._ever_ready:
+            return
+        if self._startup_error is not None:
+            raise self._startup_error
+        raise ConnectionError("WebSocket stopped before first connection became ready")
 
     async def stop(self) -> None:
         """停止客户端（外部入口）
@@ -736,21 +855,30 @@ class AsyncWebSocketClient:
         已被置 False，异常传出后 finally 里的再次 stop() 会被开头的早退挡掉，
         于是监听器与 aiohttp session 全部泄漏。内部收尾请用 :meth:`_shutdown`。
         """
-        self._running = False
-        main_task = self._main_task
-        self._main_task = None
+        async with self._lifecycle_lock:
+            self._running = False
+            self._ready = False
+            self._set_health(ConnectionHealthState.STOPPING)
+            main_task = self._main_task
+            self._main_task = None
 
-        if main_task is not None and main_task is not asyncio.current_task():
-            self.logger.debug("WebSocket client stopping")
-            main_task.cancel()
-            try:
-                await main_task
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                self.logger.error("Main task ended with error: %s", e)
+            if not self._ready_event.is_set():
+                self._startup_error = ConnectionError(
+                    "WebSocket stopped before first connection became ready"
+                )
+                self._ready_event.set()
 
-        await self._shutdown()
+            if main_task is not None and main_task is not asyncio.current_task():
+                self.logger.debug("WebSocket client stopping")
+                main_task.cancel()
+                try:
+                    await main_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    self.logger.error("Main task ended with error: %s", e)
+
+            await self._shutdown()
 
     async def _shutdown(self) -> None:
         """清理监听器与底层连接（幂等，不触碰主任务）
@@ -758,19 +886,28 @@ class AsyncWebSocketClient:
         供 :meth:`stop` 和 :meth:`_main_loop` 的 finally 共用：
         无论从外部停止还是主循环自己退出，资源释放都走同一条路径。
         """
-        self._running = False
+        async with self._shutdown_lock:
+            self._running = False
+            self._ready = False
 
-        # 关闭所有监听器
-        with self._listeners_lock:
-            listeners = list(self._listeners.values())
-            self._listeners.clear()
-        for listener in listeners:
-            listener.close()
+            if not self._ready_event.is_set():
+                self._startup_error = ConnectionError(
+                    "WebSocket stopped before first connection became ready"
+                )
+                self._ready_event.set()
 
-        # 关闭连接
-        await self.connection.close()
+            # 关闭所有监听器
+            with self._listeners_lock:
+                listeners = list(self._listeners.values())
+                self._listeners.clear()
+            for listener in listeners:
+                listener.close()
 
-        self.logger.info("WebSocket client stopped")
+            # 关闭连接
+            await self.connection.close()
+            self._set_health(ConnectionHealthState.STOPPED)
+
+            self.logger.info("WebSocket client stopped")
 
     async def create_listener(self, buffer_size: int | None = None) -> ListenerId:
         """创建消息监听器
@@ -949,6 +1086,8 @@ class AsyncWebSocketClient:
                 "max": self.config.max_listeners,
             },
             "running": self._running,
+            "ready": self.ready,
+            "health": self.health.state.value,
         }
 
     async def _main_loop(self) -> None:
@@ -1013,8 +1152,19 @@ class AsyncWebSocketClient:
         """
         if not self.reconnection.should_reconnect():
             self.logger.error("Max reconnection attempts reached")
+            error = self._last_error
+            if not isinstance(error, ConnectionError):
+                error = ConnectionError("Max reconnection attempts reached")
+                self._record_error(error)
+            if not self._ever_ready:
+                self._startup_error = error
+                self._ready_event.set()
             self._running = False
             return
+
+        if self._ever_ready and self._ready:
+            self._ready = False
+            self._set_health(ConnectionHealthState.DEGRADED)
 
         delay = self.reconnection.get_delay()
         if delay > 0:
@@ -1027,8 +1177,39 @@ class AsyncWebSocketClient:
         try:
             await self.connection.connect()
             self.reconnection.on_success()
+            self._ready = True
+            self._ever_ready = True
+            self._last_success_at = time.time()
+            self._set_health(ConnectionHealthState.READY)
+            self._ready_event.set()
         except ConnectionError as e:
+            self._record_error(e)
+            if self._ever_ready:
+                self._set_health(ConnectionHealthState.DEGRADED, error=e)
             self.logger.error("Connection failed: %s", e)
+
+    def _record_error(self, error: BaseException) -> None:
+        """记录最近一次连接错误."""
+        self._last_error = error
+        self._last_error_at = time.time()
+
+    def _set_health(
+        self,
+        state: ConnectionHealthState,
+        *,
+        error: BaseException | None = None,
+    ) -> None:
+        """更新并通知连接健康状态，观察者异常不影响 I/O 循环."""
+        if error is not None:
+            self._record_error(error)
+        self._health_state = state
+        handler = self._health_handler
+        if handler is None:
+            return
+        try:
+            handler(self.health)
+        except Exception:
+            self.logger.exception("WebSocket health handler failed")
 
     async def _process_send_queue(self) -> None:
         """处理发送队列

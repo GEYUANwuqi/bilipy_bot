@@ -46,6 +46,7 @@ EventBus 达到该数量的 in-flight Handler task 时会让 `publish()` 等待�
 | `manager` | `SourceManager` | Source 生命周期管理器 |
 | `running` | `bool` | manager 是否运行 |
 | `closed` | `bool` | manager 是否关闭 |
+| `health` | `AppHealth` | 聚合应用、Source 和插件的就绪/健康快照 |
 
 ### Source 管理
 
@@ -104,7 +105,12 @@ Source 不存在时抛 `ValueError`。回调不是协程函数时抛 `TypeError`
 async start() -> None
 async stop() -> None
 async close() -> None
-run(duration: float | None = None) -> None
+run(
+    duration: float | None = None,
+    *,
+    health_reporter: Callable[[AppHealth], None] | None = None,
+    health_interval: float = 1.0,
+) -> None
 async __aenter__() -> BotApp
 async __aexit__(exc_type, exc_val, exc_tb) -> None
 ```
@@ -118,7 +124,13 @@ PluginManager 时，会在 Source 启动前解析并注册插件 Handler，并�
 Handler、callback、Source 和 registry，最后按 Source、EventBus、API 顺序释放
 其余资源。Source 关闭失败时保留 manager、EventBus 与 API，允许再次调用
 `close()`；只有 Source 全部清理成功后才继续关闭下游依赖。`run()` 是拥有事件
-循环的同步入口，内部使用 `asyncio.run()`。
+循环的同步入口，内部使用 `asyncio.run()`。`health_reporter` 主要供
+CLI 定期持久化 `AppHealth`；回调在工作线程执行，失败只记录日志，
+不中断应用主循环。
+
+`AppHealth.state` 可为 `stopped`、`starting`、`ready`、`degraded` 或
+`stopping`。`sources` 包含 Source 类型、逻辑路由和最近成功/异常类型；
+`plugins` 仅包含稳定 ID、状态和失败类型，不写入配置值或异常消息。
 
 ## `RuntimeConfig`
 

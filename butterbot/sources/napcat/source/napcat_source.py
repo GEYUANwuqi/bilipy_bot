@@ -3,6 +3,8 @@ from typing import Any
 
 from butterbot.core.event import Event
 from butterbot.core.source import BaseSource
+from butterbot.utils import ConnectionHealth, ConnectionHealthState
+from butterbot.utils.websocket import ConnectionError
 
 from ..api import (
     NapcatApi,
@@ -27,10 +29,30 @@ class NapcatSource(BaseSource):
 
     async def on_start(self) -> None:
         self.api.set_handler(self._process_messages)
+        self.api.set_health_handler(self._handle_connection_health)
         await self.api.start()
 
     async def on_stop(self) -> None:
         await self.api.stop()
+
+    def _handle_connection_health(self, health: ConnectionHealth) -> None:
+        """把 WebSocket 的就绪/降级变化投影到 Source 健康快照."""
+        if health.state is ConnectionHealthState.READY:
+            self._report_ready(at=health.last_success_at)
+            return
+        if (
+            health.state
+            in (
+                ConnectionHealthState.DEGRADED,
+                ConnectionHealthState.STOPPED,
+            )
+            and self.running
+        ):
+            self._report_degraded(
+                ConnectionError(
+                    health.last_error_message or "NapCat WebSocket connection lost"
+                )
+            )
 
     async def _process_messages(self, message: dict[str, Any]) -> None:
         """处理接收到的消息."""

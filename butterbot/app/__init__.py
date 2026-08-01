@@ -24,6 +24,7 @@ from .config import (
     SourceDefinition,
     register_builder,
 )
+from .health import AppHealth, AppHealthState, PluginDiagnostic, SourceDiagnostic
 from .source_catalog import SourceCatalog, SourceCatalogEntry
 from .source_factory import (
     FactoryRegistration,
@@ -33,6 +34,8 @@ from .source_factory import (
 
 __all__ = [
     # 应用主入口
+    "AppHealth",
+    "AppHealthState",
     "BotApp",
     # 事件
     "Event",
@@ -51,12 +54,14 @@ __all__ = [
     "AndFilter",
     "BaseFilter",
     "OrFilter",
+    "PluginDiagnostic",
     # 异常层级
     "ApiError",
     "ButterError",
     "ConfigError",
     "LifecycleError",
     "SourceError",
+    "SourceDiagnostic",
     "SourceStartError",
     "SourceStopError",
     "SubscriptionError",

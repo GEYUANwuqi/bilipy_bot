@@ -205,6 +205,7 @@ sources:
 | `heartbeat` | `float` | 否 | `30.0` | 客户端心跳间隔（秒） |
 | `reconnect_attempts` | `int` | 否 | `5` | 重连尝试次数 |
 | `receive_timeout` | `float` | 否 | `60.0` | 接收与请求等待超时（秒） |
+| `ready_timeout` | `float` | 否 | `30.0` | 首次 WebSocket 连接就绪超时（秒） |
 
 ### `bilibili`
 

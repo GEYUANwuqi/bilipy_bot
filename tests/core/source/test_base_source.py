@@ -5,7 +5,11 @@ import asyncio
 import pytest
 
 from butterbot.core.exceptions import LifecycleError
-from butterbot.core.source import BaseSource, SourceState
+from butterbot.core.source import (
+    BaseSource,
+    SourceHealthState,
+    SourceState,
+)
 from butterbot.core.types import BaseType
 
 
@@ -53,6 +57,8 @@ class TestBaseSourceLifecycle:
         assert source.running
         assert source.state is SourceState.RUNNING
         assert source.cleanup_required
+        assert source.health.state is SourceHealthState.READY
+        assert source.health.last_success_at is not None
         assert source.start_calls == 1
 
     @pytest.mark.asyncio
@@ -72,6 +78,7 @@ class TestBaseSourceLifecycle:
         assert not source.running
         assert source.state is SourceState.STOPPED
         assert not source.cleanup_required
+        assert source.health.state is SourceHealthState.STOPPED
         assert source.stop_calls == 1
 
     @pytest.mark.asyncio
@@ -97,6 +104,9 @@ class TestBaseSourceStartFailure:
         assert not source.running
         assert source.state is SourceState.STOPPED
         assert not source.cleanup_required
+        assert source.health.state is SourceHealthState.STOPPED
+        assert source.health.last_error_type == "RuntimeError"
+        assert source.health.last_error_message == "连接失败"
         assert source.stop_calls == 1
 
     @pytest.mark.asyncio
@@ -152,6 +162,8 @@ class TestBaseSourceStopFailure:
         assert not source.running
         assert source.state is SourceState.STOP_FAILED
         assert source.cleanup_required
+        assert source.health.state is SourceHealthState.DEGRADED
+        assert source.health.last_error_type == "RuntimeError"
         assert source.stop_calls == 1
 
         source.stop_exception = None
@@ -159,6 +171,7 @@ class TestBaseSourceStopFailure:
 
         assert source.state is SourceState.STOPPED
         assert not source.cleanup_required
+        assert source.health.state is SourceHealthState.STOPPED
         assert source.stop_calls == 2
 
     @pytest.mark.asyncio

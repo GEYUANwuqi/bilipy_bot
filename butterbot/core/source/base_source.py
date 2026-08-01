@@ -1,5 +1,7 @@
 import asyncio
+import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 from uuid import UUID, uuid4
@@ -19,6 +21,27 @@ class SourceState(str, Enum):
     RUNNING = "running"
     STOPPING = "stopping"
     STOP_FAILED = "stop_failed"
+
+
+class SourceHealthState(str, Enum):
+    """Source 对外可观测的就绪与健康状态."""
+
+    STOPPED = "stopped"
+    STARTING = "starting"
+    READY = "ready"
+    DEGRADED = "degraded"
+    STOPPING = "stopping"
+
+
+@dataclass(frozen=True, slots=True)
+class SourceHealth:
+    """Source 健康快照，使诊断层无需持有异常对象."""
+
+    state: SourceHealthState
+    last_success_at: float | None
+    last_error_at: float | None
+    last_error_type: str | None
+    last_error_message: str | None
 
 
 class BaseSource(ABC):
@@ -76,6 +99,10 @@ class BaseSource(ABC):
         self._state = SourceState.STOPPED
         self._cleanup_required = False
         self._lifecycle_lock = asyncio.Lock()
+        self._health_state = SourceHealthState.STOPPED
+        self._last_success_at: float | None = None
+        self._last_error_at: float | None = None
+        self._last_error: BaseException | None = None
         self._ctx: "AppContext | None" = None
         if config_key is not None:
             self.config_key = config_key
@@ -103,18 +130,23 @@ class BaseSource(ABC):
                 )
 
             self._state = SourceState.STARTING
+            self._health_state = SourceHealthState.STARTING
             self.running = True
             # on_start 可能先创建部分资源再失败，因此进入回调前就取得清理责任。
             self._cleanup_required = True
             try:
                 await self.on_start()
             except BaseException as start_error:
+                self._record_error(start_error)
                 self.running = False
                 self._state = SourceState.STOPPING
+                self._health_state = SourceHealthState.STOPPING
                 try:
                     await self.on_stop()
                 except BaseException as cleanup_error:
+                    self._record_error(cleanup_error)
                     self._state = SourceState.STOP_FAILED
+                    self._health_state = SourceHealthState.DEGRADED
                     if cleanup_error is not start_error:
                         start_error.add_note(
                             "%s 启动回滚失败: %s: %s"
@@ -127,9 +159,11 @@ class BaseSource(ABC):
                 else:
                     self._cleanup_required = False
                     self._state = SourceState.STOPPED
+                    self._health_state = SourceHealthState.STOPPED
                 raise
             else:
                 self._state = SourceState.RUNNING
+                self._report_ready()
 
     async def stop(self) -> None:
         """停止事件源（模板方法）.
@@ -146,14 +180,18 @@ class BaseSource(ABC):
             # cleanup_required 独立保留，失败后下一次 stop() 仍会重试。
             self.running = False
             self._state = SourceState.STOPPING
+            self._health_state = SourceHealthState.STOPPING
             try:
                 await self.on_stop()
-            except BaseException:
+            except BaseException as error:
+                self._record_error(error)
                 self._state = SourceState.STOP_FAILED
+                self._health_state = SourceHealthState.DEGRADED
                 raise
             else:
                 self._cleanup_required = False
                 self._state = SourceState.STOPPED
+                self._health_state = SourceHealthState.STOPPED
 
     @abstractmethod
     async def on_start(self) -> None:
@@ -200,6 +238,33 @@ class BaseSource(ABC):
     def cleanup_required(self) -> bool:
         """是否仍持有必须由 :meth:`stop` 释放的资源责任."""
         return self._cleanup_required
+
+    @property
+    def health(self) -> SourceHealth:
+        """返回当前就绪状态和最近成功/失败信息."""
+        error = self._last_error
+        return SourceHealth(
+            state=self._health_state,
+            last_success_at=self._last_success_at,
+            last_error_at=self._last_error_at,
+            last_error_type=type(error).__name__ if error is not None else None,
+            last_error_message=str(error) if error is not None else None,
+        )
+
+    def _report_ready(self, *, at: float | None = None) -> None:
+        """供 Source 实现在连接恢复或一次成功轮询后报告就绪."""
+        self._health_state = SourceHealthState.READY
+        self._last_success_at = time.time() if at is None else at
+
+    def _report_degraded(self, error: BaseException) -> None:
+        """供 Source 实现在运行期连接中断或轮询失败时报告降级."""
+        self._record_error(error)
+        self._health_state = SourceHealthState.DEGRADED
+
+    def _record_error(self, error: BaseException) -> None:
+        """记录最近一次 Source 异常."""
+        self._last_error = error
+        self._last_error_at = time.time()
 
 
 BaseSourceT = TypeVar("BaseSourceT", bound=BaseSource)

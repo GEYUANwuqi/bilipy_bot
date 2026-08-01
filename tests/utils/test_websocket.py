@@ -11,6 +11,7 @@ import pytest
 
 from butterbot.utils.websocket import (
     AsyncWebSocketClient,
+    ConnectionHealthState,
     ListenerClosedError,
     ListenerEvictedError,
     MessageType,
@@ -18,6 +19,9 @@ from butterbot.utils.websocket import (
     WebSocketConfig,
     WebSocketListener,
     WebSocketState,
+)
+from butterbot.utils.websocket import (
+    ConnectionError as WsConnectionError,
 )
 
 
@@ -256,6 +260,35 @@ class TestReconnectionStrategy:
         assert strategy.should_reconnect()
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("receive_timeout", 0),
+        ("connect_timeout", 0),
+        ("send_queue_size", 0),
+        ("session_timeout", 0),
+        ("backoff_base", -1),
+        ("jitter_factor", -1),
+        ("compression", 16),
+        ("max_listeners", 0),
+        ("listener_buffer_size", 0),
+    ],
+)
+def test_invalid_websocket_config_is_rejected(field, value):
+    kwargs = {"uri": "ws://localhost:1", field: value}
+    with pytest.raises(ValueError):
+        WebSocketConfig(**kwargs)  # type: ignore[arg-type]
+
+
+def test_backoff_max_cannot_be_less_than_base():
+    with pytest.raises(ValueError, match="Backoff max"):
+        WebSocketConfig(
+            uri="ws://localhost:1",
+            backoff_base=2.0,
+            backoff_max=1.0,
+        )
+
+
 class TestClientShutdown:
     """首连失败也要走重连策略，且退出时必须释放资源（ASYNC-003）."""
 
@@ -351,8 +384,6 @@ class TestClientShutdown:
     @pytest.mark.asyncio
     async def test_send_before_running_raises(self):
         """未启动时发送应抛 ConnectionError."""
-        from butterbot.utils.websocket import ConnectionError as WsConnectionError
-
         client = _client()
         with pytest.raises(WsConnectionError):
             await client.send("hi")
@@ -371,3 +402,73 @@ class TestClientShutdown:
         metrics = client.get_metrics()
         assert metrics["connection"]["failed_connections"] >= 1
         assert metrics["running"] is False
+
+
+class TestClientReadiness:
+    """start 必须明确区分“任务已创建”与“首次连接就绪”."""
+
+    @pytest.mark.asyncio
+    async def test_start_can_return_without_waiting_for_ready(self):
+        client = _client(reconnect_attempts=0)
+
+        await client.start(wait_ready=False)
+
+        assert client.running
+        assert not client.ready
+        assert client.health.state is ConnectionHealthState.STARTING
+        await client.stop()
+
+    @pytest.mark.asyncio
+    async def test_wait_ready_propagates_final_connection_failure(self):
+        client = _client(reconnect_attempts=2)
+
+        with pytest.raises(WsConnectionError, match="Connection failed"):
+            await client.start(wait_ready=True, ready_timeout=2.0)
+
+        assert not client.running
+        assert not client.ready
+        assert client.health.state is ConnectionHealthState.STOPPED
+        assert client.health.last_error_type == "ConnectionError"
+
+    @pytest.mark.asyncio
+    async def test_wait_until_ready_observes_first_success(self, monkeypatch):
+        client = _client(reconnect_attempts=1)
+        connected = False
+        blocked = asyncio.Event()
+
+        async def connect() -> None:
+            nonlocal connected
+            connected = True
+            client.connection.state = WebSocketState.CONNECTED
+
+        monkeypatch.setattr(client.connection, "connect", connect)
+        monkeypatch.setattr(
+            client.connection,
+            "is_connected",
+            lambda: connected,
+        )
+        monkeypatch.setattr(client, "_process_send_queue", blocked.wait)
+        monkeypatch.setattr(client, "_process_receive", blocked.wait)
+
+        await client.start(wait_ready=False)
+        await client.wait_until_ready(timeout=1.0)
+
+        assert client.ready
+        assert client.health.state is ConnectionHealthState.READY
+        assert client.health.last_success_at is not None
+        await client.stop()
+
+    @pytest.mark.asyncio
+    async def test_ready_timeout_stops_fresh_client_transactionally(self):
+        client = _client(
+            reconnect_attempts=0,
+            backoff_base=1.0,
+            backoff_max=1.0,
+        )
+
+        with pytest.raises(WsConnectionError, match="ready timeout"):
+            await client.start(wait_ready=True, ready_timeout=0.01)
+
+        assert not client.running
+        assert client._main_task is None
+        assert client.connection.session is None

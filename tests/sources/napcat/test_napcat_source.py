@@ -6,9 +6,11 @@ import pytest
 
 from butterbot.app import RuntimeConfig
 from butterbot.core.context import AppContext
+from butterbot.core.source import SourceHealthState
 from butterbot.sources.napcat.data import NapcatGroupMessageData
 from butterbot.sources.napcat.source import NapcatSource
 from butterbot.sources.napcat.types import NapcatType
+from butterbot.utils import ConnectionHealth, ConnectionHealthState
 
 
 def _group_message() -> dict[str, object]:
@@ -53,3 +55,32 @@ class TestNapcatSourceDispatch:
         assert len(received) == 1
         assert received[0].status is NapcatType.GROUP_MESSAGE
         assert isinstance(received[0].data, NapcatGroupMessageData)
+
+    def test_connection_health_is_exposed_by_source(self) -> None:
+        source = NapcatSource()
+        source.running = True
+
+        source._handle_connection_health(
+            ConnectionHealth(
+                state=ConnectionHealthState.READY,
+                last_success_at=123.0,
+                last_error_at=None,
+                last_error_type=None,
+                last_error_message=None,
+            )
+        )
+        assert source.health.state is SourceHealthState.READY
+        assert source.health.last_success_at == 123.0
+
+        source._handle_connection_health(
+            ConnectionHealth(
+                state=ConnectionHealthState.DEGRADED,
+                last_success_at=123.0,
+                last_error_at=124.0,
+                last_error_type="ConnectionError",
+                last_error_message="connection lost",
+            )
+        )
+        assert source.health.state is SourceHealthState.DEGRADED
+        assert source.health.last_error_type == "ConnectionError"
+        assert source.health.last_error_message == "connection lost"

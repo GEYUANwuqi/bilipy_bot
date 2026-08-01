@@ -45,8 +45,8 @@ sequenceDiagram
 | --- | --- | --- |
 | Handler task | `EventBus.publish` | done callback / `EventBus.close` |
 | Bilibili 轮询 task | `BasePollingSource.on_start` | `on_stop` |
-| NapCat 消息 task | `NapcatClient.start` | `NapcatClient.stop` |
-| WebSocket 主任务 | `AsyncWebSocketClient.start` | client `stop` |
+| NapCat 消息 task/listener | `NapcatClient.start` 事务 | `NapcatClient.stop` |
+| WebSocket 主任务/ready 信号 | `AsyncWebSocketClient.start` | client `stop` |
 | Bilibili 房间线程 | `BiliDanmakuSource` | `stop_room/on_stop` |
 
 ## 项目能力清单

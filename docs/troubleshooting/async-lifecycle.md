@@ -58,6 +58,10 @@ manager 字典删除它，否则会丢失最后一个资源句柄。`on_stop()` 
 `send_request()` 等待 `receive_timeout`，超时后 pending Future 会清理。检查
 WebSocket 是否仍运行、服务器是否回传相同 echo、请求 action 是否受支持。
 
+NapCat 首次连接必须在 `ready_timeout` 内成功，否则 Source 启动直接
+抛 `ConnectionError` 并回滚。运行期断线会把 Source `health.state` 置为
+`degraded`，重连成功后恢复 `ready` 并更新 `last_success_at`。
+
 ## 取消没有被 `except Exception` 捕获
 
 `asyncio.CancelledError` 不应作为普通业务错误吞掉。需要清理时单独捕获：

@@ -13,7 +13,13 @@ from .exceptions import (
     SubscriptionError,
 )
 from .filter import AndFilter, BaseFilter, OrFilter
-from .source import BaseSource, BaseSourceT, SourceState
+from .source import (
+    BaseSource,
+    BaseSourceT,
+    SourceHealth,
+    SourceHealthState,
+    SourceState,
+)
 from .types import BaseType, BaseTypeT
 
 __all__ = [
@@ -42,6 +48,8 @@ __all__ = [
     "LifecycleError",
     "OrFilter",
     "SourceError",
+    "SourceHealth",
+    "SourceHealthState",
     "SourceStartError",
     "SourceState",
     "SourceStopError",

@@ -1,6 +1,7 @@
 import asyncio
 import re
 import signal
+import time
 from collections.abc import Coroutine
 from logging import getLogger
 from typing import TYPE_CHECKING, Any, Callable, ParamSpec, overload
@@ -19,6 +20,12 @@ if TYPE_CHECKING:
     from butterbot.plugin.runtime.manager import PluginManager
 
 from .config import RuntimeConfig
+from .health import (
+    AppHealth,
+    AppHealthState,
+    PluginDiagnostic,
+    SourceDiagnostic,
+)
 from .source_factory import SourceFactoryEntry, SourceFactoryRegistry
 from .source_manager import SourceManager
 
@@ -181,6 +188,57 @@ class BotApp:
     def closed(self) -> bool:
         """检查是否已关闭."""
         return self._manager.closed
+
+    @property
+    def health(self) -> AppHealth:
+        """聚合应用、Source 和插件的非敏感诊断快照."""
+        sources = tuple(
+            SourceDiagnostic(
+                source_id=str(source.uuid),
+                source_type=type(source).__name__,
+                source_kind=source.source_kind,
+                config_key=source.config_key,
+                state=source.health.state.value,
+                last_success_at=source.health.last_success_at,
+                last_error_at=source.health.last_error_at,
+                last_error_type=source.health.last_error_type,
+            )
+            for source in self._manager.sources.values()
+        )
+        plugin_statuses = (
+            self._plugin_manager.statuses if self._plugin_manager is not None else ()
+        )
+        plugins = tuple(
+            PluginDiagnostic(
+                plugin_id=status.plugin_id,
+                state=status.state.value,
+                failure_types=tuple(failure.error_type for failure in status.failures),
+            )
+            for status in plugin_statuses
+        )
+
+        if self._manager.closed:
+            state = AppHealthState.STOPPED
+        elif self._manager.stop_failed:
+            state = AppHealthState.DEGRADED
+        elif self._manager.closing:
+            state = AppHealthState.STOPPING
+        elif self._manager.running:
+            state = (
+                AppHealthState.READY
+                if all(source.healthy for source in sources)
+                and all(plugin.healthy for plugin in plugins)
+                else AppHealthState.DEGRADED
+            )
+        else:
+            state = AppHealthState.STOPPED
+
+        return AppHealth(
+            state=state,
+            observed_at=time.time(),
+            sources=sources,
+            plugins=plugins,
+        )
 
     def _attach_plugin_manager(self, manager: "PluginManager") -> None:
         """由插件 bootstrap 绑定唯一插件控制面."""
@@ -491,7 +549,13 @@ class BotApp:
 
     # ============ 阻塞式入口 ============ #
 
-    def run(self, duration: float | None = None) -> None:
+    def run(
+        self,
+        duration: float | None = None,
+        *,
+        health_reporter: Callable[[AppHealth], None] | None = None,
+        health_interval: float = 1.0,
+    ) -> None:
         """阻塞运行 BotApp，直到被中断或达到指定时长.
 
         这是最简使用方式，适合大多数场景。
@@ -505,12 +569,30 @@ class BotApp:
 
         Args:
             duration: 可选，运行时长（秒）。为 ``None`` 则持续运行直到收到信号。
+            health_reporter: 可选同步回调，用于 CLI 持久化应用健康快照。
+            health_interval: 健康快照报告间隔（秒）。
         """
+        if health_reporter is not None and health_interval <= 0:
+            raise ValueError("health_interval 必须大于 0")
 
         async def _run() -> None:
             loop = asyncio.get_running_loop()
             stop_event = asyncio.Event()
             installed: list[signal.Signals] = []
+            report_task: asyncio.Task[None] | None = None
+
+            async def emit_health() -> None:
+                if health_reporter is None:
+                    return
+                try:
+                    await asyncio.to_thread(health_reporter, self.health)
+                except Exception:
+                    _log.exception("健康快照回调执行失败")
+
+            async def report_health() -> None:
+                while True:
+                    await asyncio.sleep(health_interval)
+                    await emit_health()
 
             for sig in (signal.SIGINT, signal.SIGTERM):
                 try:
@@ -522,6 +604,9 @@ class BotApp:
 
             try:
                 async with self:
+                    if health_reporter is not None:
+                        await emit_health()
+                        report_task = asyncio.create_task(report_health())
                     if duration is not None:
                         try:
                             await asyncio.wait_for(stop_event.wait(), timeout=duration)
@@ -533,6 +618,10 @@ class BotApp:
                         await stop_event.wait()
                         _log.info("BotApp 收到停止信号，正在关闭")
             finally:
+                if report_task is not None:
+                    report_task.cancel()
+                    await asyncio.gather(report_task, return_exceptions=True)
+                await emit_health()
                 for sig in installed:
                     loop.remove_signal_handler(sig)
 

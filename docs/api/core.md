@@ -59,7 +59,11 @@ async close(timeout: float = 5.0) -> None
 
 ## `BaseSource`
 
-导入：`from butterbot.core.source import BaseSource, SourceState`
+导入：
+
+```python
+from butterbot.core.source import BaseSource, SourceHealthState, SourceState
+```
 
 ```python
 BaseSource(uuid: UUID | None = None, *, config_key: str | None = None)
@@ -71,7 +75,7 @@ bind(ctx: AppContext) -> None
 ```
 
 子类必须实现 `on_start()`/`on_stop()` 并设置 `supported_types`。属性：
-`uuid`、`running`、`is_running`、`state`、`cleanup_required`、`source_kind`、
+`uuid`、`running`、`is_running`、`state`、`cleanup_required`、`health`、`source_kind`、
 `config_key`、`ctx`。未绑定访问 `ctx` 抛 `RuntimeError`。参与逻辑路由的 Source
 还需声明非空 `source_kind`。
 
@@ -80,6 +84,12 @@ bind(ctx: AppContext) -> None
 原始启动异常，因此 `on_stop()` 必须容忍部分初始化。`on_stop()` 失败或被取消时，
 `cleanup_required` 保持为 true，下一次 `stop()` 会重试清理；清理完成前再次
 `start()` 抛 `LifecycleError`。同一 Source 的 start/stop 调用由生命周期锁串行化。
+
+`health` 是只读 `SourceHealth`快照，状态为 `stopped`、`starting`、
+`ready`、`degraded` 或 `stopping`，并提供 `last_success_at`、
+`last_error_at`、`last_error_type` 和 `last_error_message`。普通 Source 在
+`on_start()` 返回后自动进入 ready；长连接 Source 可在断线和恢复时
+更新该快照。
 
 ## `BaseApi`
 

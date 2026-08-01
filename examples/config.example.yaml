@@ -68,6 +68,7 @@ sources:
     # heartbeat: 30.0
     # reconnect_attempts: 5
     # receive_timeout: 60.0
+    # ready_timeout: 30.0
 
 # 也可以直接用分层环境变量覆盖字段，例如:
 # BUTTERBOT__SOURCES__QQ_ACCOUNT__TOKEN=secret

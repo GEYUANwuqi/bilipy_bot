@@ -8,7 +8,12 @@ from uuid import uuid4
 
 from butterbot.core.api import BaseApi
 from butterbot.core.context import ApiRegistry
-from butterbot.utils import AsyncWebSocketClient, ListenerId, MessageType
+from butterbot.utils import (
+    AsyncWebSocketClient,
+    ConnectionHealth,
+    ListenerId,
+    MessageType,
+)
 from butterbot.utils.websocket import ListenerClosedError, ListenerEvictedError
 
 _log = getLogger("NapcatApi")
@@ -24,6 +29,7 @@ class NapcatConfig:
         heartbeat: 心跳间隔（秒）
         reconnect_attempts: 重连尝试次数
         receive_timeout: 接收超时时间（秒）
+        ready_timeout: 首次连接就绪超时（秒）
     """
 
     url: str
@@ -36,6 +42,12 @@ class NapcatConfig:
     """重连尝试次数"""
     receive_timeout: float = 60.0
     """接收超时时间（秒）"""
+    ready_timeout: float = 30.0
+    """首次连接就绪超时（秒）"""
+
+    def __post_init__(self) -> None:
+        if self.ready_timeout <= 0:
+            raise ValueError("ready_timeout 必须大于 0")
 
 
 class NapcatClient:
@@ -60,6 +72,7 @@ class NapcatClient:
             heartbeat=napcat_config.heartbeat,
             reconnect_attempts=napcat_config.reconnect_attempts,
             receive_timeout=napcat_config.receive_timeout,
+            ready_timeout=napcat_config.ready_timeout,
         )
 
     def __init__(
@@ -69,6 +82,7 @@ class NapcatClient:
         heartbeat: float = 30.0,
         reconnect_attempts: int = 5,
         receive_timeout: float = 60.0,
+        ready_timeout: float = 30.0,
     ):
         """初始化 Napcat 客户端
 
@@ -78,10 +92,12 @@ class NapcatClient:
             heartbeat: 心跳间隔
             reconnect_attempts: 重连尝试次数
             receive_timeout: 接收超时时间
+            ready_timeout: 首次连接就绪超时
         """
         self.url = url
         self._handler: Callable[[dict[str, Any]], Awaitable[None]] | None = None
         self.timeout = receive_timeout
+        self.ready_timeout = ready_timeout
         self.client = AsyncWebSocketClient(
             uri=url,
             logger=_log,
@@ -93,11 +109,35 @@ class NapcatClient:
         self._task: asyncio.Task | None = None
         self._listener_id: ListenerId | None = None
         self._pending_requests: dict[str, asyncio.Future[dict[str, Any]]] = {}
+        self._running = False
+        self._transport_cleanup_required = False
+        self._lifecycle_lock = asyncio.Lock()
+        self._health_handler: Callable[[ConnectionHealth], None] | None = None
+        self.client.set_health_handler(self._handle_transport_health)
 
     @property
     def pending_requests(self) -> int:
         """当前等待 echo 响应的请求数量."""
         return len(self._pending_requests)
+
+    @property
+    def running(self) -> bool:
+        """客户端已完成启动且传输主任务仍在运行."""
+        return self._running and self.client.running
+
+    @property
+    def ready(self) -> bool:
+        """WebSocket 当前已就绪."""
+        return self.running and self.client.ready
+
+    @property
+    def cleanup_required(self) -> bool:
+        """是否仍持有消息任务、监听器或传输层清理责任."""
+        return (
+            self._transport_cleanup_required
+            or self._listener_id is not None
+            or self._task is not None
+        )
 
     def set_handler(self, handler: Callable[[dict[str, Any]], Awaitable[None]]):
         """设置消息处理函数
@@ -109,42 +149,118 @@ class NapcatClient:
             raise TypeError("handler must be an async function")
         self._handler = handler
 
+    def set_health_handler(
+        self,
+        handler: Callable[[ConnectionHealth], None] | None,
+    ) -> None:
+        """设置上层 Source 的连接健康观察者."""
+        self._health_handler = handler
+
     async def start(self):
-        """启动客户端并创建监听器"""
+        """事务化启动客户端，返回时首次连接已就绪."""
         if not self._handler:
             raise RuntimeError(
                 "消息处理函数未设置，请先调用 set_handler() 设置处理函数"
             )
-        await self.client.start()
-        self._listener_id = await self.client.create_listener()
-        self._task = asyncio.create_task(self._process_messages())
-        _log.info("Napcat client started with listener: %s", self._listener_id)
+        async with self._lifecycle_lock:
+            if self.running and self.ready and self._task is not None:
+                return
+            if self.cleanup_required:
+                await self._stop_locked()
+
+            try:
+                # 先创建监听器，确保握手后立即到达的消息不会落在窗口期。
+                self._listener_id = await self.client.create_listener()
+                self._transport_cleanup_required = True
+                await self.client.start(wait_ready=False)
+                self._task = asyncio.create_task(self._process_messages())
+                await self.client.wait_until_ready(timeout=self.ready_timeout)
+            except BaseException as start_error:
+                try:
+                    await self._stop_locked()
+                except BaseException as cleanup_error:
+                    if cleanup_error is not start_error:
+                        start_error.add_note(
+                            "NapcatClient 启动回滚失败: %s: %s"
+                            % (type(cleanup_error).__name__, cleanup_error)
+                        )
+                raise
+
+            self._running = True
+            _log.info("Napcat client started with listener: %s", self._listener_id)
 
     async def stop(self):
         """停止客户端（幂等，可被 on_stop 与 ApiRegistry.aclose_all 重复调用）"""
+        async with self._lifecycle_lock:
+            await self._stop_locked()
+
+    async def _stop_locked(self) -> None:
+        """尽力释放所有内部资源，保留失败步骤的句柄以便重试."""
+        self._running = False
         pending = list(self._pending_requests.values())
         self._pending_requests.clear()
         for future in pending:
             if not future.done():
                 future.cancel()
 
+        first_error: BaseException | None = None
         task = self._task
-        self._task = None
-        if task and not task.done():
+        if task is not None:
             try:
-                task.cancel()
+                if not task.done():
+                    task.cancel()
                 await task
-            except asyncio.CancelledError:
-                # 任务被取消是预期行为，忽略异常
-                pass
+            except asyncio.CancelledError as exc:
+                if not task.cancelled():
+                    first_error = exc
+            except BaseException as exc:
+                first_error = exc
+            finally:
+                if task.done():
+                    self._task = None
 
         listener_id = self._listener_id
-        self._listener_id = None
-        if listener_id:
-            await self.client.remove_listener(listener_id)
+        if listener_id is not None:
+            try:
+                await self.client.remove_listener(listener_id)
+            except BaseException as exc:
+                first_error = self._merge_cleanup_error(first_error, exc)
+            else:
+                self._listener_id = None
 
-        await self.client.stop()
+        needs_transport_stop = self._transport_cleanup_required or bool(pending)
+        if needs_transport_stop:
+            try:
+                await self.client.stop()
+            except BaseException as exc:
+                first_error = self._merge_cleanup_error(first_error, exc)
+            else:
+                self._transport_cleanup_required = False
+
+        if first_error is not None:
+            raise first_error
+
         _log.info("Napcat client stopped")
+
+    @staticmethod
+    def _merge_cleanup_error(
+        first: BaseException | None,
+        current: BaseException,
+    ) -> BaseException:
+        """保留第一个清理异常，并把后续失败附加到诊断注释."""
+        if first is None:
+            return current
+        if current is not first:
+            first.add_note(
+                "NapcatClient 后续清理失败: %s: %s" % (type(current).__name__, current)
+            )
+        return first
+
+    def _handle_transport_health(self, health: ConnectionHealth) -> None:
+        """把传输层健康变化转发给 Source."""
+        handler = self._health_handler
+        if handler is not None:
+            handler(health)
 
     async def send_request(self, message: dict) -> dict | None:
         """发送请求到服务器
@@ -284,6 +400,13 @@ class NapcatApi(BaseApi):
     def set_handler(self, handler: Callable[[dict[str, Any]], Awaitable[None]]):
         """设置消息处理函数"""
         self.client.set_handler(handler)
+
+    def set_health_handler(
+        self,
+        handler: Callable[[ConnectionHealth], None] | None,
+    ) -> None:
+        """设置连接健康观察者."""
+        self.client.set_health_handler(handler)
 
     async def start(self):
         """启动客户端"""

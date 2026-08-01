@@ -31,6 +31,7 @@ sources:
     heartbeat: 30.0
     reconnect_attempts: 5
     receive_timeout: 60.0
+    ready_timeout: 30.0
 ```
 
 `url` 必填；其余字段使用 `NapcatConfig` 默认值。`${NAME:-default}` 从当前环境
@@ -58,6 +59,10 @@ app.run()
 
 `BotApp()` 默认读取当前工作目录的 `config.yaml`。Source 启动时从
 `ApiRegistry` 获取 `NapcatApi`，设置消息 Handler，再启动 WebSocket 客户端。
+启动顺序是“创建 listener → 启动传输任务 → 启动消息处理 → 等待
+首次 ready”。有限重连用尽或超过 `ready_timeout` 时，
+`NapcatSource.start()` 同步失败并回滚 task、listener 和 WebSocket，不会把
+“正在后台重连”误报为启动成功。
 
 ## 事件层级
 
@@ -92,7 +97,8 @@ result = await api.send_group_message(
 
 `NapcatSource.on_stop()` 停止 `NapcatApi`；应用随后还会调用
 `NapcatApi.aclose()`。客户端关闭实现是幂等的，会取消消息处理 task、
-待响应 Future、监听器和 WebSocket。
+待响应 Future、监听器和 WebSocket。退订 listener 失败时仍会尝试关闭
+传输层，失败句柄保留到下一次 `stop()` 重试。
 
 ## 常见问题
 

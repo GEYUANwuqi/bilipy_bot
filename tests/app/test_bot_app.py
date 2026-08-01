@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from butterbot.app import (
+    AppHealthState,
     BotApp,
     ConfigBuilderRegistry,
     ConfigError,
@@ -88,6 +89,22 @@ class TestBotApp:
         """无 config 且无 config.yaml 文件时抛出 FileNotFoundError."""
         with pytest.raises(FileNotFoundError, match="config.yaml"):
             BotApp()
+
+    @pytest.mark.asyncio
+    async def test_health_aggregates_source_readiness(self, config):
+        app = BotApp(config)
+        source = app.add_source(StubSource)
+        assert app.health.state is AppHealthState.STOPPED
+
+        await app.start()
+        assert app.health.state is AppHealthState.READY
+        assert app.health.sources[0].source_id == str(source.uuid)
+        assert app.health.sources[0].healthy
+
+        source._report_degraded(RuntimeError("上游断开"))
+        assert app.health.state is AppHealthState.DEGRADED
+        assert app.health.sources[0].last_error_type == "RuntimeError"
+        await app.close()
 
     def test_construction_with_injected_ctx(self, config):
         """注入的 AppContext 应被使用."""
@@ -640,6 +657,21 @@ class TestBotAppRun:
         assert source.stopped
         assert app.closed
         assert app.bus.closed
+
+    def test_run_reports_ready_and_stopped_health(self, config):
+        """运行期 reporter 应能向 CLI 持久化 ready 和最终 stopped."""
+        app = BotApp(config)
+        app.add_source(StubSource)
+        reports = []
+
+        app.run(
+            duration=0.02,
+            health_reporter=reports.append,
+            health_interval=0.005,
+        )
+
+        assert any(report.state is AppHealthState.READY for report in reports)
+        assert reports[-1].state is AppHealthState.STOPPED
 
     @pytest.mark.skipif(
         sys.platform == "win32",
