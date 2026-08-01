@@ -174,7 +174,6 @@ def test_framework_control_plane_is_not_exported_from_plugin_root() -> None:
 
     for name in (
         "CleanupRegistration",
-        "ExtensionRegistrar",
         "LocalPluginSettings",
         "PluginBootstrap",
         "PluginCatalog",

@@ -223,13 +223,12 @@ assert entry.owner_id == "example.plugin"
 `(source_kind, config_key)` 会在应用构造或注册期抛 `SourceError`，避免 Handler
 绑定到不确定实现。手工组装的旧式重复 Source 仍保留兼容行为。
 
-## 扩展原型
+## 插件集成
 
-`SourceRef`、`ExtensionRegistrar`、`SubscriptionSpec`、插件发现、两阶段
-bootstrap、依赖状态机和统一回滚都位于独立的 `butterbot.plugin` 命名空间，见
-[插件 API](./plugin.md)和
-[实验性插件系统](/extensions/plugins.html)。底层手工契约见
-[插件原型基础](/extensions/prototype-foundations.html)。
+`BotApp` 通过 CLI 内部 bootstrap 绑定插件控制面. 插件作者只使用
+[插件 API](./plugin.md) 列出的契约; discovery、manager、注册事务和收据是
+internal 实现. 不使用插件时, 简单 Python 组装直接调用
+`BotApp.add_source()` 和 `BotApp.subscribe()`.
 
 `PluginCandidate` 使用 `DistributionPluginOrigin` 或 `DirectoryPluginOrigin`
 记录来源；选中后统一成为 `LoadedPlugin` 并进入 `PluginManager`。本地 manifest

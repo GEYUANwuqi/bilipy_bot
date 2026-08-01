@@ -24,7 +24,7 @@ from butterbot.core.event import SubscriptionHandle
 from butterbot.core.exceptions import LifecycleError, SourceError
 from butterbot.core.source import BaseSourceT
 
-from .extension import ExtensionRegistrar
+from ._transaction import _RuntimeRegistrationTransaction
 
 _SourceP = ParamSpec("_SourceP")
 _log = getLogger(__name__)
@@ -169,7 +169,7 @@ class ConfigRegistrar:
         self._closed = True
 
 
-class PluginRegistrar(ExtensionRegistrar):
+class PluginRegistrar(_RuntimeRegistrationTransaction):
     """由 PluginManager 注入 owner 的运行阶段 registrar."""
 
     def __init__(

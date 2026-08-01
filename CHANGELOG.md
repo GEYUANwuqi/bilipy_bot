@@ -21,4 +21,5 @@
 - 删除未使用的 tqdm 包装器和 Pillow、requests、tqdm 直接依赖.
 - 删除未使用的公开 terminal 颜色生成器, 日志只保留私有最小 ANSI 能力.
 - 从插件根包删除 discovery、bootstrap、manager、registrar 收据和状态模型.
+- 删除 `ExtensionRegistrar` 和手工插件原型入口, 运行时只保留一份私有注册事务实现.
 - R1 中删除的 provisional API 不提供兼容 alias 或弃用包装器.

@@ -391,5 +391,3 @@ distribution 插件至少应在独立 wheel 中验证：
 核心仓库的 `scripts/smoke_local_plugins.py` 会把四类本地 fixture 复制到两个随机
 绝对路径，并在仅安装 ButterBot 与 provider wheel 的 Python 3.12、3.13、3.14
 环境中验证这些条件。
-
-手工扩展的底层原语仍见[插件原型基础](./prototype-foundations.md)。

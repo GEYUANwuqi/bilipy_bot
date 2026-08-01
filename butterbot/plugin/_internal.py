@@ -18,7 +18,6 @@ from butterbot.plugin.runtime.bootstrap import (
     bootstrap_app,
     validate_plugin_config,
 )
-from butterbot.plugin.runtime.extension import ExtensionRegistrar
 from butterbot.plugin.runtime.manager import (
     PluginFailure,
     PluginFailurePhase,
@@ -37,7 +36,6 @@ __all__ = [
     "DirectoryPluginOrigin",
     "DistributionPluginOrigin",
     "ENTRY_POINT_GROUP",
-    "ExtensionRegistrar",
     "LocalPluginManifest",
     "LocalPluginSettings",
     "PluginBootstrap",
