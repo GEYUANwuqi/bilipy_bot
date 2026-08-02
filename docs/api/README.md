@@ -33,5 +33,5 @@ from butterbot.core.source import BaseSource
 
 ## 稳定性说明
 
-项目当前处于 `3.1.0.dev2` 的 R1 clean-break 收敛窗口. Stable、provisional 和
-internal 的边界以及 R1 后的 SemVer 规则见 [API 稳定性](./stability.md).
+项目当前处于 `3.1.0b1` Beta. Stable、provisional 和 internal 的边界、RC 冻结
+要求以及正式版 SemVer 规则见 [API 稳定性](./stability.md).

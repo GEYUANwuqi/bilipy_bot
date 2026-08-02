@@ -9,7 +9,7 @@ title: 开发 Source
 自定义事件源继承 `BaseSource`，必须：
 
 - 设置 `supported_types: ClassVar[type[BaseType]]`；
-- 需要参与插件原型时设置稳定的 `source_kind: ClassVar[str]`；
+- 需要让 Handler 插件按逻辑能力订阅时设置 `source_kind: ClassVar[str]`；
 - 实现 `async on_start()`；
 - 实现 `async on_stop()`；
 - 用 `self.ctx.bus.publish(self.uuid, event)` 发布事件；

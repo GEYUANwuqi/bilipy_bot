@@ -6,7 +6,7 @@ from butterbot.core.exceptions import ButterError
 
 
 class PluginError(ButterError):
-    """实验插件系统错误的基类."""
+    """插件系统错误的基类."""
 
 
 class PluginDiscoveryError(PluginError):

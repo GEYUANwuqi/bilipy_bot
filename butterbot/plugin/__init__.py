@@ -1,4 +1,4 @@
-"""ButterBot 插件作者使用的稳定 API."""
+"""ButterBot Beta 插件作者 API."""
 
 from __future__ import annotations
 

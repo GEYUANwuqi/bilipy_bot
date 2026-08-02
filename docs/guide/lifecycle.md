@@ -153,9 +153,13 @@ closing 阶段，禁止添加和启动新 Source。修正瞬时故障后再次�
 ## 回调超时
 
 插件生命周期分别受 `plugins.lifecycle.start_timeout`、`stop_timeout`、
-`cleanup_timeout` 和 `drain_timeout` 限制。一个插件超时不会跳过其余插件的逆序
-停止和清理；失败会进入 `PluginStatus.failures`。存在 stopping 或 cleaning
-失败时，该插件状态为 `failed`，同一个 manager 不允许再次启动。
+`cleanup_timeout` 和 `drain_timeout` 限制。生命周期回调超时后, 框架先请求取消,
+并在 `cleanup_timeout` 内等待该回调真正结束, 再执行同一插件的 `on_stop` 和 cleanup.
+一个插件失败不会跳过其他插件的逆序停止和清理.
+
+如果插件持续捕获取消且在清理预算内仍未结束, 框架不会让 `on_stop` 或 cleanup 与它
+并发操作资源; 该插件进入 failed, 保留的 cleanup 会在后续 `aclose()` 时重试. 插件
+应只在完成必要收尾后重新抛出 `CancelledError`, 不得把拒绝取消当作常规控制流.
 
 `BotApp(close_timeout=5.0)` 的默认关闭等待为 5 秒。超过该时间仍未完成的
 Handler task 会被取消并等待到真正结束：

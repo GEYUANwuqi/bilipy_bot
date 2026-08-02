@@ -3,6 +3,9 @@
 一个基于 Python 3.12+ 和 asyncio 的事件驱动机器人框架。项目把外部输入抽象为
 Source，把数据与状态包装为 Event，再由 EventBus 分发给异步 Handler。
 
+> 当前版本为 `3.1.0b1` Beta。自定义 Source 和可信 Handler 插件已经开放真实环境
+> 验证，但暂不承诺无人值守生产、跨 Beta 兼容或第三方 Source 自动发现。
+
 当前仓库内置：
 
 - NapCat OneBot WebSocket 事件与 API；
@@ -103,7 +106,3 @@ npm run docs:links
 ## 许可证
 
 [GPL-3.0](LICENSE)
-
-把兼容的方法去掉, 当前没有适配旧版本的焦虑
-plugin进一步优化, 提供装饰器以代替注册钩子, 进一步优化Plugin*类的数量, 进一步内置插件内置方法
-plugin不再引用core里的内容, 仅提供插件内容, core叫用户自己导入
