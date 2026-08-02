@@ -56,4 +56,4 @@ flowchart TB
 
 [控制流, 任务所有权与能力审计](./control-flow.md).
 
-[统一 CLI, 直接运行与可选插件装配的设计提案](./unified-runtime-bootstrap.md).
+[统一 CLI、直接运行与可选插件装配的已落地设计](./unified-runtime-bootstrap.md).

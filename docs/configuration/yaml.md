@@ -19,18 +19,18 @@ config = RuntimeConfig.from_yaml("config.yaml")
 2. 合并 YAML `environment` 和当前进程环境；
 3. 递归解析字符串中的环境变量引用；
 4. 应用 `BUTTERBOT__` 分层环境变量覆盖；
-5. 分离可选的 `kwarg`，再按 `source_name` 调用配置 builder；
-6. `BotApp` 按 `kwarg` 中出现的 Source 类名自动实例化并注册事件源。
+5. 校验并冻结 `plugins`、Source definition 和构造参数；
+6. 按 `source_name` 构造内置 adapter 配置；
+7. `BotApp` 按 `kwarg` 中出现的内置 Source 类名实例化并注册事件源；
+8. 只有最终 `plugins.enabled=true` 时，`BotApp` 才动态导入插件运行时。
 
-CLI 始终通过 `PluginBootstrap` 构造应用。它先读取同一份已合并配置中的
-`plugins.enabled`、`plugins.plugin_list`、`plugins.plugin_path` 和插件私有配置，
-在第 5 步前登记插件 builder、在第 6 步前登记插件 Source factory，随后才执行
-运行阶段注册。`RuntimeConfig.from_yaml()` 本身不会发现或导入插件。
+CLI 和直接构造 `BotApp` 共用这条路线。`RuntimeConfig.from_yaml()` 本身不枚举候选、
+不导入插件代码，也不创建 Source、任务或连接。
 
 ## 实验插件设置
 
-`plugins` 是 bootstrap 保留段，不会出现在
-`RuntimeConfig.get_config("plugins")` 中：
+`plugins` 是完整运行时配置的一部分。`RuntimeConfig.plugin_enabled` 返回最终总开关，
+`plugin_config` 和 `get_config("plugins")` 返回只读映射：
 
 ```yaml
 plugins:
@@ -66,12 +66,16 @@ descriptor 声明。
 省略 `plugin_list` 与配置 `plugin_list: []` 含义相同：不启用任何插件。列表中的
 名称找不到候选时直接报错，不会回退到加载整个目录。
 
+总开关关闭时只要求 `plugins` 是 mapping 且 `enabled` 是 bool，其余插件专属字段会
+原样冻结，不做完整插件 schema 校验。这样可以先编辑配置再开启插件，且关闭路径
+保证不导入任何 `butterbot.plugin` 模块。
+
 相对 `plugin_path` 以配置文件父目录为基准；不存在时视为空。插件系统开启后，
 路径中存在的无效 manifest 即使未被选择也会使 `check` 和 `run` 失败。框架不修改
 `sys.path`，不跟随符号链接，也不自动安装依赖。
 
-`plugins.config` 的每个值必须是 mapping，只读注入对应插件，不进入
-`RuntimeConfig`。引用未启用 plugin ID 的私有配置会直接报错。未知字段、重复名称或
+`plugins.config` 的每个值必须是 mapping，并作为 `RuntimeConfig` 中的只读原始数据
+注入对应插件。引用未启用 plugin ID 的私有配置会直接报错。未知字段、重复名称或
 ID、缺失候选、版本不兼容和依赖错误都会使配置无效。分层环境覆盖同样适用：
 
 ```bash
@@ -156,18 +160,8 @@ sources:
 `app.add_source(SourceClass, ..., config_key=...)` 用法和运行期动态接入流程均
 保持不变。
 
-插件应使用 `register_factory(..., factory_id="source")` 声明稳定 ID，YAML 使用
-`kwarg.source`，而不是依赖 Python 类名：
-
-```yaml
-sources:
-  primary:
-    source_name: example
-    kwarg:
-      source: {}
-```
-
-内置 Source 类名继续作为兼容配置协议。
+`kwarg` 目前只接受框架内置 Source 类名。插件不能登记 factory、创建 Source 或接管
+应用 Source；自定义 Source 自动发现留给独立的后续机制。
 
 同一 `source_name` 可以构建多个命名配置，适合多账号或多端点：
 
@@ -254,26 +248,6 @@ sources:
 配置构建完成后，`RuntimeConfig.source_definitions` 会保留每个实例的
 `config_key`、`source_name`、`kwarg` 和构建结果。`source_name` 仍只代表配置
 构建器，不等同于具体事件流的 `SourceRef.source_kind`。
-
-自定义 Source 可使用隔离工厂注册表：
-
-```python
-from butterbot.app import BotApp, SourceFactoryRegistry
-
-source_registry = SourceFactoryRegistry.with_defaults()
-registration = source_registry.register(
-    "feed",
-    FeedSource,
-    factory_name="source",
-    owner_id="example.feed",
-)
-app = BotApp(config, source_factory_registry=source_registry)
-```
-
-YAML 中即可使用 `kwarg.source`。省略 `factory_name` 时兼容使用工厂的
-`__name__`。重复注册同一个 `source_name + factory_name` 会抛 `ConfigError`；
-返回的 `FactoryRegistration` 可用 `unregister()` 精确撤销，旧收据不能误删后来
-替换的注册。
 
 builder 抛出的普通异常会包装为 `ConfigError` 并保留 cause。
 

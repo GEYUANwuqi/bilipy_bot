@@ -43,6 +43,10 @@ app.run()
 `run()` 自己调用 `asyncio.run()`，适合没有现成事件循环的顶层脚本。不要在
 Jupyter、ASGI 服务或其他已运行的协程中调用它。
 
+`cli_mode`、`duration`、信号覆盖关系和健康报告参数的完整说明见
+[运行模式与 `run()`](./runtime-modes.md)。特别注意，`cli_mode=False` 只关闭
+`run()` 的默认 signal handler，不会关闭插件，也不会让 `run()` 变成非阻塞调用。
+
 ::: danger 默认调用会持续阻塞
 `app.run()` 是同步阻塞入口. 默认 `duration=None`, 不会自行返回. 它会一直运行到
 收到 `SIGINT`, `SIGTERM`, `KeyboardInterrupt`, 遇到未处理异常或进程被外部终止.
@@ -120,7 +124,7 @@ finally:
 
 插件 `on_start()` 发生异常或取消时，当前插件和此前已启动插件会先按依赖逆序执行
 `on_stop()`，再关闭各自 `PluginScope` 中的后台任务和清理回调，然后撤销 Handler、
-插件 Source 与配置注册。普通异常包装为 `PluginRegistrationError`；取消在清理
+插件自身资源注册。普通异常包装为 `PluginRegistrationError`；取消在清理
 完成后原样传播。
 
 ## 停止与关闭的区别
@@ -134,7 +138,7 @@ Source、插件 Handler 注册、EventBus 与 API 缓存，因此可以再次启
 `await app.close()` 是终态操作，顺序固定：
 
 1. `PluginManager.aclose()`：先逆依赖执行仍在运行的插件 `on_stop()`，再撤销插件
-   托管任务、Handler、close callback、Source 和 registry；
+   托管任务、Handler 和 close callback；
 2. `SourceManager.close()`：停止其余 Source，不再产生新事件；
 3. `EventBus.close()`：等待正在执行的 Handler；
 4. `ApiRegistry.aclose_all()`：关闭 API 连接和任务。

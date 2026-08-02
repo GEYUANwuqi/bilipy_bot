@@ -32,7 +32,7 @@ ButterBot 当前处于 `3.1.0.dev2` 的 R1 收敛窗口. 这个窗口采用 clea
 
 - 以下划线开头的模块或名称;
 - 未从门面 `__all__` 导出的实现细节;
-- 插件 discovery、bootstrap、manager 和 registrar 的框架控制面;
+- 插件 discovery、可选运行时工厂、manager 和 registrar 的框架控制面;
 - 测试 helper 与 fixture 内部类型.
 
 能通过深层模块路径 import 不代表该名称是 stable API.

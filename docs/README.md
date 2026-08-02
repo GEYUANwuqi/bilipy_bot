@@ -74,6 +74,7 @@ if __name__ == "__main__":
 ## 从哪里开始
 
 - 第一次使用：从[安装](/guide/installation.html)和[快速开始](/guide/quick-start.html)开始。
+- 选择独立进程或嵌入模式：查看[运行模式与 `run()`](/guide/runtime-modes.html)。
 - 接入 NapCat 或 Bilibili：查看[功能指南](/features/)。
 - 开发自定义事件源：查看[扩展开发](/extensions/)。
 - 查询签名和异常：查看[API 参考](/api/)。

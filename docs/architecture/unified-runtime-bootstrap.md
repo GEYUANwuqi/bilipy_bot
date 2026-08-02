@@ -4,9 +4,9 @@ title: 统一运行时装配设计
 
 # 统一运行时装配设计
 
-> 状态: 设计提案, 尚未实现.
+> 状态: 已实现 (2026-08-02).
 >
-> 目标版本: R1 后续收敛.
+> 落地版本: 3.1.0.dev2 开发线.
 
 ## 1. 核心决策
 
@@ -39,9 +39,9 @@ CLI 和直接运行必须共享一条装配路线:
     adapter 实现.
 12. 官方 CLI 入口只使用具名同步工厂.
 
-## 2. 当前问题
+## 2. 实现前问题
 
-当前实现存在两套不一致路线:
+落地前的实现存在两套不一致路线:
 
 - `butterbot run` 总是导入 `PluginBootstrap`, 即使插件关闭也会绑定空 manager;
 - 直接 `BotApp().run()` 不经过 bootstrap, YAML 中的插件开关不会生效;
@@ -255,7 +255,7 @@ RuntimeConfig
 
 ## 8. BotApp 对外契约
 
-建议构造签名:
+已落地的构造签名:
 
 ```python
 BotApp(
@@ -425,7 +425,7 @@ async with app:
 
 ## 12. 基础设施状态
 
-建议给 `BotApp` 增加私有装配状态:
+`BotApp` 使用以下私有装配状态:
 
 ```text
 NEW -> PREPARING -> PREPARED -> RUNNING -> CLOSING -> CLOSED
@@ -443,24 +443,24 @@ NEW -> PREPARING -> PREPARED -> RUNNING -> CLOSING -> CLOSED
 - 禁用插件分支不能创建空 manager;
 - 一个应用只能持有一个可选插件运行时.
 
-## 13. 迁移步骤
+## 13. 已完成的迁移
 
-建议独立提交:
+落地结果:
 
-1. 将 `SourceRef` 移入 core, 清除 app 对 plugin 的导入;
-2. 让 `RuntimeConfig` 保存最终 `plugin_enabled` 和只读插件声明;
-3. 删除插件 `@configure`, `ConfigRegistrar` 和 builder/factory 扩展路径;
-4. 删除插件 Source 创建, adopt 和 owner factory 路径;
-5. 把 `SourceFactoryRegistry` 降为 app runtime 内部实现;
-6. 新增统一 assembler 和准备状态;
-7. 根据 config 动态导入可选插件运行时;
-8. 修改 CLI 为"先 RuntimeConfig, 后应用工厂";
-9. 将 CLI loader 收敛为只接受具名同步工厂;
-10. 延迟导入 CLI 插件工具和异常;
-11. 让 `plugin check` 使用隔离子进程;
-12. 增加 `plugin_enabled`, `cli_mode` 和 run 执行参数;
-13. 重写外部插件 fixtures, 删除 source-only/combined 插件模式;
-14. 更新 examples, API 文档, 稳定性 snapshot 和 changelog.
+1. [x] 将 `SourceRef` 移入 core, 清除 app 对 plugin 的静态导入;
+2. [x] 让 `RuntimeConfig` 保存最终 `plugin_enabled` 和只读插件声明;
+3. [x] 删除插件 `@configure`, `ConfigRegistrar` 和 builder/factory 扩展路径;
+4. [x] 删除插件 Source 创建, adopt 和 owner factory 路径;
+5. [x] 把 `SourceFactoryRegistry` 降为 app runtime 内部实现;
+6. [x] 新增统一 assembler 和准备状态;
+7. [x] 根据 config 动态导入可选插件运行时;
+8. [x] 修改 CLI 为"先 RuntimeConfig, 后应用工厂";
+9. [x] 将 CLI loader 收敛为只接受具名同步工厂;
+10. [x] 延迟导入 CLI 插件工具和异常;
+11. [x] 让 `plugin check` 使用隔离子进程;
+12. [x] 增加 `plugin_enabled`, `cli_mode` 和 run 执行参数;
+13. [x] 重写 Handler 插件 fixtures, 删除 source-only/combined 插件模式;
+14. [x] 更新 examples、配置指南、API 文档和稳定性 snapshot.
 
 ## 14. 验收标准
 

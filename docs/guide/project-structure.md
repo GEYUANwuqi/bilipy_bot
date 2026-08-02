@@ -18,12 +18,13 @@ butterbot/
 │   ├── data/            # 数据模型基础设施
 │   ├── event/           # Event、EventBus、Subscriber
 │   ├── filter/          # BaseFilter 与组合过滤器
+│   ├── routing.py       # SourceRef 中立路由值对象
 │   ├── source/          # BaseSource
 │   └── types/           # BaseType
 ├── plugin/
 │   ├── contracts/       # ButterPlugin、descriptor、路由和订阅契约
 │   ├── discovery/       # catalog、目录加载、manifest、来源与设置
-│   ├── runtime/         # bootstrap、registrar、manager 与生命周期事务
+│   ├── runtime/         # 可选运行时工厂、registrar、manager 与事务
 │   └── errors.py        # 插件系统共享异常
 ├── sources/
 │   ├── bilibili/        # Bilibili API、Source、Data、Type
@@ -81,10 +82,10 @@ flowchart TD
   U[用户应用] --> APP[butterbot.app]
   P[业务插件] --> PLUGIN[butterbot.plugin]
   P --> CORE
-  APP --> CONTRACT[plugin.contracts.routing]
-  PLUGIN --> APP
   APP --> CORE[butterbot.core]
-  PLUGIN_RUNTIME[plugin.runtime] --> CORE
+  APP -. enabled 时动态导入 .-> PLUGIN_RUNTIME
+  PLUGIN_RUNTIME[plugin.runtime] --> APP
+  PLUGIN_RUNTIME --> CORE
   U --> SOURCES[butterbot.sources]
   SOURCES --> CORE
   SOURCES --> UTILS[butterbot.utils]
@@ -93,10 +94,10 @@ flowchart TD
   CORE -. 不允许 .-> SOURCES
 ```
 
-`BotApp` 只导入轻量的 `plugin.contracts.routing`；反向组合应用的 bootstrap、
-registrar 和 manager 由 `butterbot.plugin` 门面延迟导出，因此模块级导入图不会
-形成循环。插件作者从根门面导入插件契约，需要 core 类型时直接从
-`butterbot.core` 导入，不把插件内部分类当作稳定路径。
+`BotApp` 静态只依赖 core；`SourceRef` 位于 `core.routing`。只有最终配置启用插件
+时，app 才通过 `importlib` 动态加载插件运行时工厂，因此关闭路径不会触发 plugin
+包。插件作者从根门面导入插件契约，需要 core 类型时直接从 `butterbot.core`
+导入，不把插件内部分类当作稳定路径。
 
 `butterbot/plugin/` 内部同一目录的模块使用单点相对导入；跨
 `contracts/discovery/runtime` 目录或访问根目录模块时使用完整

@@ -57,29 +57,31 @@ butterbot run \
 工作目录解析；相对 `plugins.plugin_path` 则以该 YAML 所在目录解析。`--path` 和
 `--config` 也是等价写法。
 
-`app.py` 使用具名同步工厂. 无论是否显式指定 `-config`, 官方项目都只采用这一种
-入口. CLI 会把解析好的 `RuntimeConfig` 和当前 Source 注册表作为关键字参数传给
-工厂.
+`app.py` 使用具名同步工厂。无论是否显式指定 `-config`，官方项目都只采用这一种
+入口。CLI 会先完成 `RuntimeConfig` 构造，再把配置和 `cli_mode=True` 传给工厂。
 
 `butterbot init` 默认生成工厂入口：
 
 ```python
-from butterbot.app import BotApp, RuntimeConfig, SourceFactoryRegistry
+from butterbot.app import BotApp, RuntimeConfig
 
 
 def app(
     *,
     config: RuntimeConfig,
-    source_factory_registry: SourceFactoryRegistry,
+    cli_mode: bool = True,
 ) -> BotApp:
-    return BotApp(
-        config=config,
-        source_factory_registry=source_factory_registry,
-    )
+    return BotApp(config=config, cli_mode=cli_mode)
 ```
 
-工厂入口必须接受 `config` 和 `source_factory_registry` 两个关键字参数, 并返回
-`BotApp`. 不要在模块导入时构造或运行 Bot, 运行与关闭生命周期由 CLI 持有.
+工厂入口必须接受 `config` 和 `cli_mode` 两个关键字参数，并返回 `BotApp`。不要在
+模块导入时构造或运行 Bot，运行与关闭生命周期由 CLI 持有。已构造的 `BotApp`
+对象入口不再接受。
+
+CLI 固定传入 `cli_mode=True`，因此 `app.run()` 默认接管 `SIGINT` 和 `SIGTERM`。
+该参数不控制插件开关；插件是否加载只取决于环境覆盖后的
+`config.plugin_enabled`。完整的模式差异和 `run()` 参数见
+[运行模式与 `run()`](./runtime-modes.md)。
 
 ::: danger 导入阶段不要启动应用
 如果入口模块在顶层执行 `run()`, 模块导入会阻塞, CLI 无法登记后台状态, 也
@@ -102,6 +104,7 @@ butterbot config -config ./deploy/config.production.yaml
 
 ```bash
 butterbot plugin
+butterbot plugin config
 butterbot plugin -config ./deploy/config.production.yaml
 ```
 
@@ -144,7 +147,8 @@ butterbot plugin check
 butterbot plugin check -config ./deploy/config.production.yaml
 ```
 
-`check` 不接受应用入口或插件名。它按 YAML 报告：
+`check` 不接受应用入口或插件名。选中候选的导入和配置模型校验在短生命周期子进程
+中执行，结束后不会污染 CLI 主进程的模块和全局状态。它按 YAML 报告：
 
 - `LOADED`：已被总开关和 `plugin_list` 选中，并成功导入；
 - `BLOCKED`：被总开关或 `plugin_list` 拦截，没有导入；

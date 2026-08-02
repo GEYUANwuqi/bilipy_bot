@@ -17,20 +17,28 @@ from butterbot.app import BotApp
 ```python
 BotApp(
     config: RuntimeConfig | None = None,
-    ctx: AppContext | None = None,
     *,
+    config_path: str | Path | None = None,
+    cli_mode: bool = True,
+    logging_mode: Literal["managed", "external"] = "managed",
     close_timeout: float = 5.0,
     max_pending_callbacks: int | None = None,
-    logging_mode: Literal["managed", "external"] = "managed",
-    source_factory_registry: SourceFactoryRegistry | None = None,
+    ctx: AppContext | None = None,
 )
 ```
 
-`config=None` 时调用 `RuntimeConfig.from_yaml("config.yaml")`，可能抛
+`config=None` 时调用 `RuntimeConfig.from_yaml(config_path or "config.yaml")`，可能抛
 `FileNotFoundError`、`yaml.YAMLError` 或 `ConfigError`。
+`config` 和 `config_path` 同时传入时抛 `ValueError`。
 
-配置包含 `sources.<config_key>.kwarg` 时，构造器会用内置或传入的
-`source_factory_registry` 自动创建并注册 Source。此阶段不启动 Source。
+配置包含 `sources.<config_key>.kwarg` 时，构造器会用 app 内部的内置 factory 自动
+创建并注册 Source。factory registry 不能注入。此阶段不启动 Source。
+
+`cli_mode` 只描述执行宿主，不控制插件。它必须是 `bool`，构造后只能通过只读属性
+查询。它只影响 `run(install_signal_handlers=None)` 的默认值：`True` 默认安装
+`SIGINT`/`SIGTERM` handler，`False` 默认不安装。`await start()` 和异步上下文
+本身都不修改 signal handler。完整用法见
+[运行模式与 `run()`](/guide/runtime-modes.md)。
 
 `max_pending_callbacks` 为 `None` 时保持无限并发的兼容行为；设置正整数后，
 EventBus 达到该数量的 in-flight Handler task 时会让 `publish()` 等待容量。
@@ -48,6 +56,8 @@ EventBus 达到该数量的 in-flight Handler task 时会让 `publish()` 等待�
 | 属性 | 类型 | 说明 |
 | --- | --- | --- |
 | `config` | `RuntimeConfig` | 应用运行配置 |
+| `plugin_enabled` | `bool` | 最终配置是否启用插件 |
+| `cli_mode` | `bool` | 构造期确定的执行宿主模式 |
 | `ctx` | `AppContext` | 注入给 Source 的上下文 |
 | `bus` | `EventBus` | 事件总线 |
 | `api_ctx` | `ApiRegistry` | API 单例容器 |
@@ -116,6 +126,7 @@ async close() -> None
 run(
     duration: float | None = None,
     *,
+    install_signal_handlers: bool | None = None,
     health_reporter: Callable[[AppHealth], None] | None = None,
     health_interval: float = 1.0,
 ) -> None
@@ -129,18 +140,49 @@ async __aexit__(exc_type, exc_val, exc_tb) -> None
 不能期待它在正常服务期间继续执行后续同步语句.
 :::
 
+#### `cli_mode` 与信号处理
+
+`install_signal_handlers` 显式值优先于 `cli_mode`：
+
+| `cli_mode` | `install_signal_handlers` | 最终行为 |
+| --- | --- | --- |
+| `True` | `None` | 安装 `SIGINT`/`SIGTERM` handler |
+| `False` | `None` | 不安装 signal handler |
+| `True` | `False` | 不安装 signal handler |
+| `False` | `True` | 安装 `SIGINT`/`SIGTERM` handler |
+
+handler 安装成功时，两个信号都会唤醒等待逻辑并进入完整 `close()` 路径；`run()`
+退出前会移除自己安装的 handler。不支持 `add_signal_handler()` 的平台保留默认行为。
+`cli_mode=False` 不影响插件、Source、日志或阻塞语义。
+
+#### `run()` 参数
+
+| 参数 | 默认值 | 语义 |
+| --- | --- | --- |
+| `duration` | `None` | `None` 持续等待；正数从启动完成后开始计时；`0` 或负数在启动后立即关闭 |
+| `install_signal_handlers` | `None` | `None` 使用 `cli_mode`；布尔值显式覆盖；其他类型抛 `TypeError` |
+| `health_reporter` | `None` | 同步健康回调；启动后、周期运行时和关闭后报告，通过工作线程执行 |
+| `health_interval` | `1.0` | reporter 的周期秒数；提供 reporter 时必须大于 `0` |
+
+`health_reporter=None` 时不创建周期 task，`health_interval` 不参与执行。reporter
+异常只记录日志，不中断应用。`duration` 只计算应用启动完成后的等待时间，不包含
+配置解析、构造和启动耗时。
+
+`run()` 创建并拥有 event loop，不能在已有 event loop 中调用。`await app.stop()`
+不会唤醒 `run()` 的内部等待事件；需要由异步宿主控制退出时，应使用
+`async with app` 或手动 `start()`/`close()`。
+
 `start()` 可能抛 `SourceStartError` 或 `PluginRegistrationError`。启动被取消时会
-回滚此前已启动的 Source 和插件注册，完成后传播 `CancelledError`。存在
-PluginManager 时，会在 Source 启动前解析并注册插件 Handler，并在全部 Source
+回滚此前已启动的 Source 和插件注册，完成后传播 `CancelledError`。配置启用插件
+时，会在 Source 启动前解析并注册插件 Handler，并在全部 Source
 启动后按依赖顺序调用插件 `on_start()`。`stop()` 先逆依赖调用插件 `on_stop()`，
 再停止 Source；一个或多个 Source 停止失败时抛 `SourceStopError`，但仍会尝试
 停止其余 Source。`close()` 同样先执行仍在运行的插件停止回调，再撤销插件
-Handler、callback、Source 和 registry，最后按 Source、EventBus、API 顺序释放
+Handler、callback 和插件自身资源，最后按 Source、EventBus、API 顺序释放
 其余资源。Source 关闭失败时保留 manager、EventBus 与 API，允许再次调用
 `close()`；只有 Source 全部清理成功后才继续关闭下游依赖。`run()` 是拥有事件
 循环的同步入口，内部使用 `asyncio.run()`。`health_reporter` 主要供
-CLI 定期持久化 `AppHealth`；回调在工作线程执行，失败只记录日志，
-不中断应用主循环。
+CLI 定期持久化 `AppHealth`。
 
 `AppHealth.state` 可为 `stopped`、`starting`、`ready`、`degraded` 或
 `stopping`。`sources` 包含 Source 类型、逻辑路由和最近成功/异常类型；
@@ -171,7 +213,8 @@ RuntimeConfig.from_yaml(
 
 `source_definitions` 是只读映射，保留 YAML 中每个命名 Source 的 `config_key`、
 `source_name`、`kwarg` 和构建结果；`get_source_definition(config_key)` 可查询
-单项。
+单项。`plugin_enabled` 是环境覆盖后的总开关，`plugin_config` 是插件声明的递归
+只读映射，`config_root` 是相对插件路径的解析根。
 
 ## `register_builder`
 
@@ -194,25 +237,6 @@ builder 接收配置值并返回运行时配置对象。新格式由
 `ConfigBuilderRegistry` 提供隔离注册表；`with_defaults()` 可复制内置构建器，
 `RuntimeConfig.from_yaml(builder_registry=...)` 只使用传入实例。
 
-## `SourceFactoryRegistry`
-
-```python
-registry = SourceFactoryRegistry.with_defaults()
-registry.register(
-    source_name: str,
-    factory: Callable[..., BaseSource],
-    *,
-    factory_name: str | None = None,
-    owner_id: str | None = None,
-) -> FactoryRegistration
-```
-
-注册表把 YAML 的 `source_name + kwarg` 类名解析为 Source 构造工厂。
-`with_defaults()` 包含内置 Bilibili 与 NapCat Source。自定义注册表通过
-`BotApp(source_factory_registry=registry)` 注入；同名注册抛 `ConfigError`。
-`factory_name` 是稳定的配置 ID，不要求等于类名。返回收据的 `unregister()` 只在
-收据仍拥有该注册时撤销；`resolve()` 返回包含 owner 的 `SourceFactoryEntry`。
-
 ## `SourceCatalog`
 
 `SourceManager.source_catalog` 记录有 `source_kind` 的 Source：
@@ -222,19 +246,17 @@ entry = app.manager.source_catalog.entries[0]
 assert entry.source_id == source.uuid
 assert entry.source_kind == "example.events"
 assert entry.config_key == "primary"
-assert entry.owner_id == "example.plugin"
 ```
 
-`SourceRef` 查询通过 catalog 解析。插件拥有的重复
-`(source_kind, config_key)` 会在应用构造或注册期抛 `SourceError`，避免 Handler
-绑定到不确定实现。手工组装的旧式重复 Source 仍保留兼容行为。
+`SourceRef` 查询通过 catalog 解析。多个 Source 匹配同一逻辑引用时，单项查询抛
+`SourceError`；`get_sources()` 可返回全部匹配项。
 
 ## 插件集成
 
-`BotApp` 通过 CLI 内部 bootstrap 绑定插件控制面. 插件作者只使用
-[插件 API](./plugin.md) 列出的契约; discovery、manager、注册事务和收据是
-internal 实现. 不使用插件时, 简单 Python 组装直接调用
-`BotApp.add_source()` 和 `BotApp.subscribe()`.
+`BotApp` 根据最终配置动态导入可选插件运行时，CLI 和直接运行共用该路径。插件作者
+只使用[插件 API](./plugin.md)列出的契约；discovery、manager、注册事务和收据是
+internal 实现。不使用插件时，直接调用 `BotApp.add_source()` 和
+`BotApp.subscribe()`，且框架不会导入任何 `butterbot.plugin` 模块。
 
 `PluginCandidate` 使用 `DistributionPluginOrigin` 或 `DirectoryPluginOrigin`
 记录来源；选中后统一成为 `LoadedPlugin` 并进入 `PluginManager`。本地 manifest
@@ -256,7 +278,6 @@ distribution 候选则要到被名称选中并加载 descriptor 后才能取得�
 
 - `Event`
 - `SourceDefinition`、`ConfigBuilderRegistry`、`BuilderRegistration`
-- `SourceFactoryRegistry`、`FactoryRegistration`、`SourceFactoryEntry`
 - `SourceCatalog`、`SourceCatalogEntry`
 - `BaseFilter`、`AndFilter`、`OrFilter`
 - `ButterError` 及公开异常子类
