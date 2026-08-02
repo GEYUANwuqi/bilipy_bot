@@ -108,6 +108,11 @@ class PluginScope:
                         "插件资源作用域在超时前仍有 %s 个后台任务未结束" % len(pending)
                     ),
                 )
+                # task 仍可能操作同一资源，不能并发执行 cleanup callback。保留
+                # callback，后续 scope close 可以在 task 静默后继续清理。
+                if cancelled is not None:
+                    raise cancelled
+                return
 
         cleanups = tuple(reversed(self._cleanups))
         self._cleanups.clear()

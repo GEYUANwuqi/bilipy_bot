@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -75,6 +76,7 @@ def _write_config(
     enabled: bool = True,
     plugin_name: str = "RuntimeHandlerPlugin",
     private_config: str = "",
+    lifecycle_config: str = "",
 ) -> Path:
     path = root / "config.yaml"
     config_block = (
@@ -82,11 +84,13 @@ def _write_config(
         if private_config
         else ""
     )
+    lifecycle_block = "  lifecycle:\n%s" % lifecycle_config if lifecycle_config else ""
     path.write_text(
         "plugins:\n"
         f"  enabled: {str(enabled).lower()}\n"
         f"  plugin_list: [{plugin_name}]\n"
         "  plugin_path: ./plugins\n"
+        f"{lifecycle_block}"
         f"{config_block}"
         "sources: {}\n",
         encoding="utf-8",
@@ -247,6 +251,116 @@ async def test_plugin_lifecycle_wraps_source_lifecycle(tmp_path: Path):
     await app.close()
 
     assert output.read_text() == "start,stop"
+
+
+@pytest.mark.asyncio
+async def test_start_timeout_waits_for_callback_exit_before_on_stop(tmp_path: Path):
+    output = tmp_path / "timeout-lifecycle.txt"
+    _write_plugin(
+        tmp_path / "plugins",
+        code=(
+            "import asyncio\n"
+            "from pathlib import Path\n"
+            "from butterbot.plugin import ButterPlugin\n"
+            "\n"
+            "class RuntimeHandlerPlugin(ButterPlugin):\n"
+            "    def append(self, value):\n"
+            "        path = Path(str(self.settings['output']))\n"
+            "        previous = path.read_text() if path.exists() else ''\n"
+            "        path.write_text(previous + value)\n"
+            "    async def on_start(self):\n"
+            "        self.append('start-entered,')\n"
+            "        try:\n"
+            "            await asyncio.Event().wait()\n"
+            "        except asyncio.CancelledError:\n"
+            "            self.append('cancel-observed,')\n"
+            "            await asyncio.sleep(0.02)\n"
+            "        self.append('start-exited,')\n"
+            "    async def on_stop(self):\n"
+            "        self.append('stop')\n"
+        ),
+    )
+    config_path = _write_config(
+        tmp_path,
+        private_config=f"      output: {output}\n",
+        lifecycle_config=(
+            "    start_timeout: 0.005\n"
+            "    stop_timeout: 0.1\n"
+            "    cleanup_timeout: 0.1\n"
+            "    drain_timeout: 0.1\n"
+        ),
+    )
+    app = BotApp(config_path=config_path, cli_mode=False, logging_mode="external")
+
+    with pytest.raises(PluginRegistrationError, match="starting"):
+        await app.start()
+
+    assert output.read_text() == ("start-entered,cancel-observed,start-exited,stop")
+    await app.close()
+
+
+@pytest.mark.asyncio
+async def test_start_timeout_skips_on_stop_while_callback_refuses_cancel(
+    tmp_path: Path,
+):
+    output = tmp_path / "stuck-lifecycle.txt"
+    _write_plugin(
+        tmp_path / "plugins",
+        code=(
+            "import asyncio\n"
+            "from pathlib import Path\n"
+            "from butterbot.plugin import ButterPlugin\n"
+            "\n"
+            "class RuntimeHandlerPlugin(ButterPlugin):\n"
+            "    release = asyncio.Event()\n"
+            "    def append(self, value):\n"
+            "        path = Path(str(self.settings['output']))\n"
+            "        previous = path.read_text() if path.exists() else ''\n"
+            "        path.write_text(previous + value)\n"
+            "    async def on_start(self):\n"
+            "        self.append('start-entered,')\n"
+            "        self.context.add_cleanup(lambda: self.append('cleanup'))\n"
+            "        cancelled = False\n"
+            "        while not self.release.is_set():\n"
+            "            try:\n"
+            "                await self.release.wait()\n"
+            "            except asyncio.CancelledError:\n"
+            "                if not cancelled:\n"
+            "                    self.append('cancel-observed,')\n"
+            "                    cancelled = True\n"
+            "        self.append('start-exited')\n"
+            "    async def on_stop(self):\n"
+            "        self.append('stop')\n"
+        ),
+    )
+    config_path = _write_config(
+        tmp_path,
+        private_config=f"      output: {output}\n",
+        lifecycle_config=(
+            "    start_timeout: 0.005\n"
+            "    stop_timeout: 0.01\n"
+            "    cleanup_timeout: 0.01\n"
+            "    drain_timeout: 0.01\n"
+        ),
+    )
+    app = BotApp(config_path=config_path, cli_mode=False, logging_mode="external")
+    manager = app._optional_runtime
+    assert manager is not None
+
+    with pytest.raises(PluginRegistrationError, match="starting"):
+        await app.start()
+
+    assert output.read_text() == "start-entered,cancel-observed,"
+    records = getattr(manager, "_records")
+    instance = records["local.runtime-handler"].loaded.instance
+    getattr(instance, "release").set()
+    for _ in range(10):
+        if output.read_text().endswith("start-exited"):
+            break
+        await asyncio.sleep(0)
+    assert output.read_text() == "start-entered,cancel-observed,start-exited"
+    await app.close()
+    assert output.read_text() == ("start-entered,cancel-observed,start-exitedcleanup")
 
 
 def test_typed_plugin_config_fails_during_application_preparation(tmp_path: Path):

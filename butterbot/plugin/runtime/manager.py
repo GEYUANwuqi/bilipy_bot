@@ -282,11 +282,20 @@ class PluginManager:
                     record.loaded.instance.on_start,
                     name="on_start",
                     timeout=self._lifecycle.start_timeout,
+                    cancel_timeout=self._lifecycle.cleanup_timeout,
                     scope=record.loaded.instance.context.scope,
                 )
             except BaseException as exc:
+                stop_ids = [*started_ids]
+                if _callback_task_stopped(exc):
+                    stop_ids.append(plugin_id)
+                else:
+                    _log.error(
+                        "插件 '%s' 的 on_start 取消后仍未结束，跳过 on_stop",
+                        plugin_id,
+                    )
                 stop_cancelled = await self._run_stop_callbacks(
-                    tuple(reversed((*started_ids, plugin_id)))
+                    tuple(reversed(stop_ids))
                 )
                 self._mark_failure(
                     plugin_id,
@@ -338,6 +347,11 @@ class PluginManager:
     async def aclose(self) -> None:
         """按依赖逆序关闭插件并撤销行为注册."""
         if self._closed:
+            # 启动回滚时拒绝取消的 task 可能让 scope 保留 cleanup callback。
+            # 调用方稍后再次 close 时，在 task 已静默的前提下继续完成清理。
+            runtime_cancelled = await self._close_runtime()
+            if runtime_cancelled is not None:
+                raise runtime_cancelled
             return
         plugin_ids = tuple(
             record.plugin_id
@@ -372,6 +386,7 @@ class PluginManager:
                     record.loaded.instance.on_stop,
                     name="on_stop",
                     timeout=self._lifecycle.stop_timeout,
+                    cancel_timeout=self._lifecycle.cleanup_timeout,
                     scope=record.loaded.instance.context.scope,
                 )
             except asyncio.CancelledError as exc:
@@ -497,6 +512,7 @@ class PluginManager:
         *,
         name: str,
         timeout: float,
+        cancel_timeout: float,
         scope: PluginScope,
     ) -> None:
         if not callable(callback) or not inspect.iscoroutinefunction(callback):
@@ -508,12 +524,17 @@ class PluginManager:
         scope._track_task(task, report_failure=False)
         try:
             _, pending = await asyncio.wait((task,), timeout=timeout)
-        except asyncio.CancelledError:
-            task.cancel()
+        except asyncio.CancelledError as exc:
+            stopped = await _cancel_and_wait(task, timeout=cancel_timeout)
+            _mark_callback_task_stopped(exc, stopped)
             raise
         if pending:
-            task.cancel()
-            raise TimeoutError("%s 执行超过 %.3f 秒" % (name, timeout))
+            stopped = await _cancel_and_wait(task, timeout=cancel_timeout)
+            error = TimeoutError("%s 执行超过 %.3f 秒" % (name, timeout))
+            _mark_callback_task_stopped(error, stopped)
+            if not stopped:
+                error.add_note("%s 取消后未在 %.3f 秒内结束" % (name, cancel_timeout))
+            raise error
         await task
 
     def _record_failure(
@@ -525,7 +546,11 @@ class PluginManager:
         failure = PluginFailure(
             plugin_id=plugin_id,
             phase=phase,
-            error_type=type(cause).__name__,
+            error_type=(
+                "TimeoutError"
+                if isinstance(cause, TimeoutError)
+                else type(cause).__name__
+            ),
             timed_out=isinstance(cause, TimeoutError),
             cancelled=isinstance(cause, asyncio.CancelledError),
         )
@@ -576,14 +601,36 @@ async def _run_bounded(
     try:
         _, pending = await asyncio.wait((task,), timeout=timeout)
     except asyncio.CancelledError:
+        await _cancel_and_wait(task, timeout=timeout)
+        raise
+    if pending:
+        await _cancel_and_wait(task, timeout=timeout)
+        raise TimeoutError("%s 执行超过 %.3f 秒" % (name, timeout))
+    await task
+
+
+async def _cancel_and_wait(task: asyncio.Task[object], *, timeout: float) -> bool:
+    """请求取消并在固定预算内等待 task 真正静默."""
+    task.cancel()
+    try:
+        _, pending = await asyncio.wait((task,), timeout=timeout)
+    except asyncio.CancelledError:
         task.cancel()
         task.add_done_callback(_consume_task_result)
         raise
     if pending:
-        task.cancel()
         task.add_done_callback(_consume_task_result)
-        raise TimeoutError("%s 执行超过 %.3f 秒" % (name, timeout))
-    await task
+        return False
+    await asyncio.gather(task, return_exceptions=True)
+    return True
+
+
+def _mark_callback_task_stopped(error: BaseException, stopped: bool) -> None:
+    setattr(error, "_butterbot_callback_task_stopped", stopped)
+
+
+def _callback_task_stopped(error: BaseException) -> bool:
+    return bool(getattr(error, "_butterbot_callback_task_stopped", True))
 
 
 def _consume_task_result(task: asyncio.Task[object]) -> None:
