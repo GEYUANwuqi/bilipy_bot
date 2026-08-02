@@ -3,7 +3,7 @@ name = "butterbot-plugin-contract-handler"
 version = "1.0.0"
 description = "ButterBot external handler-only plugin contract fixture"
 requires-python = ">=3.12"
-dependencies = ["butterbot-python>=3.1.0.dev2"]
+dependencies = ["butterbot-python>=3.1.0b1,<3.2"]
 
 [project.entry-points."butterbot.plugins"]
 "ContractHandlerPlugin" = "contract_handler:ContractHandlerPlugin"

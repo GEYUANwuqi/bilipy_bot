@@ -19,7 +19,7 @@ class ContractHandlerPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="contract.handler",
         version="1.0.0",
-        requires_core=">=3.1.0.dev2,<4",
+        requires_core=">=3.1.0b1,<3.2",
         requires_plugins=(),
         provides=("contract.handler",),
     )

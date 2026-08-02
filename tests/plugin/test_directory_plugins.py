@@ -18,7 +18,7 @@ from butterbot.plugin import (
 from butterbot.plugin.discovery.catalog import PluginCatalog
 from butterbot.plugin.discovery.settings import LocalPluginSettings
 
-CORE_VERSION = "3.1.0.dev2"
+CORE_VERSION = "3.1.0b1"
 
 
 @dataclass
@@ -49,7 +49,7 @@ def write_plugin(
         "schema_version = 2\n"
         f'plugin_name = "{resolved_plugin_name}"\n'
         'version = "0.1.0"\n'
-        'requires_core = ">=3.1.0.dev2,<4"\n'
+        'requires_core = ">=3.1.0b1,<3.2"\n'
         'entry = "plugin.py"\n'
         "requires_plugins = [%s]\n"
         "requires_distributions = [%s]\n"
@@ -471,7 +471,7 @@ def test_cross_origin_plugin_name_collision_is_rejected_before_import(tmp_path: 
         descriptor = PluginDescriptor(
             plugin_id="installed.shared",
             version="1.0.0",
-            requires_core=">=3.1.0.dev2",
+            requires_core=">=3.1.0b1",
         )
 
     write_plugin(
@@ -504,7 +504,7 @@ def test_hybrid_dependencies_share_one_topological_graph(tmp_path: Path):
         descriptor = PluginDescriptor(
             plugin_id="installed.provider",
             version="1.0.0",
-            requires_core=">=3.1.0.dev2",
+            requires_core=">=3.1.0b1",
         )
 
     write_plugin(
@@ -529,7 +529,7 @@ def test_distribution_can_depend_on_local_plugin(tmp_path: Path):
         descriptor = PluginDescriptor(
             plugin_id="installed.consumer",
             version="1.0.0",
-            requires_core=">=3.1.0.dev2",
+            requires_core=">=3.1.0b1",
             requires_plugins=("local.provider",),
         )
 

@@ -59,14 +59,14 @@ jobs:
             CHANNEL="stable"
             REQUIRED_BRANCH="main"
             PRERELEASE="false"
-          elif [[ "$PROJECT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+$ ]]; then
-            CHANNEL="dev"
+          elif [[ "$PROJECT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.dev[0-9]+|b[0-9]+|rc[0-9]+)$ ]]; then
+            CHANNEL="prerelease"
             REQUIRED_BRANCH="dev_main"
             PRERELEASE="true"
           else
             echo "Invalid project version: $PROJECT_VERSION"
             echo "Expected stable tag: v3.0.5"
-            echo "Expected dev tag: v3.0.5.dev1"
+            echo "Expected prerelease tag: v3.0.5.dev1, v3.0.5b1, or v3.0.5rc1"
             exit 1
           fi
 

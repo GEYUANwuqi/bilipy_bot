@@ -26,7 +26,7 @@ _INITIAL_CONFIG: dict[str, object] = {
             "drain_timeout": 5,
         },
     },
-    # Source 自动发现完成前保留稳定配置位置。
+    # 内置 Source 使用该配置；第三方 Source 由应用工厂手动装配。
     "sources": {},
 }
 
@@ -48,7 +48,7 @@ _PLUGIN_MANIFEST = """\
 schema_version = 2
 plugin_name = "HelloPlugin"
 version = "0.1.0"
-requires_core = ">=3.1.0.dev2,<4"
+requires_core = ">=3.1.0b1,<3.2"
 entry = "plugin.py"
 requires_plugins = []
 requires_distributions = []

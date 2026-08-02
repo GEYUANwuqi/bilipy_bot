@@ -16,7 +16,7 @@ from butterbot.plugin import (
 )
 from butterbot.plugin.discovery.catalog import PluginCatalog
 
-CORE_VERSION = "3.1.0.dev2"
+CORE_VERSION = "3.1.0b1"
 
 
 @dataclass

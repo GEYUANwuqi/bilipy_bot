@@ -1,9 +1,16 @@
 # Changelog
 
-本文件记录面向使用者的行为、API 和安装方式变化. 当前 R1 属于
-`3.1.0.dev2` clean-break 收敛窗口.
+本文件记录面向使用者的行为、API 和安装方式变化. `3.1.0b1` 是 R1 收敛后的
+首个公开 Beta; 作者 API 在 RC 前仍是 provisional, 变更必须记录在本文件中.
 
-## Unreleased
+## 3.1.0b1 - 2026-08-02
+
+### Beta scope
+
+- 自定义 Source 通过应用工厂和 `BotApp.add_source()` 手动装配; 本轮不提供第三方
+  Source 自动发现或自动 YAML factory 注册.
+- 插件只支持可信 Handler 行为扩展和自身资源, 不创建或接管 Source.
+- 当前 Beta 用于受控真实环境验证, 不承诺服务器无人值守生产.
 
 ### Changed
 
@@ -18,6 +25,13 @@
 - 内置 adapter 改为 `napcat`、`bilibili` 和 `all` extras;
   NapCat 与 Bilibili 均显式依赖 `aiohttp`.
 - 项目自有中文文本将统一使用 ASCII 半角标点.
+
+### Fixed
+
+- 发布 wheel smoke 不再导入已经内部化的 `SourceFactoryRegistry`.
+- WebSocket 发送取消不再阻塞回填满队列; 断线使用单一 in-flight slot 重放消息.
+- 插件生命周期回调超时后先等待取消静默, 避免 `on_start` 与 `on_stop` 并发.
+- release workflow 接受 PEP 440 `bN` 和 `rcN` 预发布版本.
 
 ### Removed
 

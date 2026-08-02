@@ -744,7 +744,7 @@ def _write_plugin(
         "schema_version = 2\n"
         f'plugin_name = "{plugin_name}"\n'
         'version = "0.1.0"\n'
-        'requires_core = ">=3.1.0.dev2,<4"\n'
+        'requires_core = ">=3.1.0b1,<3.2"\n'
         'entry = "plugin.py"\n'
         "requires_plugins = []\n"
         "requires_distributions = []\n",
