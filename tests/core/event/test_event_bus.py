@@ -1,6 +1,7 @@
 """Tests for EventBus publish/subscribe flow with compiled dispatch."""
 
 import asyncio
+import inspect
 from uuid import UUID
 
 import pytest
@@ -44,7 +45,7 @@ class TestEventBus:
             pass
 
         wrapped = bus._wrap_callback(good)
-        assert asyncio.iscoroutinefunction(wrapped)
+        assert inspect.iscoroutinefunction(wrapped)
 
     def test_wrap_callback_rejects_sync(self):
         """_wrap_callback 应拒绝同步函数并抛出 TypeError."""

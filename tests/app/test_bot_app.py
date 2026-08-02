@@ -71,7 +71,7 @@ def config():
 
 @pytest.fixture
 def app(config):
-    return BotApp(config)
+    return BotApp(config, logging_mode="external")
 
 
 class TestBotApp:
@@ -79,7 +79,7 @@ class TestBotApp:
 
     def test_construction_with_config(self, config):
         """传入 config 构造应创建内部的 AppContext 和 SourceManager."""
-        app = BotApp(config)
+        app = BotApp(config, logging_mode="external")
         assert isinstance(app.ctx, AppContext)
         from butterbot.app.source_manager import SourceManager
 
@@ -111,7 +111,7 @@ class TestBotApp:
         api_ctx = ApiRegistry(config)
         bus = EventBus()
         ctx = AppContext(config, event_bus=bus, api_ctx=api_ctx)
-        app = BotApp(config, ctx=ctx)
+        app = BotApp(config, ctx=ctx, logging_mode="external")
         assert app.ctx is ctx
         assert app.bus is bus
 
@@ -129,7 +129,11 @@ class TestBotApp:
 
     def test_max_pending_callbacks_configures_default_bus(self, config):
         """BotApp 应把可选回调容量传给自动创建的 EventBus."""
-        app = BotApp(config, max_pending_callbacks=3)
+        app = BotApp(
+            config,
+            max_pending_callbacks=3,
+            logging_mode="external",
+        )
         assert app.bus.max_pending_callbacks == 3
 
     def test_injected_ctx_rejects_max_pending_callbacks(self, config):
@@ -237,7 +241,7 @@ class TestBotAppYamlSourceSugar:
         )
 
         monkeypatch.chdir(tmp_path)
-        app = BotApp()
+        app = BotApp(logging_mode="external")
 
         danmaku = app.get_source(BiliDanmakuSource, "bili_account")
         napcat = app.get_source(NapcatSource, "qq_account")
@@ -257,7 +261,10 @@ class TestBotAppYamlSourceSugar:
             "    source_name: napcat\n"
             "    url: ws://localhost:3001\n"
         )
-        app = BotApp(RuntimeConfig.from_yaml(yaml_file, environ={}))
+        app = BotApp(
+            RuntimeConfig.from_yaml(yaml_file, environ={}),
+            logging_mode="external",
+        )
 
         assert app.get_source(NapcatSource) is None
         source = app.add_source(NapcatSource, config_key="qq_account")
@@ -311,7 +318,7 @@ class TestBotAppYamlSourceSugar:
             },
         )
 
-        app = BotApp(config)
+        app = BotApp(config, logging_mode="external")
 
         assert app.get_source(NapcatSource, "qq_account") is not None
 
@@ -565,7 +572,7 @@ class TestBotAppCloseOrder:
                 closed.append("api")
 
         ctx = AppContext(config, event_bus=CancellingBus())
-        app = BotApp(config, ctx=ctx)
+        app = BotApp(config, ctx=ctx, logging_mode="external")
         app.get_api(ClosableApi, "test")
 
         with pytest.raises(asyncio.CancelledError):

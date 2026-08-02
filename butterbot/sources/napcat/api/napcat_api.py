@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -146,7 +147,7 @@ class NapcatClient:
         Args:
             handler: 消息处理函数，必须是异步函数，接受一个 dict 参数
         """
-        if not asyncio.iscoroutinefunction(handler):
+        if not inspect.iscoroutinefunction(handler):
             raise TypeError("handler must be an async function")
         self._handler = handler
 
