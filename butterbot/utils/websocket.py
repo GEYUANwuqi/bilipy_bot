@@ -7,11 +7,11 @@ import random
 import threading
 import time
 import uuid
-from asyncio import QueueFull
+from asyncio import QueueEmpty, QueueFull
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, NewType
+from typing import Any, NewType, cast
 
 import aiohttp
 from aiohttp import ClientSession, ClientWebSocketResponse, WSMsgType
@@ -169,6 +169,9 @@ _CLOSE_SENTINEL = object()
 等待者会永远挂在那里等一条永不到来的消息。哨兵被 ``get()`` 识别后转换为
 ``ListenerClosedError``，因此不会被误当成业务消息。
 """
+
+_NO_INFLIGHT_MESSAGE = object()
+_SendMessage = str | bytes | dict[str, Any]
 
 
 class WebSocketListener:
@@ -736,7 +739,14 @@ class AsyncWebSocketClient:
         self._health_handler: Callable[[ConnectionHealth], None] | None = None
 
         # 发送队列
-        self._send_queue = asyncio.Queue(maxsize=self.config.send_queue_size)
+        self._send_queue: asyncio.Queue[_SendMessage] = asyncio.Queue(
+            maxsize=self.config.send_queue_size
+        )
+        # 消息离开有界队列后、底层 send 确认前由客户端继续持有。断线或 sibling
+        # task 取消时不能 await 回填满队列，否则重连和关闭都会被反向阻塞。
+        self._inflight_message: _SendMessage | object = _NO_INFLIGHT_MESSAGE
+        self._send_retries = 0
+        self._send_dropped = 0
 
     @property
     def running(self) -> bool:
@@ -903,6 +913,10 @@ class AsyncWebSocketClient:
             for listener in listeners:
                 listener.close()
 
+            # stop 是终止当前客户端生命周期，不把旧消息带到下一次 start。连接切换
+            # 过程不会进入 shutdown，因此普通重连仍会优先重放 in-flight 消息。
+            self._send_dropped += self._clear_send_buffer()
+
             # 关闭连接
             await self.connection.close()
             self._set_health(ConnectionHealthState.STOPPED)
@@ -1005,10 +1019,12 @@ class AsyncWebSocketClient:
 
         return listener.get_nowait()
 
-    async def send(self, message: str | bytes | dict) -> None:
+    async def send(self, message: _SendMessage) -> None:
         """发送消息到 WebSocket 服务器
 
         消息会被放入发送队列，由后台任务异步发送。
+        断线时正在发送的单条消息会在重连后优先重放，因此传输语义是
+        at-least-once；显式 :meth:`stop` 会丢弃尚未确认发送的消息。
 
         Args:
             message: 要发送的消息，支持字符串、字节或字典
@@ -1088,6 +1104,13 @@ class AsyncWebSocketClient:
             "running": self._running,
             "ready": self.ready,
             "health": self.health.state.value,
+            "send_queue": {
+                "pending": self._send_queue.qsize(),
+                "capacity": self.config.send_queue_size,
+                "inflight": self._inflight_message is not _NO_INFLIGHT_MESSAGE,
+                "retried": self._send_retries,
+                "dropped": self._send_dropped,
+            },
         }
 
     async def _main_loop(self) -> None:
@@ -1214,7 +1237,9 @@ class AsyncWebSocketClient:
     async def _process_send_queue(self) -> None:
         """处理发送队列
 
-        持续从队列取出消息并发送，处理连接中断时的消息回退。
+        持续从队列取出消息并发送。消息离开队列后先进入单一 retry slot；连接
+        中断或 task 取消只保留该 slot，不执行任何可能等待队列容量的操作。重连后
+        优先重放 slot，再读取普通队列。
         """
         while self._running:
             if not self.connection.is_connected():
@@ -1223,28 +1248,52 @@ class AsyncWebSocketClient:
                 # _main_loop 一直卡在 asyncio.wait 上，断线后既 100% CPU 忙等
                 # 又永远不会重连。
                 return
-            try:
-                message = await asyncio.wait_for(self._send_queue.get(), timeout=0.1)
-            except TimeoutError:
-                continue
+            from_queue = False
+            if self._inflight_message is _NO_INFLIGHT_MESSAGE:
+                try:
+                    message = await asyncio.wait_for(
+                        self._send_queue.get(), timeout=0.1
+                    )
+                except TimeoutError:
+                    continue
+                self._inflight_message = message
+                from_queue = True
+            else:
+                message = cast(_SendMessage, self._inflight_message)
+                self._send_retries += 1
 
             try:
                 await self.connection.send(message)
             except asyncio.CancelledError:
-                # 将消息放回队列并重新抛出
-                await self._send_queue.put(message)
+                # slot 继续持有消息。这里不能 await queue.put()：队列可能已经被
+                # 并发生产者填满，导致一次 cancel 无法结束发送任务。
                 raise
             except ConnectionError:
-                # 连接不可用，将消息重新入队并退出，触发重连
-                await self._send_queue.put(message)
+                # 保留 slot 并退出，主循环完成重连后会优先重放。
                 break
             except Exception as e:
                 self.logger.error("Send processing error: %s", e)
+                self._inflight_message = _NO_INFLIGHT_MESSAGE
+                self._send_dropped += 1
+            else:
+                self._inflight_message = _NO_INFLIGHT_MESSAGE
             finally:
-                try:
+                if from_queue:
                     self._send_queue.task_done()
-                except Exception:
-                    pass
+
+    def _clear_send_buffer(self) -> int:
+        """丢弃当前生命周期尚未确认的消息并返回数量."""
+        dropped = int(self._inflight_message is not _NO_INFLIGHT_MESSAGE)
+        self._inflight_message = _NO_INFLIGHT_MESSAGE
+        while True:
+            try:
+                self._send_queue.get_nowait()
+            except QueueEmpty:
+                break
+            else:
+                self._send_queue.task_done()
+                dropped += 1
+        return dropped
 
     async def _process_receive(self) -> None:
         """处理接收消息

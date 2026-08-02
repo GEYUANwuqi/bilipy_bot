@@ -429,6 +429,73 @@ class TestClientShutdown:
             await client.send("second")
 
     @pytest.mark.asyncio
+    async def test_send_cancel_with_full_queue_finishes_and_retries_in_order(
+        self,
+        monkeypatch,
+    ):
+        """取消不得阻塞回填；重连后先重放 in-flight，再处理排队消息."""
+        client = _client(send_queue_size=1)
+        client._running = True
+        entered = asyncio.Event()
+
+        async def blocked_send(message) -> None:
+            del message
+            entered.set()
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(client.connection, "is_connected", lambda: True)
+        monkeypatch.setattr(client.connection, "send", blocked_send)
+        client._send_queue.put_nowait("first")
+        sender = asyncio.create_task(client._process_send_queue())
+        await entered.wait()
+        client._send_queue.put_nowait("second")
+
+        sender.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(sender, timeout=0.1)
+
+        metrics = client.get_metrics()["send_queue"]
+        assert metrics["inflight"] is True
+        assert metrics["pending"] == 1
+
+        sent: list[str] = []
+
+        async def successful_send(message) -> None:
+            sent.append(message)
+
+        monkeypatch.setattr(client.connection, "send", successful_send)
+        sender = asyncio.create_task(client._process_send_queue())
+        for _ in range(10):
+            if sent == ["first", "second"]:
+                break
+            await asyncio.sleep(0)
+        sender.cancel()
+        await asyncio.gather(sender, return_exceptions=True)
+
+        assert sent == ["first", "second"]
+        metrics = client.get_metrics()["send_queue"]
+        assert metrics["inflight"] is False
+        assert metrics["pending"] == 0
+        assert metrics["retried"] == 1
+
+    @pytest.mark.asyncio
+    async def test_shutdown_drops_and_reports_unsent_messages(self):
+        client = _client(send_queue_size=2)
+        client._inflight_message = "inflight"
+        client._send_queue.put_nowait("queued")
+
+        await client._shutdown()
+
+        metrics = client.get_metrics()["send_queue"]
+        assert metrics == {
+            "pending": 0,
+            "capacity": 2,
+            "inflight": False,
+            "retried": 0,
+            "dropped": 2,
+        }
+
+    @pytest.mark.asyncio
     async def test_metrics_report_failed_connections(self):
         """指标应记录失败的连接尝试."""
         client = _client(reconnect_attempts=2)
