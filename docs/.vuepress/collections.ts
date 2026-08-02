@@ -12,6 +12,7 @@ export default defineCollections([
       "quick-start",
       "project-structure",
       "lifecycle",
+      "runtime-modes",
       "cli",
     ],
   },
@@ -61,12 +62,6 @@ export default defineCollections([
     type: "doc",
     dir: "architecture",
     title: "项目架构",
-    sidebar: "auto",
-  },
-  {
-    type: "doc",
-    dir: "contributing",
-    title: "贡献指南",
     sidebar: "auto",
   },
 ])

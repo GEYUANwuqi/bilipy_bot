@@ -1,0 +1,112 @@
+name: Bug 报告
+description: 报告可以稳定复现的错误、回归或资源泄漏
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你帮助改进 ButterBot。提交前请搜索已有 Issue，并移除 Token、Cookie、Authorization、用户 ID 等敏感信息。
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响范围
+      description: 选择最接近问题发生位置的模块。
+      options:
+        - BotApp 与生命周期
+        - CLI 与进程管理
+        - RuntimeConfig 与配置
+        - EventBus 与 Handler
+        - Plugin
+        - Source 或 API
+        - NapCat
+        - Bilibili
+        - 安装、构建或打包
+        - 文档
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: ButterBot 版本
+      description: 可运行 `python -c "import butterbot; print(butterbot.__version__)"` 获取。
+      placeholder: 例如 3.1.0.dev2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: python-version
+    attributes:
+      label: Python 版本
+      options:
+        - "3.12"
+        - "3.13"
+        - "3.14"
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 填写操作系统、安装方式，以及相关 adapter 或外部服务版本。
+      placeholder: 例如 Ubuntu 24.04, uv sync, NapCat 4.x
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: 当前行为
+      description: 说明实际发生了什么，包括异常类型、状态变化或未释放的资源。
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: 预期行为
+      description: 说明你期望框架如何表现。
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 最小复现步骤
+      description: 提供可以独立运行的最小代码、命令和操作顺序，避免依赖真实外部网络。
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: 最小配置
+      description: 如问题与配置有关，请提供删除凭证后的最小 YAML；不相关可留空。
+      render: yaml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Traceback 或日志
+      description: 提供完整异常类型和必要上下文，并删除所有敏感信息。
+      render: text
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已经搜索现有 Issue，未发现相同问题。
+          required: true
+        - label: 我已经提供最小复现，或说明了无法提供的原因。
+          required: true
+        - label: 我已经删除 Token、Cookie、Authorization 和用户隐私信息。
+          required: true

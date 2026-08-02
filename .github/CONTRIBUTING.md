@@ -1,7 +1,3 @@
----
-title: 贡献指南
----
-
 # 贡献指南
 
 ## 本页目标
@@ -53,7 +49,7 @@ CI 在 Python 3.12、3.13 和 3.14 运行测试；lint、类型检查、覆盖�
 - 测试结束没有 pending task。
 
 测试使用 `pytest-asyncio` strict 模式。避免外部网络、固定长 sleep、全局状态
-泄漏和测试顺序依赖。推荐模式见[测试异步扩展](/extensions/testing.html)。
+泄漏和测试顺序依赖。推荐模式见[测试异步扩展](../docs/extensions/testing.md)。
 
 ## 修改文档
 

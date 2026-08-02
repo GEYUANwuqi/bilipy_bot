@@ -89,7 +89,7 @@ npm run docs:dev
 - [API 参考](docs/api/README.md)
 - [故障排除](docs/troubleshooting/README.md)
 - [项目架构](docs/architecture/README.md)
-- [贡献指南](docs/contributing/README.md)
+- [贡献指南](.github/CONTRIBUTING.md)
 
 生产构建与文档检查：
 
