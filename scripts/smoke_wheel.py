@@ -8,7 +8,8 @@ from importlib.metadata import metadata, requires, version
 from pathlib import Path
 
 import butterbot
-from butterbot.app import BotApp, RuntimeConfig, SourceFactoryRegistry
+import butterbot.app as app_module
+from butterbot.app import BotApp, RuntimeConfig
 from butterbot.core.event import EventBus
 from butterbot.core.exceptions import ConfigError
 
@@ -39,32 +40,27 @@ def main() -> None:
     )
     assert importlib.util.find_spec("aiohttp") is None
     assert importlib.util.find_spec("bilibili_api") is None
-    registry = SourceFactoryRegistry.with_defaults()
-    assert registry.names("napcat") == ("NapcatSource",)
-    assert registry.names("bilibili") == (
-        "BiliDanmakuSource",
-        "BiliDynamicSource",
-        "BiliLiveSource",
-    )
-    napcat_factory = registry.get("napcat", "NapcatSource")
-    assert napcat_factory is not None
-    try:
-        napcat_factory()
-    except ConfigError as exc:
-        assert "butterbot-python[napcat]" in str(exc)
-    else:
-        raise AssertionError("base wheel unexpectedly imported NapCat dependencies")
-    config_path = Path("missing-bilibili-extra.yaml")
-    config_path.write_text(
-        "sources:\n  account:\n    source_name: bilibili\n",
-        encoding="utf-8",
-    )
-    try:
-        RuntimeConfig.from_yaml(config_path, environ={})
-    except ConfigError as exc:
-        assert "butterbot-python[bilibili]" in str(exc)
-    else:
-        raise AssertionError("base wheel unexpectedly imported Bilibili dependencies")
+    assert not hasattr(app_module, "SourceFactoryRegistry")
+    missing_extra_configs = {
+        "napcat": (
+            "sources:\n"
+            "  account:\n"
+            "    source_name: napcat\n"
+            "    url: ws://localhost:3001\n"
+        ),
+        "bilibili": "sources:\n  account:\n    source_name: bilibili\n",
+    }
+    for extra, payload in missing_extra_configs.items():
+        config_path = Path("missing-%s-extra.yaml" % extra)
+        config_path.write_text(payload, encoding="utf-8")
+        try:
+            RuntimeConfig.from_yaml(config_path, environ={})
+        except ConfigError as exc:
+            assert "butterbot-python[%s]" % extra in str(exc)
+        else:
+            raise AssertionError(
+                "base wheel unexpectedly imported %s dependencies" % extra
+            )
     cli = Path(sys.executable).with_name("butterbot")
     result = subprocess.run(
         [str(cli), "--version"],
