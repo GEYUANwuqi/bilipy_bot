@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from butterbot.core.exceptions import SourceError
+from butterbot.core.routing import SourceRef
 from butterbot.core.source import BaseSource
-from butterbot.plugin.contracts.routing import SourceRef
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,7 +14,6 @@ class SourceCatalogEntry:
     source_id: UUID
     source_kind: str
     config_key: str
-    owner_id: str | None = None
 
 
 class SourceCatalog:
@@ -27,15 +25,8 @@ class SourceCatalog:
     def register(
         self,
         source: BaseSource,
-        *,
-        owner_id: str | None = None,
     ) -> SourceCatalogEntry | None:
-        """登记 Source；没有 ``source_kind`` 的 Source 不进入逻辑目录.
-
-        为兼容既有手工组装，两个无 owner 的 Source 可以保留相同逻辑键。
-        只要任一方属于插件，就拒绝相同 ``source_kind + config_key``，使插件
-        consumer 在启动前得到确定绑定。
-        """
+        """登记 Source；没有 ``source_kind`` 的 Source 不进入逻辑目录."""
         source_kind = source.source_kind
         if source_kind is None:
             return None
@@ -44,28 +35,7 @@ class SourceCatalog:
             source_id=source.uuid,
             source_kind=source_kind,
             config_key=source.config_key,
-            owner_id=owner_id,
         )
-        conflicting = tuple(
-            candidate
-            for candidate in self._entries.values()
-            if candidate.source_kind == entry.source_kind
-            and candidate.config_key == entry.config_key
-        )
-        if conflicting and (
-            owner_id is not None
-            or any(candidate.owner_id is not None for candidate in conflicting)
-        ):
-            conflict = conflicting[0]
-            raise SourceError(
-                "逻辑事件源 '%s'（config_key=%r）已由 %s 注册"
-                % (
-                    source_kind,
-                    source.config_key,
-                    conflict.owner_id or "手工应用",
-                )
-            )
-
         self._entries[source.uuid] = entry
         return entry
 
@@ -83,12 +53,6 @@ class SourceCatalog:
                 source_ref.config_key is None
                 or entry.config_key == source_ref.config_key
             )
-        )
-
-    def by_owner(self, owner_id: str) -> tuple[SourceCatalogEntry, ...]:
-        """返回指定插件拥有的 Source 条目."""
-        return tuple(
-            entry for entry in self._entries.values() if entry.owner_id == owner_id
         )
 
     @property

@@ -80,7 +80,9 @@ class TestRuntimeConfigFromYaml:
         config = RuntimeConfig.from_yaml(yaml_file)
         assert config.get_config("anything") is None
 
-    def test_plugins_section_is_reserved_for_bootstrap(self, tmp_path: Path):
+    def test_plugins_section_is_preserved_as_complete_runtime_input(
+        self, tmp_path: Path
+    ):
         yaml_file = tmp_path / "config.yaml"
         yaml_file.write_text(
             "plugins:\n  enabled: false\nordinary: value\n",
@@ -89,7 +91,8 @@ class TestRuntimeConfigFromYaml:
 
         config = RuntimeConfig.from_yaml(yaml_file, environ={})
 
-        assert config.get_config("plugins") is None
+        assert config.get_config("plugins") == {"enabled": False}
+        assert config.plugin_enabled is False
         assert config.get_config("ordinary") == "value"
 
     @pytest.mark.parametrize("source_name", ["bilibili", "napcat"])

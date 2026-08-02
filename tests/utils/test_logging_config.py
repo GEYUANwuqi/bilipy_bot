@@ -222,7 +222,7 @@ def test_bot_app_construction_failure_releases_logging(
     monkeypatch.setattr(
         BotApp,
         "_add_configured_sources",
-        lambda self, registry: (_ for _ in ()).throw(RuntimeError("构造失败")),
+        lambda self: (_ for _ in ()).throw(RuntimeError("构造失败")),
     )
 
     try:

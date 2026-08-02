@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from butterbot.app import BotApp
 from butterbot.cli.errors import CliError
 from butterbot.cli.loader import load_application, resolve_entrypoint
 
@@ -32,7 +31,7 @@ def test_load_application_without_calling_it(
 ):
     _write_module(
         tmp_path,
-        "def app(*, config, source_factory_registry):\n"
+        "def app(*, config, cli_mode=True):\n"
         "    raise AssertionError('loader 不应调用应用入口')\n",
     )
     monkeypatch.syspath_prepend(str(tmp_path))
@@ -42,7 +41,7 @@ def test_load_application_without_calling_it(
     assert callable(application)
 
 
-def test_load_application_accepts_botapp_instance(
+def test_load_application_rejects_botapp_instance(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -53,9 +52,8 @@ def test_load_application_accepts_botapp_instance(
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    application = load_application("test_cli_app.app")
-
-    assert isinstance(application, BotApp)
+    with pytest.raises(CliError, match="不能是 BotApp 实例"):
+        load_application("test_cli_app.app")
 
 
 def test_load_application_rejects_constructed_object(
@@ -65,7 +63,7 @@ def test_load_application_rejects_constructed_object(
     _write_module(tmp_path, "app = object()\n")
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    with pytest.raises(CliError, match="必须是 BotApp 实例或可调用工厂"):
+    with pytest.raises(CliError, match="具名同步工厂"):
         load_application("test_cli_app.app")
 
 

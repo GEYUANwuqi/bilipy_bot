@@ -3,5 +3,5 @@ plugin_name = "LocalContractHybridHandlerPlugin"
 version = "0.1.0"
 requires_core = ">=3.1.0.dev2,<4"
 entry = "plugin.py"
-requires_plugins = ["contract.source"]
-requires_distributions = ["butterbot-plugin-contract-source>=1"]
+requires_plugins = []
+requires_distributions = []

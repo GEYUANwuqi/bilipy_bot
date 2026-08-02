@@ -13,12 +13,9 @@ from .config import PluginConfig
 from .context import PluginContext
 from .routing import SourceRef, SubscriptionSpec
 
-_ConfigureHook = Callable[..., object]
 _Handler = Callable[..., Coroutine[Any, Any, None]]
-_HookT = TypeVar("_HookT", bound=_ConfigureHook)
 _HandlerT = TypeVar("_HandlerT", bound=_Handler)
 _PluginConfigT = TypeVar("_PluginConfigT", bound=PluginConfig)
-_CONFIGURE_ATTRIBUTE = "__butterbot_plugin_configure__"
 _SUBSCRIPTIONS_ATTRIBUTE = "__butterbot_plugin_subscriptions__"
 
 
@@ -149,14 +146,6 @@ class ButterPlugin(Generic[_PluginConfigT]):
         return tuple(specs)
 
 
-def configure(method: _HookT) -> _HookT:
-    """声明同步配置方法，manager 会注入 ``ConfigRegistrar``."""
-    if not callable(method):
-        raise TypeError("@configure 只能用于可调用对象")
-    setattr(cast(Any, method), _CONFIGURE_ATTRIBUTE, True)
-    return method
-
-
 def register(
     source_kind: str,
     status: object,
@@ -190,19 +179,6 @@ def register(
     return decorate
 
 
-def iter_configure_hooks(plugin: ButterPlugin) -> tuple[_ConfigureHook, ...]:
-    """按基类到子类、类内定义顺序返回配置方法."""
-    hooks: list[_ConfigureHook] = []
-    for name, member in _resolved_members(plugin).items():
-        if not getattr(member, _CONFIGURE_ATTRIBUTE, False):
-            continue
-        hook = getattr(plugin, name)
-        if not callable(hook):
-            raise TypeError("@configure 只能用于实例方法")
-        hooks.append(cast(_ConfigureHook, hook))
-    return tuple(hooks)
-
-
 def iter_plugin_subscriptions(
     plugin: ButterPlugin,
 ) -> tuple[tuple[_Handler, _SubscriptionDeclaration], ...]:
@@ -230,6 +206,5 @@ def _resolved_members(plugin: ButterPlugin) -> dict[str, object]:
 
 __all__ = [
     "ButterPlugin",
-    "configure",
     "register",
 ]

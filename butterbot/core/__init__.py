@@ -13,6 +13,7 @@ from .exceptions import (
     SubscriptionError,
 )
 from .filter import AndFilter, BaseFilter, OrFilter
+from .routing import SourceRef
 from .source import (
     BaseSource,
     BaseSourceT,
@@ -50,6 +51,7 @@ __all__ = [
     "SourceError",
     "SourceHealth",
     "SourceHealthState",
+    "SourceRef",
     "SourceStartError",
     "SourceState",
     "SourceStopError",

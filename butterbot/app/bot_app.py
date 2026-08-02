@@ -1,24 +1,26 @@
 import asyncio
+import importlib
 import re
 import signal
 import time
 from collections.abc import Coroutine
+from enum import StrEnum
 from logging import getLogger
-from typing import TYPE_CHECKING, Any, Callable, Literal, ParamSpec, overload
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Literal, ParamSpec, Protocol, overload
 from uuid import UUID
 
 from butterbot.core.api import BaseApiT
 from butterbot.core.context import ApiRegistry, AppContext
 from butterbot.core.event import Event, EventBus, SubscriptionHandle
 from butterbot.core.exceptions import ConfigError
+from butterbot.core.routing import SourceRef
 from butterbot.core.source import BaseSource, BaseSourceT
 from butterbot.core.types import BaseType
-from butterbot.plugin.contracts.routing import SourceRef
 from butterbot.utils.logging_config import LoggingLease, setup_logging
 
 if TYPE_CHECKING:
     from butterbot.core.filter import BaseFilter
-    from butterbot.plugin.runtime.manager import PluginManager
 
 from .config import RuntimeConfig
 from .health import (
@@ -33,6 +35,33 @@ from .source_manager import SourceManager
 _BotSourceP = ParamSpec("_BotSourceP")
 
 _log = getLogger(__name__)
+
+
+class _OptionalRuntime(Protocol):
+    """BotApp 与按配置导入的可选运行时之间的最小边界."""
+
+    @property
+    def statuses(self) -> tuple[Any, ...]: ...
+
+    async def register(self) -> None: ...
+
+    async def start(self) -> None: ...
+
+    async def stop(self) -> None: ...
+
+    async def fail_start(self, cause: BaseException) -> None: ...
+
+    async def aclose(self) -> None: ...
+
+
+class _AppState(StrEnum):
+    NEW = "new"
+    PREPARING = "preparing"
+    PREPARED = "prepared"
+    RUNNING = "running"
+    CLOSING = "closing"
+    CLOSED = "closed"
+    PREPARE_FAILED = "prepare_failed"
 
 
 class BotApp:
@@ -52,39 +81,50 @@ class BotApp:
     def __init__(
         self,
         config: RuntimeConfig | None = None,
-        ctx: AppContext | None = None,
         *,
+        config_path: str | Path | None = None,
+        cli_mode: bool = True,
+        logging_mode: Literal["managed", "external"] = "managed",
         close_timeout: float = 5.0,
         max_pending_callbacks: int | None = None,
-        logging_mode: Literal["managed", "external"] = "managed",
-        source_factory_registry: SourceFactoryRegistry | None = None,
+        ctx: AppContext | None = None,
     ) -> None:
         """初始化 BotApp.
 
         Args:
-            config: 运行时配置，可选，默认从 ``config.yaml`` 自动加载
+            config: 完整运行时配置；与 ``config_path`` 互斥
+            config_path: 未注入配置时读取的 YAML 路径
+            cli_mode: 是否由独立 CLI 进程托管，决定 ``run()`` 的默认信号策略
             ctx:    可选，注入自定义 AppContext，默认自动创建
             close_timeout: 关闭时等待 in-flight 回调完成的秒数，超时后强制取消
             max_pending_callbacks: 自动创建 EventBus 时可选的回调 task 上限；
                 达到上限后 publish 等待容量。注入 ``ctx`` 时该参数必须为 ``None``
             logging_mode: ``managed`` 自动管理进程 root logger;
                 ``external`` 保留宿主的日志配置
-            source_factory_registry: 可选的 YAML Source 工厂注册表。默认使用内置
-                Bilibili 和 NapCat Source；只在配置包含 ``kwarg`` 时使用
-
         Raises:
             FileNotFoundError: 自动加载时 ``config.yaml`` 不存在
             ConfigError: YAML 声明了未知 Source 工厂，或自动实例化失败
         """
-        self._config = config or RuntimeConfig.from_yaml()
+        if config is not None and config_path is not None:
+            raise ValueError("config 和 config_path 不能同时传入")
+        if not isinstance(cli_mode, bool):
+            raise TypeError("cli_mode 必须是布尔值")
+        self._config = (
+            config
+            if config is not None
+            else RuntimeConfig.from_yaml(config_path or "config.yaml")
+        )
 
         if ctx is not None and max_pending_callbacks is not None:
             raise ValueError("注入 ctx 时不能同时设置 max_pending_callbacks")
         if logging_mode not in ("managed", "external"):
             raise ValueError("logging_mode 必须是 'managed' 或 'external'")
 
+        self._cli_mode = cli_mode
+        self._state = _AppState.NEW
         logging_lease = setup_logging() if logging_mode == "managed" else None
         try:
+            self._state = _AppState.PREPARING
             # 统一注入对象，传递给各 Source
             self._ctx = ctx or AppContext(
                 config=self._config,
@@ -93,26 +133,38 @@ class BotApp:
 
             # 事件源生命周期管理器
             self._manager = SourceManager(self._ctx)
-            self._plugin_manager: PluginManager | None = None
+            self._optional_runtime: _OptionalRuntime | None = None
             self._close_timeout = close_timeout
             self._logging_lease: LoggingLease | None = logging_lease
-            self._add_configured_sources(source_factory_registry)
+            configured_source_ids = self._add_configured_sources()
+            try:
+                if self._config.plugin_enabled:
+                    module = importlib.import_module(
+                        "butterbot.plugin.runtime.bootstrap"
+                    )
+                    factory = getattr(module, "create_optional_runtime")
+                    self._optional_runtime = factory(self, self._config)
+            except BaseException:
+                for source_id in reversed(configured_source_ids):
+                    self._manager.discard_unstarted_source(source_id)
+                raise
+            self._state = _AppState.PREPARED
         except BaseException:
+            self._state = _AppState.PREPARE_FAILED
             if logging_lease is not None:
                 logging_lease.close()
             raise
 
     def _add_configured_sources(
         self,
-        registry: SourceFactoryRegistry | None,
-    ) -> None:
+    ) -> list[UUID]:
         """注册 YAML ``kwarg`` 显式声明的 Source 实例."""
         configured: list[tuple[str, SourceFactoryEntry, dict[str, Any]]] = []
         definitions = tuple(self._config.source_definitions.values())
         if not any(definition.kwarg for definition in definitions):
-            return
+            return []
 
-        resolved_registry = registry or SourceFactoryRegistry.with_defaults()
+        resolved_registry = SourceFactoryRegistry.with_defaults()
         for definition in definitions:
             for factory_name, arguments in definition.kwarg.items():
                 factory_entry = resolved_registry.resolve(
@@ -146,14 +198,7 @@ class BotApp:
         added_source_ids: list[UUID] = []
         for config_key, factory_entry, kwargs in configured:
             try:
-                if factory_entry.owner_id is None:
-                    source = self._manager.add_source(factory_entry.factory, **kwargs)
-                else:
-                    source = self._manager.add_owned_source(
-                        factory_entry.owner_id,
-                        factory_entry.factory,
-                        **kwargs,
-                    )
+                source = self._manager.add_source(factory_entry.factory, **kwargs)
                 added_source_ids.append(source.uuid)
             except BaseException as exc:
                 for source_id in reversed(added_source_ids):
@@ -166,6 +211,7 @@ class BotApp:
                     "Source 配置 '%s' 自动实例化 '%s' 失败（%s）"
                     % (config_key, factory_entry.factory_id, type(exc).__name__)
                 ) from exc
+        return added_source_ids
 
     # ============ 属性 ============ #
 
@@ -173,6 +219,16 @@ class BotApp:
     def config(self) -> "RuntimeConfig":
         """获取运行时配置（只读）."""
         return self._config
+
+    @property
+    def plugin_enabled(self) -> bool:
+        """返回最终配置中的插件总开关."""
+        return self._config.plugin_enabled
+
+    @property
+    def cli_mode(self) -> bool:
+        """返回构造期确定的执行宿主模式."""
+        return self._cli_mode
 
     @property
     def bus(self) -> EventBus:
@@ -220,7 +276,9 @@ class BotApp:
             for source in self._manager.sources.values()
         )
         plugin_statuses = (
-            self._plugin_manager.statuses if self._plugin_manager is not None else ()
+            self._optional_runtime.statuses
+            if self._optional_runtime is not None
+            else ()
         )
         plugins = tuple(
             PluginDiagnostic(
@@ -254,17 +312,6 @@ class BotApp:
             plugins=plugins,
         )
 
-    def _attach_plugin_manager(self, manager: "PluginManager") -> None:
-        """由插件 bootstrap 绑定唯一插件控制面."""
-        if self._plugin_manager is not None:
-            raise RuntimeError("BotApp 已绑定 PluginManager")
-        self._plugin_manager = manager
-
-    async def _prepare_plugins(self) -> None:
-        """执行插件运行阶段注册，不启动 Source."""
-        if self._plugin_manager is not None:
-            await self._plugin_manager.register()
-
     # ============ Source 管理（委托 SourceManager）============ #
 
     def add_source(
@@ -288,21 +335,6 @@ class BotApp:
             ``add_source`` → ``subscribe`` → ``await start_source(...)``。
         """
         return self._manager.add_source(source_cls, *args, **kwargs)
-
-    def _add_owned_source(
-        self,
-        owner_id: str,
-        source_cls: Callable[_BotSourceP, BaseSourceT],
-        *args: _BotSourceP.args,
-        **kwargs: _BotSourceP.kwargs,
-    ) -> BaseSourceT:
-        """由插件 registrar 为已校验 owner 注册 Source."""
-        return self._manager.add_owned_source(
-            owner_id,
-            source_cls,
-            *args,
-            **kwargs,
-        )
 
     async def remove_source(self, source_id: UUID) -> BaseSource | None:
         """移除事件源.
@@ -485,37 +517,47 @@ class BotApp:
                 （抛出前已回滚成功启动的事件源）
             PluginRegistrationError: 插件配置、Handler 注册或启动回调失败
         """
-        if self._plugin_manager is not None:
-            await self._plugin_manager.register()
+        self._ensure_prepared()
+        if self._optional_runtime is not None:
+            await self._optional_runtime.register()
         try:
             await self._manager.start()
         except BaseException as exc:
-            if self._plugin_manager is not None:
-                await self._plugin_manager.fail_start(exc)
+            if self._optional_runtime is not None:
+                await self._optional_runtime.fail_start(exc)
             raise
-        if self._plugin_manager is not None:
+        if self._optional_runtime is not None:
             try:
-                await self._plugin_manager.start()
+                await self._optional_runtime.start()
             except BaseException:
                 await self._manager.stop()
                 raise
+        self._state = _AppState.RUNNING
 
     async def stop(self) -> None:
         """停止插件生命周期回调和所有事件源."""
         try:
-            if self._plugin_manager is not None:
-                await self._plugin_manager.stop()
+            if self._optional_runtime is not None:
+                await self._optional_runtime.stop()
         finally:
             await self._manager.stop()
+        if self._state is _AppState.RUNNING:
+            self._state = _AppState.PREPARED
+
+    def _ensure_prepared(self) -> None:
+        """确保所有启动入口只能使用成功装配的不可变运行时."""
+        if self._state is _AppState.PREPARE_FAILED:
+            raise RuntimeError("BotApp 准备失败，不能再次启动")
+        if self._state in (_AppState.CLOSING, _AppState.CLOSED):
+            raise RuntimeError("BotApp 正在关闭或已关闭")
 
     async def close(self) -> None:
         """关闭应用，释放所有资源.
 
         关闭顺序是固定的，且不能调换：
 
-        1. experimental ``PluginManager.aclose()``（若存在）— 逆依赖执行
-           ``on_stop``，再撤销 Handler、close callback、插件 Source 和配置
-           registry；
+        1. 可选插件运行时（若存在）— 逆依赖执行 ``on_stop``，再撤销 Handler、
+           close callback 和插件自身资源；
         2. ``SourceManager.close()`` — 停止全部事件源并清空注册；
            先停源，总线才不会在排空期间又收到新事件。
         3. ``EventBus.close()`` — 排空正在执行的订阅回调（``close_timeout`` 超时后取消）；
@@ -529,9 +571,10 @@ class BotApp:
         尝试释放 API。
         """
         deferred_error: BaseException | None = None
-        if self._plugin_manager is not None:
+        self._state = _AppState.CLOSING
+        if self._optional_runtime is not None:
             try:
-                await self._plugin_manager.aclose()
+                await self._optional_runtime.aclose()
             except BaseException as exc:
                 deferred_error = exc
 
@@ -566,6 +609,7 @@ class BotApp:
 
         if bus_closed_cleanly and apis_closed_cleanly:
             self._release_logging()
+            self._state = _AppState.CLOSED
 
         if deferred_error is not None:
             raise deferred_error
@@ -589,6 +633,7 @@ class BotApp:
         self,
         duration: float | None = None,
         *,
+        install_signal_handlers: bool | None = None,
         health_reporter: Callable[[AppHealth], None] | None = None,
         health_interval: float = 1.0,
     ) -> None:
@@ -605,11 +650,21 @@ class BotApp:
 
         Args:
             duration: 可选，运行时长（秒）。为 ``None`` 则持续运行直到收到信号。
+            install_signal_handlers: 是否接管 SIGINT/SIGTERM；默认使用 ``cli_mode``
             health_reporter: 可选同步回调，用于 CLI 持久化应用健康快照。
             health_interval: 健康快照报告间隔（秒）。
         """
         if health_reporter is not None and health_interval <= 0:
             raise ValueError("health_interval 必须大于 0")
+        if install_signal_handlers is not None and not isinstance(
+            install_signal_handlers, bool
+        ):
+            raise TypeError("install_signal_handlers 必须是布尔值或 None")
+        should_install_signals = (
+            self._cli_mode
+            if install_signal_handlers is None
+            else install_signal_handlers
+        )
 
         async def _run() -> None:
             loop = asyncio.get_running_loop()
@@ -630,13 +685,19 @@ class BotApp:
                     await asyncio.sleep(health_interval)
                     await emit_health()
 
-            for sig in (signal.SIGINT, signal.SIGTERM):
-                try:
-                    loop.add_signal_handler(sig, stop_event.set)
-                except (NotImplementedError, RuntimeError, ValueError, AttributeError):
-                    _log.debug("当前平台不支持处理信号 %s，回退到默认行为", sig)
-                else:
-                    installed.append(sig)
+            if should_install_signals:
+                for sig in (signal.SIGINT, signal.SIGTERM):
+                    try:
+                        loop.add_signal_handler(sig, stop_event.set)
+                    except (
+                        NotImplementedError,
+                        RuntimeError,
+                        ValueError,
+                        AttributeError,
+                    ):
+                        _log.debug("当前平台不支持处理信号 %s，回退到默认行为", sig)
+                    else:
+                        installed.append(sig)
 
             try:
                 async with self:

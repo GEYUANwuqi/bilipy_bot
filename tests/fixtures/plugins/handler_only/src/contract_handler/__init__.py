@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import os
 
+if os.environ.get("BUTTERBOT_CONTRACT_FAIL_IMPORT"):
+    raise RuntimeError("external handler import failed")
+
 from butterbot.core.event import Event
 from butterbot.plugin import (
     ButterPlugin,
@@ -17,7 +20,7 @@ class ContractHandlerPlugin(ButterPlugin):
         plugin_id="contract.handler",
         version="1.0.0",
         requires_core=">=3.1.0.dev2,<4",
-        requires_plugins=("contract.source",),
+        requires_plugins=(),
         provides=("contract.handler",),
     )
 

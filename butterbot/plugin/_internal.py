@@ -13,11 +13,6 @@ from butterbot.plugin.discovery import (
     PluginSettings,
 )
 from butterbot.plugin.discovery.catalog import ENTRY_POINT_GROUP
-from butterbot.plugin.runtime.bootstrap import (
-    PluginBootstrap,
-    bootstrap_app,
-    validate_plugin_config,
-)
 from butterbot.plugin.runtime.manager import (
     PluginFailure,
     PluginFailurePhase,
@@ -38,7 +33,6 @@ __all__ = [
     "ENTRY_POINT_GROUP",
     "LocalPluginManifest",
     "LocalPluginSettings",
-    "PluginBootstrap",
     "PluginCandidate",
     "PluginCatalog",
     "PluginFailure",
@@ -52,6 +46,4 @@ __all__ = [
     "PluginStatus",
     "RegistrationReceipt",
     "SubscriptionSpec",
-    "bootstrap_app",
-    "validate_plugin_config",
 ]

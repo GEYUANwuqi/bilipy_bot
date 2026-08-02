@@ -3,7 +3,7 @@
 from .config import PluginConfig
 from .context import PluginContext, PluginScope
 from .descriptor import PluginDescriptor
-from .hooks import ButterPlugin, configure, register
+from .hooks import ButterPlugin, register
 from .routing import SourceRef, SubscriptionSpec
 
 __all__ = [
@@ -14,6 +14,5 @@ __all__ = [
     "PluginScope",
     "SourceRef",
     "SubscriptionSpec",
-    "configure",
     "register",
 ]

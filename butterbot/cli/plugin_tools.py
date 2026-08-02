@@ -1,22 +1,28 @@
-"""插件候选查看与模拟导入操作."""
+"""显式插件管理命令使用的只读工具."""
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 import click
 
-from butterbot import __version__
-from butterbot.plugin import PluginError
-from butterbot.plugin._internal import PluginBootstrap
-from butterbot.plugin.discovery.directory import validate_distribution_requirements
+from butterbot.app.config import _load_resolved_yaml
+from butterbot.core.exceptions import ConfigError
+from butterbot.plugin.discovery.catalog import PluginCatalog
+from butterbot.plugin.discovery.settings import PluginSettings
 
 
 def list_plugins(config_path: Path) -> int:
-    """静态列出配置可发现的全部插件候选."""
-    bootstrap = PluginBootstrap(config_path.resolve())
-    settings = bootstrap.settings
-    candidates = bootstrap.inspect_candidates()
+    """静态列出候选元数据，不导入候选插件代码."""
+    resolved = config_path.resolve()
+    settings = _settings(resolved)
+    candidates = PluginCatalog.index_candidates(
+        local=settings.local,
+        config_root=resolved.parent,
+    )
     selected = set(settings.plugin_list)
 
     click.echo("ID\tNAME\tVERSION\tORIGIN\tCONFIGURED\tSYSTEM\tLOCATION")
@@ -44,55 +50,30 @@ def list_plugins(config_path: Path) -> int:
 
 
 def check_plugins(config_path: Path) -> int:
-    """只导入 YAML 选中的插件，并报告配置拦截结果."""
-    bootstrap = PluginBootstrap(config_path.resolve())
-    settings = bootstrap.settings
-    candidates = bootstrap.inspect_candidates()
+    """在短生命周期子进程中导入并校验选中的候选插件."""
+    resolved = config_path.resolve()
+    settings = _settings(resolved)
+    candidates = PluginCatalog.index_candidates(
+        local=settings.local,
+        config_root=resolved.parent,
+    )
     selected = set(settings.plugin_list)
-    failed = False
-
-    click.echo("NAME\tRESULT\tLOCATION")
     discovered_names = {candidate.plugin_name for candidate in candidates}
+    results: dict[str, str] = {}
+
+    if settings.enabled and selected:
+        results = _run_check_worker(resolved)
+
+    failed = False
+    click.echo("NAME\tRESULT\tLOCATION")
     for candidate in candidates:
         if not settings.enabled:
             result = "BLOCKED: plugins.enabled=false"
         elif candidate.plugin_name not in selected:
             result = "BLOCKED: not in plugin_list"
         else:
-            try:
-                validate_distribution_requirements(
-                    candidate.plugin_id or candidate.plugin_name,
-                    candidate.requires_distributions,
-                )
-                loaded = candidate.load()
-                implementation_name = type(loaded.instance).__name__
-                if implementation_name != candidate.plugin_name:
-                    raise PluginError(
-                        "插件名称 '%s' 与实现类名 '%s' 不一致"
-                        % (candidate.plugin_name, implementation_name)
-                    )
-                if (
-                    candidate.plugin_id is not None
-                    and loaded.descriptor.plugin_id != candidate.plugin_id
-                ):
-                    raise PluginError(
-                        "候选 '%s' 返回的 plugin_id 是 '%s'"
-                        % (candidate.plugin_id, loaded.descriptor.plugin_id)
-                    )
-                if not loaded.descriptor.supports_core(__version__):
-                    raise PluginError(
-                        "插件 '%s' 要求 ButterBot %s，当前为 %s"
-                        % (
-                            loaded.descriptor.plugin_id,
-                            loaded.descriptor.requires_core,
-                            __version__,
-                        )
-                    )
-            except PluginError as exc:
-                result = "FAILED: %s" % exc
-                failed = True
-            else:
-                result = "LOADED"
+            result = results.get(candidate.plugin_name, "FAILED: WorkerProtocolError")
+            failed = failed or result.startswith("FAILED")
         click.echo(
             "%s\t%s\t%s:%s"
             % (
@@ -102,17 +83,52 @@ def check_plugins(config_path: Path) -> int:
                 candidate.origin.location,
             )
         )
+
     for missing in sorted(selected - discovered_names):
         result = "BLOCKED: plugins.enabled=false" if not settings.enabled else "MISSING"
-        if settings.enabled:
-            failed = True
+        failed = failed or settings.enabled
         click.echo("%s\t%s\t<not found>" % (missing, result))
 
     if failed:
-        click.echo("插件模拟导入发现错误", err=True)
+        click.echo("插件隔离校验发现错误", err=True)
         return 1
-    click.echo("插件模拟导入完成")
+    click.echo("插件隔离校验完成")
     return 0
+
+
+def _settings(config_path: Path) -> PluginSettings:
+    data = _load_resolved_yaml(config_path)
+    return PluginSettings.from_mapping(data)
+
+
+def _run_check_worker(config_path: Path) -> dict[str, str]:
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "butterbot.cli._plugin_check_worker",
+                str(config_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ConfigError("插件隔离校验超过 60 秒") from exc
+    if result.returncode != 0:
+        raise ConfigError("插件隔离校验子进程失败（退出码 %s）" % result.returncode)
+    try:
+        payload = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ConfigError("插件隔离校验子进程返回了无效结果") from exc
+    if not isinstance(payload, dict) or not all(
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in payload.items()
+    ):
+        raise ConfigError("插件隔离校验子进程返回了无效结果")
+    return payload
 
 
 __all__ = ["check_plugins", "list_plugins"]

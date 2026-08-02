@@ -12,10 +12,10 @@ from butterbot.app import (
     BotApp,
     ConfigBuilderRegistry,
     ConfigError,
-    SourceFactoryRegistry,
     SourceStopError,
 )
 from butterbot.app.config import RuntimeConfig
+from butterbot.app.source_factory import SourceFactoryRegistry
 from butterbot.core.api import BaseApi
 from butterbot.core.context import ApiRegistry, AppContext
 from butterbot.core.data import BaseDataMixin
@@ -315,7 +315,7 @@ class TestBotAppYamlSourceSugar:
 
         assert app.get_source(NapcatSource, "qq_account") is not None
 
-    def test_supports_injected_factory_registry(self, tmp_path):
+    def test_rejects_injected_factory_registry(self, tmp_path):
         class ConfiguredSource(StubSource):
             def __init__(self, label: str, **kwargs):
                 super().__init__(**kwargs)
@@ -340,11 +340,8 @@ class TestBotAppYamlSourceSugar:
             builder_registry=builder_registry,
         )
 
-        app = BotApp(config, source_factory_registry=source_registry)
-
-        source = app.get_source(ConfiguredSource, "primary")
-        assert source is not None
-        assert source.label == "yaml"
+        with pytest.raises(TypeError, match="source_factory_registry"):
+            BotApp(config, source_factory_registry=source_registry)  # type: ignore[call-arg]
 
 
 class TestBotAppCloseOrder:
@@ -672,6 +669,33 @@ class TestBotAppRun:
 
         assert any(report.state is AppHealthState.READY for report in reports)
         assert reports[-1].state is AppHealthState.STOPPED
+
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Windows 的事件循环不支持 add_signal_handler",
+    )
+    def test_embedded_mode_does_not_install_signal_handlers_by_default(
+        self,
+        config,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        installed: list[signal.Signals] = []
+        original = asyncio.SelectorEventLoop.add_signal_handler
+
+        def track(loop, sig, callback, *args):
+            installed.append(sig)
+            return original(loop, sig, callback, *args)
+
+        monkeypatch.setattr(
+            asyncio.SelectorEventLoop,
+            "add_signal_handler",
+            track,
+        )
+        app = BotApp(config, cli_mode=False, logging_mode="external")
+
+        app.run(duration=0)
+
+        assert installed == []
 
     @pytest.mark.skipif(
         sys.platform == "win32",

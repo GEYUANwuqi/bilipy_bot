@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 import signal
 import subprocess
@@ -11,7 +12,7 @@ from pathlib import Path
 
 import click
 
-from butterbot.app import AppHealth, BotApp
+from butterbot.app import AppHealth, BotApp, ConfigError, RuntimeConfig
 
 from .errors import CliError
 from .loader import load_application
@@ -36,43 +37,24 @@ def run_application(
     background: bool,
     debug: bool,
 ) -> int:
-    """构建应用，并在前台运行或委托给后台子进程.
-
-    约定：新项目统一使用工厂入口注入配置；不指定 ``-config`` 时仍兼容
-    ``app = BotApp()`` 对象入口。
-    """
-    from butterbot.plugin._internal import PluginBootstrap
-
+    """先构建完整配置，再通过具名同步工厂构建并运行应用."""
     working_directory = Path.cwd()
     application_path = application_override or application or _DEFAULT_APPLICATION_PATH
-    config_specified = config_path is not None
     resolved_config_path = (config_path or Path("config.yaml")).resolve()
     store = _state_store(working_directory)
     if background:
         pid = _spawn_background(
             application_path=application_path,
-            config_path=resolved_config_path if config_specified else None,
+            config_path=resolved_config_path if config_path is not None else None,
             debug=debug,
             working_directory=working_directory,
         )
         click.echo("ButterBot 已在后台启动（PID %s）" % pid)
         return 0
 
-    application_entry = load_application(application_path)
-    if config_specified and isinstance(application_entry, BotApp):
-        application_entry._release_logging()
-        raise CliError(
-            "指定 -config 时必须使用工厂入口注入配置；"
-            "请把入口 '%s' 改为 app = BotApp 或 def app(*, config, source_factory_registry)"
-            % application_path
-        )
-    bootstrap = PluginBootstrap(resolved_config_path)
-    try:
-        app = bootstrap.build(application_entry)
-    except BaseException:
-        if isinstance(application_entry, BotApp):
-            application_entry._release_logging()
-        raise
+    config = RuntimeConfig.from_yaml(resolved_config_path)
+    application_factory = load_application(application_path)
+    app = _build_application(application_factory, config)
     state = RuntimeState.running(
         pid=os.getpid(),
         debug=debug,
@@ -95,6 +77,28 @@ def run_application(
     finally:
         app._release_logging()
         store.mark_stopped(state.token, exit_code)
+
+
+def _build_application(application_factory, config: RuntimeConfig) -> BotApp:
+    kwargs = {"config": config, "cli_mode": True}
+    try:
+        inspect.signature(application_factory).bind(**kwargs)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("应用工厂必须接受关键字参数 'config' 和 'cli_mode'") from exc
+
+    try:
+        app = application_factory(**kwargs)
+    except ConfigError:
+        raise
+    except Exception as exc:
+        raise ConfigError("应用工厂构造失败（%s）" % type(exc).__name__) from exc
+    if inspect.isawaitable(app):
+        if inspect.iscoroutine(app):
+            app.close()
+        raise ConfigError("应用入口必须是同步函数")
+    if not isinstance(app, BotApp):
+        raise ConfigError("应用入口必须返回 BotApp")
+    return app
 
 
 def show_status() -> int:

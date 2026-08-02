@@ -9,8 +9,8 @@ from butterbot.core.exceptions import (
     SourceStartError,
     SourceStopError,
 )
+from butterbot.core.routing import SourceRef
 from butterbot.core.source import BaseSource, BaseSourceT
-from butterbot.plugin.contracts.routing import SourceRef
 
 from .source_catalog import SourceCatalog
 
@@ -121,23 +121,10 @@ class SourceManager:
         Raises:
             LifecycleError: 如果 SourceManager 已关闭
         """
-        return self._add_source(None, source_cls, *args, **kwargs)
-
-    def add_owned_source(
-        self,
-        owner_id: str,
-        source_cls: Callable[_SourceP, BaseSourceT],
-        *args: _SourceP.args,
-        **kwargs: _SourceP.kwargs,
-    ) -> BaseSourceT:
-        """为受管扩展注册 Source，owner 由插件控制面注入."""
-        if not owner_id or owner_id != owner_id.strip():
-            raise ValueError("owner_id 必须是非空且无首尾空白的字符串")
-        return self._add_source(owner_id, source_cls, *args, **kwargs)
+        return self._add_source(source_cls, *args, **kwargs)
 
     def _add_source(
         self,
-        owner_id: str | None,
         source_cls: Callable[_SourceP, BaseSourceT],
         *args: _SourceP.args,
         **kwargs: _SourceP.kwargs,
@@ -152,7 +139,7 @@ class SourceManager:
         if source.uuid in self._sources:
             raise SourceError("事件源 UUID %s 已注册" % source.uuid)
 
-        self._source_catalog.register(source, owner_id=owner_id)
+        self._source_catalog.register(source)
         self._sources[source.uuid] = source
         if self._running:
             # 运行中新增：先注入上下文，让用户可以立刻订阅，再显式启动
@@ -221,8 +208,8 @@ class SourceManager:
     def discard_unstarted_source(self, source_id: UUID) -> BaseSource | None:
         """同步撤销一个尚未启动的 Source.
 
-        仅供 BotApp 构造和插件 bootstrap 的注册期回滚使用。运行中的 Source 必须
-        通过 :meth:`remove_source` 完成异步停止。
+        仅供 BotApp 构造期回滚使用。运行中的 Source 必须通过
+        :meth:`remove_source` 完成异步停止。
         """
         source = self._sources.get(source_id)
         if source is None:

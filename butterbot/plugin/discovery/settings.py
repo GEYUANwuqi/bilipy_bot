@@ -71,11 +71,6 @@ class PluginSettings:
     lifecycle: PluginLifecyclePolicy = field(default_factory=PluginLifecyclePolicy)
 
     @property
-    def requires_plugin_bootstrap(self) -> bool:
-        """配置是否显式启用了插件控制面."""
-        return self.enabled
-
-    @property
     def local(self) -> LocalPluginSettings:
         """把 YAML 的扁平路径转换为发现层设置."""
         return LocalPluginSettings(path=self.plugin_path)
@@ -98,7 +93,7 @@ class PluginSettings:
             raise ConfigError("配置项 'plugins.enabled' 应为布尔值")
 
         raw_plugin_list = raw_plugins.get("plugin_list", [])
-        if not isinstance(raw_plugin_list, list):
+        if not isinstance(raw_plugin_list, (list, tuple)):
             raise ConfigError("配置项 'plugins.plugin_list' 应为列表")
 
         plugin_list: list[str] = []

@@ -17,12 +17,12 @@ class TestPackage:
 
     def test_app_facade_importable(self):
         """公开门面 butterbot.app 的核心导出可用."""
+        import butterbot.app as app_module
         from butterbot.app import (
             AppHealth,
             BotApp,
             Event,
             RuntimeConfig,
-            SourceFactoryRegistry,
             SourceStopError,
         )
 
@@ -30,8 +30,8 @@ class TestPackage:
         assert BotApp is not None
         assert Event is not None
         assert RuntimeConfig is not None
-        assert SourceFactoryRegistry is not None
         assert SourceStopError is not None
+        assert not hasattr(app_module, "SourceFactoryRegistry")
 
     def test_builtin_sources_importable(self):
         """内置事件源包可通过常规包路径导入."""

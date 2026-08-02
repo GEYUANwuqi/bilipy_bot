@@ -7,9 +7,8 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
-from butterbot.plugin import ButterPlugin, PluginConfig, configure, register
+from butterbot.plugin import ButterPlugin, PluginConfig, register
 from butterbot.plugin.contracts.hooks import (
-    iter_configure_hooks,
     iter_plugin_subscriptions,
 )
 
@@ -162,23 +161,6 @@ def test_register_forwards_filter_and_multiple_match_policy() -> None:
 
     assert spec.event_filter is event_filter
     assert spec.allow_multiple
-
-
-def test_configure_methods_still_support_source_factory_registration() -> None:
-    class BasePlugin(ButterPlugin):
-        @configure
-        def first_config(self, registrar) -> None:
-            del registrar
-
-    class ExamplePlugin(BasePlugin):
-        @configure
-        def second_config(self, registrar) -> None:
-            del registrar
-
-    assert tuple(hook.__name__ for hook in iter_configure_hooks(ExamplePlugin())) == (
-        "first_config",
-        "second_config",
-    )
 
 
 def test_register_requires_async_handler() -> None:

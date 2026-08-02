@@ -11,13 +11,11 @@ from typing import TYPE_CHECKING, Any
 
 from butterbot.core.exceptions import LifecycleError
 from butterbot.plugin.contracts.context import PluginScope
-from butterbot.plugin.contracts.hooks import iter_configure_hooks
 from butterbot.plugin.discovery.catalog import LoadedPlugin, PluginCatalog
 from butterbot.plugin.discovery.settings import PluginLifecyclePolicy
 from butterbot.plugin.errors import PluginRegistrationError
 
 from .registrar import (
-    ConfigRegistrar,
     PluginRegistrar,
     RegistrationReceipt,
     make_receipt,
@@ -25,8 +23,6 @@ from .registrar import (
 
 if TYPE_CHECKING:
     from butterbot.app.bot_app import BotApp
-    from butterbot.app.config import ConfigBuilderRegistry
-    from butterbot.app.source_factory import SourceFactoryRegistry
 
 _log = getLogger(__name__)
 
@@ -35,8 +31,6 @@ class PluginState(StrEnum):
     """插件从发现到关闭的控制面状态."""
 
     VALIDATED = "validated"
-    CONFIGURING = "configuring"
-    CONFIGURED = "configured"
     REGISTERING = "registering"
     REGISTERED = "registered"
     STARTED = "started"
@@ -48,7 +42,6 @@ class PluginState(StrEnum):
 class PluginFailurePhase(StrEnum):
     """可持久诊断且不包含异常消息的插件失败阶段."""
 
-    CONFIGURING = "configuring"
     REGISTERING = "registering"
     STARTING = "starting"
     STOPPING = "stopping"
@@ -106,24 +99,18 @@ class PluginManager:
     def __init__(
         self,
         catalog: PluginCatalog,
-        builder_registry: "ConfigBuilderRegistry",
-        factory_registry: "SourceFactoryRegistry",
         *,
         plugin_settings: Mapping[str, Mapping[str, object]] | None = None,
         lifecycle: PluginLifecyclePolicy | None = None,
     ) -> None:
         self._catalog = catalog
-        self._builder_registry = builder_registry
-        self._factory_registry = factory_registry
         self._plugin_settings = plugin_settings or {}
         self._lifecycle = lifecycle or PluginLifecyclePolicy()
         self._records = {
             item.descriptor.plugin_id: _PluginRecord(item) for item in catalog.plugins
         }
-        self._config_registrars: dict[str, ConfigRegistrar] = {}
         self._runtime_registrars: dict[str, PluginRegistrar] = {}
         self._app: BotApp | None = None
-        self._configured = False
         self._registered = False
         self._closed = False
 
@@ -165,36 +152,22 @@ class PluginManager:
                 PluginState.STARTED,
             ):
                 continue
-            config = self._config_registrars.get(plugin_id)
             runtime = self._runtime_registrars.get(plugin_id)
-            if (
-                config is not None
-                and runtime is not None
-                and not config.closed
-                and not runtime.closed
-            ):
-                receipts.append(make_receipt(config, runtime))
+            if runtime is not None and not runtime.closed:
+                receipts.append(make_receipt(runtime))
         return tuple(receipts)
 
-    def configure(self) -> None:
-        """按依赖顺序执行无运行时副作用的 ``@configure`` 方法."""
+    def bind(self, app: "BotApp") -> None:
+        """绑定应用查询能力并校验每个插件的只读配置."""
         if self._closed:
             raise LifecycleError("PluginManager 已关闭")
-        if self._configured:
-            return
+        if self._app is not None:
+            raise LifecycleError("PluginManager 已绑定应用")
 
-        for record in self._ordered_records():
-            plugin_id = record.plugin_id
-            registrar = ConfigRegistrar(
-                plugin_id,
-                self._builder_registry,
-                self._factory_registry,
-                settings=self._plugin_settings.get(plugin_id),
-                resource_root=record.loaded.origin.resource_root,
-            )
-            self._config_registrars[plugin_id] = registrar
-            record.state = PluginState.CONFIGURING
-            try:
+        self._app = app
+        try:
+            for plugin_id in self.plugin_ids:
+                record = self._records[plugin_id]
                 record.loaded.instance._bind_context(
                     plugin_id,
                     self._plugin_settings.get(plugin_id),
@@ -206,45 +179,6 @@ class PluginManager:
                     ),
                     plugin_name=record.loaded.plugin_name,
                 )
-                for hook in iter_configure_hooks(record.loaded.instance):
-                    result = hook(registrar)
-                    if inspect.isawaitable(result):
-                        if inspect.iscoroutine(result):
-                            result.close()
-                        raise TypeError("@configure 方法必须是同步函数")
-                registrar.commit()
-            except BaseException as exc:
-                registrar.rollback()
-                self._mark_failure(
-                    plugin_id,
-                    PluginFailurePhase.CONFIGURING,
-                    exc,
-                )
-                self._rollback_config()
-                self._mark_rolled_back()
-                self._closed = True
-                if not isinstance(exc, Exception):
-                    raise
-                raise PluginRegistrationError(
-                    plugin_id,
-                    "configuring",
-                    exc,
-                ) from exc
-            record.state = PluginState.CONFIGURED
-        self._configured = True
-
-    def bind(self, app: "BotApp") -> None:
-        """绑定已构建应用，并接管配置 factory 创建的插件 Source."""
-        if self._closed:
-            raise LifecycleError("PluginManager 已关闭")
-        if not self._configured:
-            raise LifecycleError("PluginManager 尚未完成配置阶段")
-        if self._app is not None:
-            raise LifecycleError("PluginManager 已绑定应用")
-
-        self._app = app
-        try:
-            for plugin_id in self.plugin_ids:
                 registrar = PluginRegistrar(
                     app,
                     plugin_id,
@@ -258,32 +192,28 @@ class PluginManager:
                     ),
                 )
                 self._runtime_registrars[plugin_id] = registrar
-                record = self._records[plugin_id]
                 record.loaded.instance._bind_runtime_context(
                     get_source=app.get_source,
                     get_sources=app.get_sources,
                     get_api=app.get_api,
                 )
-                for entry in app.manager.source_catalog.by_owner(plugin_id):
-                    registrar.adopt_source(entry.source_id)
-        except BaseException:
-            for registrar in self._runtime_registrars.values():
-                for source_id in registrar.source_ids:
-                    app.manager.discard_unstarted_source(source_id)
-            self._rollback_config()
+        except BaseException as exc:
+            self._mark_failure(
+                plugin_id,
+                PluginFailurePhase.REGISTERING,
+                exc,
+            )
             self._mark_rolled_back()
             self._runtime_registrars.clear()
             self._app = None
             self._closed = True
-            raise
-
-    def abort_before_bind(self) -> None:
-        """应用构造失败时同步撤销配置阶段注册."""
-        if self._app is not None:
-            raise LifecycleError("已绑定应用的 PluginManager 必须异步关闭")
-        self._rollback_config()
-        self._mark_rolled_back()
-        self._closed = True
+            if not isinstance(exc, Exception):
+                raise
+            raise PluginRegistrationError(
+                plugin_id,
+                "binding",
+                exc,
+            ) from exc
 
     async def register(self) -> None:
         """按依赖顺序登记 ``@register`` Handler，失败时回滚全部注册."""
@@ -406,7 +336,7 @@ class PluginManager:
             raise cleanup_cancelled
 
     async def aclose(self) -> None:
-        """按依赖逆序关闭插件，并撤销配置 registry."""
+        """按依赖逆序关闭插件并撤销行为注册."""
         if self._closed:
             return
         plugin_ids = tuple(
@@ -416,7 +346,6 @@ class PluginManager:
         )
         callback_cancelled = await self._run_stop_callbacks(plugin_ids)
         runtime_cancelled = await self._close_runtime()
-        self._rollback_config()
         self._closed = True
         for record in self._ordered_records():
             if record.state not in (PluginState.FAILED, PluginState.BLOCKED):
@@ -494,7 +423,6 @@ class PluginManager:
 
     async def _rollback_all(self) -> asyncio.CancelledError | None:
         cancelled = await self._close_runtime()
-        self._rollback_config()
         self._registered = False
         self._closed = True
         self._mark_rolled_back()
@@ -545,12 +473,6 @@ class PluginManager:
                 )
                 _log.exception("插件 '%s' 的运行时注册清理失败", plugin_id)
         return cancelled
-
-    def _rollback_config(self) -> None:
-        for plugin_id in reversed(self.plugin_ids):
-            registrar = self._config_registrars.get(plugin_id)
-            if registrar is not None:
-                registrar.rollback()
 
     def _mark_rolled_back(self) -> None:
         """把没有失败或被阻断的记录标记为已关闭."""

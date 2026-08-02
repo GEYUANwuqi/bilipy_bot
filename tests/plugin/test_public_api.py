@@ -44,8 +44,8 @@ def test_app_and_plugin_public_api_import_in_fresh_process() -> None:
         (
             "from butterbot.core import Event",
             "from butterbot.plugin import (",
-            "    ButterPlugin, ConfigRegistrar, PluginConfig, PluginContext,",
-            "    PluginScope, SourceRef, configure, register,",
+            "    ButterPlugin, PluginConfig, PluginContext,",
+            "    PluginScope, SourceRef, register,",
             ")",
         )
     )
@@ -63,8 +63,8 @@ def test_app_and_plugin_public_api_import_in_fresh_process() -> None:
         )
 
 
-def test_source_ref_is_not_exported_from_core() -> None:
-    assert not hasattr(core, "SourceRef")
+def test_source_ref_is_exported_from_core_routing_boundary() -> None:
+    assert hasattr(core, "SourceRef")
     assert not hasattr(core_source, "SourceRef")
 
 
@@ -153,7 +153,6 @@ def test_plugin_author_api_snapshot() -> None:
 
     assert plugin.__all__ == [
         "ButterPlugin",
-        "ConfigRegistrar",
         "PluginCompatibilityError",
         "PluginConfig",
         "PluginContext",
@@ -164,7 +163,6 @@ def test_plugin_author_api_snapshot() -> None:
         "PluginRegistrationError",
         "PluginScope",
         "SourceRef",
-        "configure",
         "register",
     ]
 

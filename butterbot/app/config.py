@@ -140,7 +140,7 @@ class ConfigBuilderRegistry:
 
 
 class RuntimeConfig:
-    """运行时 API 配置类，存储和管理 API 配置信息.
+    """应用完成装配前唯一且只读的运行时配置输入.
 
     以键值对形式存储 API 配置，支持通过方法访问 API 配置项.
 
@@ -154,8 +154,13 @@ class RuntimeConfig:
         Args:
             **configs: 可变关键字参数，表示 API 配置项的键值对.
         """
-        self._configs = configs
+        plugin_config = _build_plugin_config(configs.get(_PLUGINS_KEY, {}))
+        self._configs = dict(configs)
+        if _PLUGINS_KEY in configs:
+            self._configs[_PLUGINS_KEY] = plugin_config
         self._source_definitions: Mapping[str, SourceDefinition] = MappingProxyType({})
+        self._plugin_config = plugin_config
+        self._config_root = Path.cwd()
 
     def get_config(self, key: str, default: Any = None) -> Any:
         """获取指定键的配置值.
@@ -173,6 +178,21 @@ class RuntimeConfig:
     def source_definitions(self) -> Mapping[str, SourceDefinition]:
         """返回从 YAML 构建的命名 Source 元数据只读视图."""
         return self._source_definitions
+
+    @property
+    def plugin_enabled(self) -> bool:
+        """返回环境覆盖完成后的唯一插件总开关."""
+        return self._plugin_config.get("enabled", False) is True
+
+    @property
+    def plugin_config(self) -> Mapping[str, object]:
+        """返回插件运行时使用的原始只读配置段."""
+        return self._plugin_config
+
+    @property
+    def config_root(self) -> Path:
+        """返回相对插件和资源路径的解析根目录."""
+        return self._config_root
 
     def get_source_definition(self, config_key: str) -> SourceDefinition | None:
         """按配置实例键获取 Source 元数据."""
@@ -225,6 +245,7 @@ class RuntimeConfig:
         return cls._from_resolved_data(
             resolved_data,
             builder_registry=builder_registry,
+            config_root=Path(path).resolve().parent,
         )
 
     @classmethod
@@ -233,14 +254,16 @@ class RuntimeConfig:
         resolved_data: Mapping[str, Any],
         *,
         builder_registry: ConfigBuilderRegistry | None = None,
+        config_root: Path | None = None,
     ) -> RuntimeConfig:
-        """从已完成环境变量合并的数据构建配置，供 bootstrap 复用."""
+        """从已完成环境变量合并的数据构建完整配置."""
         configs, source_definitions = _build_configs(
             dict(resolved_data),
             builder_registry=builder_registry,
         )
         runtime_config = cls(**configs)
         runtime_config._source_definitions = MappingProxyType(source_definitions)
+        runtime_config._config_root = (config_root or Path.cwd()).resolve()
         return runtime_config
 
 
@@ -294,12 +317,14 @@ def _build_configs(
 ) -> tuple[dict[str, Any], dict[str, SourceDefinition]]:
     """保留普通顶层配置，并构建命名 Source 配置."""
     registry = builder_registry or _DEFAULT_BUILDER_REGISTRY
-    data.pop(_PLUGINS_KEY, None)
+    plugins = _build_plugin_config(data.pop(_PLUGINS_KEY, {}))
     source_definitions = data.pop(_SOURCES_KEY, {})
     if not isinstance(source_definitions, dict):
         raise ConfigError("配置项 'sources' 应为映射")
 
     configs: dict[str, Any] = {}
+    if plugins:
+        configs[_PLUGINS_KEY] = plugins
     definitions: dict[str, SourceDefinition] = {}
     for key, value in data.items():
         if not isinstance(key, str) or not key:
@@ -409,8 +434,54 @@ def _build_source_kwarg(
                 "Source 配置 '%s' 的 'kwarg.%s.config_key' 不允许设置；"
                 "该值由外层配置键自动注入" % (config_key, source_class)
             )
-        source_kwarg[source_class] = MappingProxyType(dict(arguments))
+        source_kwarg[source_class] = _freeze_mapping(arguments)
     return MappingProxyType(source_kwarg)
+
+
+def _build_plugin_config(value: Any) -> Mapping[str, object]:
+    """只校验总开关并冻结插件原始配置，不导入插件实现."""
+    if not isinstance(value, Mapping):
+        raise ConfigError("配置项 'plugins' 应为映射")
+    enabled = value.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("配置项 'plugins.enabled' 应为布尔值")
+    return _freeze_plugin_mapping(value)
+
+
+def _freeze_plugin_mapping(value: Mapping[Any, Any]) -> Mapping[str, object]:
+    """冻结未启用时也必须原样保留的插件专属原始数据."""
+    return MappingProxyType(
+        {key: _freeze_plugin_value(item) for key, item in value.items()}
+    )
+
+
+def _freeze_plugin_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return _freeze_plugin_mapping(value)
+    if isinstance(value, list):
+        return tuple(_freeze_plugin_value(item) for item in value)
+    if isinstance(value, set):
+        return frozenset(_freeze_plugin_value(item) for item in value)
+    return value
+
+
+def _freeze_mapping(value: Mapping[object, object]) -> Mapping[str, object]:
+    frozen: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise ConfigError("配置映射键必须是字符串")
+        frozen[key] = _freeze_value(item)
+    return MappingProxyType(frozen)
+
+
+def _freeze_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return _freeze_mapping(value)
+    if isinstance(value, list):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, set):
+        return frozenset(_freeze_value(item) for item in value)
+    return value
 
 
 def _run_builder(

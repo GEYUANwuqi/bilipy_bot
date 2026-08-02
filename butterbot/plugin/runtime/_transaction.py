@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from uuid import UUID
 
 from butterbot.core.event import SubscriptionHandle
 from butterbot.core.exceptions import LifecycleError, SourceError
@@ -15,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class _RuntimeRegistrationTransaction:
-    """记录同一 owner 的 Source 和订阅, 并提供逆序清理."""
+    """记录同一 owner 的 Handler 订阅并提供逆序清理."""
 
     def __init__(
         self,
@@ -32,7 +31,6 @@ class _RuntimeRegistrationTransaction:
         self._app = app
         self._owner_id = owner_id
         self._drain_timeout = drain_timeout
-        self._source_ids: list[UUID] = []
         self._subscriptions: list[SubscriptionHandle] = []
         self._committed = False
         self._closed = False
@@ -48,11 +46,6 @@ class _RuntimeRegistrationTransaction:
     @property
     def closed(self) -> bool:
         return self._closed
-
-    @property
-    def source_ids(self) -> tuple[UUID, ...]:
-        """返回当前事务仍持有的 Source UUID."""
-        return tuple(self._source_ids)
 
     @property
     def subscriptions(self) -> tuple[SubscriptionHandle, ...]:
@@ -106,7 +99,7 @@ class _RuntimeRegistrationTransaction:
         self._committed = True
 
     async def aclose(self) -> None:
-        """幂等退订、移除 Source, 并排空当前 owner 的回调."""
+        """幂等退订并排空当前 owner 的回调."""
         if self._closed:
             return
 
@@ -116,15 +109,6 @@ class _RuntimeRegistrationTransaction:
 
         cancelled: asyncio.CancelledError | None = None
         errors: list[Exception] = []
-        for source_id in reversed(self._source_ids):
-            try:
-                await self._app.remove_source(source_id)
-            except asyncio.CancelledError as exc:
-                cancelled = cancelled or exc
-            except Exception as exc:
-                errors.append(exc)
-            else:
-                self._source_ids.remove(source_id)
 
         try:
             await self._app.bus.drain_owner(
@@ -138,7 +122,6 @@ class _RuntimeRegistrationTransaction:
 
         self._closed = (
             not self._subscriptions
-            and not self._source_ids
             and self._app.bus.pending_callbacks_for(self._owner_id) == 0
         )
         if cancelled is not None:

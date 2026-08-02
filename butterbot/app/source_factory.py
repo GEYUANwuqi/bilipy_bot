@@ -13,12 +13,11 @@ SourceFactory = Callable[..., BaseSource]
 
 @dataclass(frozen=True, slots=True)
 class SourceFactoryEntry:
-    """一个已注册的 Source 构造工厂及其所有权元数据."""
+    """一个框架内置的 Source 构造工厂."""
 
     source_name: str
     factory_id: str
     factory: SourceFactory = field(repr=False)
-    owner_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +26,6 @@ class FactoryRegistration:
 
     source_name: str
     factory_id: str
-    owner_id: str | None
     _registry: "SourceFactoryRegistry" = field(repr=False)
     _token: object = field(repr=False)
 
@@ -49,7 +47,6 @@ class SourceFactoryRegistry:
         factory: SourceFactory,
         *,
         factory_name: str | None = None,
-        owner_id: str | None = None,
     ) -> FactoryRegistration:
         """注册一个可由 YAML ``kwarg`` 选择的 Source 工厂.
 
@@ -59,9 +56,6 @@ class SourceFactoryRegistry:
         _validate_name(source_name, "source_name")
         if not callable(factory):
             raise TypeError("factory 必须可调用")
-        if owner_id is not None:
-            _validate_name(owner_id, "owner_id")
-
         resolved_name = factory_name or getattr(factory, "__name__", None)
         _validate_name(resolved_name, "factory_name")
         assert isinstance(resolved_name, str)
@@ -76,7 +70,6 @@ class SourceFactoryRegistry:
             source_name=source_name,
             factory_id=resolved_name,
             factory=factory,
-            owner_id=owner_id,
         )
         token = object()
         entries[resolved_name] = entry
@@ -84,7 +77,6 @@ class SourceFactoryRegistry:
         return FactoryRegistration(
             source_name=source_name,
             factory_id=resolved_name,
-            owner_id=owner_id,
             _registry=self,
             _token=token,
         )
@@ -111,7 +103,7 @@ class SourceFactoryRegistry:
         source_name: str,
         factory_name: str,
     ) -> SourceFactoryEntry | None:
-        """按名称查询包含 owner 的完整 factory 条目."""
+        """按名称查询完整 factory 条目."""
         entries = self._entries.get(source_name)
         if entries is None:
             return None
@@ -147,7 +139,6 @@ class SourceFactoryRegistry:
                     entry.source_name,
                     entry.factory,
                     factory_name=entry.factory_id,
-                    owner_id=entry.owner_id,
                 )
         return registry
 

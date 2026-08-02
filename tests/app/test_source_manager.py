@@ -137,34 +137,17 @@ class TestSourceManager:
 
         assert len(manager.get_sources(SourceRef("stub.events"))) == 2
 
-    def test_plugin_owned_logical_key_rejects_duplicate(self, manager):
-        first = manager.add_owned_source(
-            "example.one",
-            StubSource,
-            config_key="account",
-        )
-
-        with pytest.raises(SourceError, match="example.one"):
-            manager.add_owned_source(
-                "example.two",
-                StubSource,
-                config_key="account",
-            )
-
-        assert manager.source_catalog.by_owner("example.one")[0].source_id == first.uuid
-        assert manager.source_catalog.by_owner("example.two") == ()
+    def test_source_manager_has_no_plugin_ownership_api(self, manager):
+        assert not hasattr(manager, "add_owned_source")
+        assert not hasattr(manager.source_catalog, "by_owner")
 
     @pytest.mark.asyncio
-    async def test_remove_source_removes_catalog_owner_entry(self, manager):
-        source = manager.add_owned_source(
-            "example.owner",
-            StubSource,
-            config_key="account",
-        )
+    async def test_remove_source_removes_catalog_entry(self, manager):
+        source = manager.add_source(StubSource, config_key="account")
 
         await manager.remove_source(source.uuid)
 
-        assert manager.source_catalog.by_owner("example.owner") == ()
+        assert manager.source_catalog.entries == ()
 
     def test_get_source_nonexistent_returns_none(self, manager):
         """get_source 不存在的 UUID 应返回 None."""

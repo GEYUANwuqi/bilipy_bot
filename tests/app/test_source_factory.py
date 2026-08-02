@@ -1,8 +1,8 @@
 import pytest
 
-from butterbot.app import SourceFactoryRegistry
 from butterbot.app import _optional as optional_module
 from butterbot.app import source_factory as source_factory_module
+from butterbot.app.source_factory import SourceFactoryRegistry
 from butterbot.core.exceptions import ConfigError
 from butterbot.core.source import BaseSource
 
@@ -15,21 +15,19 @@ class FactorySource(BaseSource):
         pass
 
 
-def test_factory_registration_tracks_owner_and_can_unregister():
+def test_factory_registration_can_unregister():
     registry = SourceFactoryRegistry()
 
     registration = registry.register(
         "example",
         FactorySource,
         factory_name="stable",
-        owner_id="example.provider",
     )
     entry = registry.resolve("example", "STABLE")
 
     assert entry is not None
     assert entry.factory is FactorySource
     assert entry.factory_id == "stable"
-    assert entry.owner_id == "example.provider"
     assert registration.unregister()
     assert registry.resolve("example", "stable") is None
     assert not registration.unregister()
@@ -47,20 +45,16 @@ def test_stale_factory_receipt_cannot_remove_new_registration():
     assert current.unregister()
 
 
-def test_factory_registry_copy_preserves_owner():
+def test_factory_registry_copy_is_isolated():
     registry = SourceFactoryRegistry()
-    registry.register(
-        "example",
-        FactorySource,
-        factory_name="source",
-        owner_id="example.provider",
-    )
+    registration = registry.register("example", FactorySource, factory_name="source")
 
     copied = registry.copy()
     entry = copied.resolve("example", "source")
 
     assert entry is not None
-    assert entry.owner_id == "example.provider"
+    assert registration.unregister()
+    assert copied.resolve("example", "source") is entry
 
 
 def test_factory_id_collision_is_case_insensitive():

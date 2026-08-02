@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -10,21 +11,23 @@ from butterbot.app import BotApp
 
 from .errors import CliError
 
-ApplicationEntry = BotApp | Callable[..., BotApp]
+ApplicationEntry = Callable[..., BotApp]
 
 
 def load_application(entrypoint: str) -> ApplicationEntry:
-    """加载应用入口，但把配置注入和应用构造留给 bootstrap.
-
-    支持两种入口：
-    - 已构造的 ``BotApp`` 实例（例如 ``app = BotApp()``）；
-    - 同步工厂，接受 ``config`` 与 ``source_factory_registry`` 并返回 ``BotApp``。
-    """
+    """加载具名同步应用工厂，但不调用它."""
     target = resolve_entrypoint(entrypoint)
     if isinstance(target, BotApp):
-        return target
-    if not callable(target):
-        raise CliError("应用入口 '%s' 必须是 BotApp 实例或可调用工厂" % entrypoint)
+        target._release_logging()
+        raise CliError(
+            "应用入口 '%s' 必须是具名同步工厂，不能是 BotApp 实例" % entrypoint
+        )
+    if (
+        not inspect.isfunction(target)
+        or inspect.iscoroutinefunction(target)
+        or target.__name__ == "<lambda>"
+    ):
+        raise CliError("应用入口 '%s' 必须是具名同步工厂" % entrypoint)
     return cast(Callable[..., BotApp], target)
 
 

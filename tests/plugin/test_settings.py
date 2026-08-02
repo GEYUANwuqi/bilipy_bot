@@ -47,7 +47,7 @@ def test_local_and_private_settings_are_parsed_and_frozen():
 
     assert settings.local.path == "./extensions"
     assert settings.plugin_path == "./extensions"
-    assert settings.requires_plugin_bootstrap
+    assert settings.enabled
     assert settings.config_by_plugin["local.example"]["nested"] == {"values": (1, 2)}
     with pytest.raises(TypeError):
         settings.config_by_plugin["local.example"]["new"] = "value"  # type: ignore[index]
@@ -58,7 +58,7 @@ def test_private_config_alone_does_not_enable_plugin_system():
         {"plugins": {"config": {"local.example": {}}}}
     )
 
-    assert not settings.requires_plugin_bootstrap
+    assert not settings.enabled
 
 
 def test_lifecycle_timeouts_are_parsed():

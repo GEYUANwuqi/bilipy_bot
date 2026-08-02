@@ -26,11 +26,6 @@ from .config import (
 )
 from .health import AppHealth, AppHealthState, PluginDiagnostic, SourceDiagnostic
 from .source_catalog import SourceCatalog, SourceCatalogEntry
-from .source_factory import (
-    FactoryRegistration,
-    SourceFactoryEntry,
-    SourceFactoryRegistry,
-)
 
 __all__ = [
     # 应用主入口
@@ -42,13 +37,10 @@ __all__ = [
     # 配置
     "BuilderRegistration",
     "ConfigBuilderRegistry",
-    "FactoryRegistration",
     "RuntimeConfig",
     "SourceDefinition",
     "SourceCatalog",
     "SourceCatalogEntry",
-    "SourceFactoryEntry",
-    "SourceFactoryRegistry",
     "register_builder",
     # 过滤器
     "AndFilter",

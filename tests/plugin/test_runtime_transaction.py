@@ -55,9 +55,7 @@ def test_plugin_registrar_uses_private_transaction() -> None:
 @pytest.mark.asyncio
 async def test_source_and_handler_are_decoupled_by_source_ref() -> None:
     app = BotApp(RuntimeConfig())
-    provider = PluginRegistrar(app, "example.provider")
-    source = provider.add_source(TransactionSource, config_key="primary")
-    provider.commit()
+    source = app.add_source(TransactionSource, config_key="primary")
 
     received: asyncio.Queue[str] = asyncio.Queue()
 
@@ -86,8 +84,6 @@ async def test_source_and_handler_are_decoupled_by_source_ref() -> None:
     assert received.empty()
     assert app.get_source(source.uuid) is source
 
-    await provider.aclose()
-    assert app.get_source(source.uuid) is None
     await app.close()
 
 
@@ -133,24 +129,11 @@ async def test_close_cancels_only_owned_handler_after_timeout() -> None:
 
 
 @pytest.mark.asyncio
-async def test_failed_source_removal_keeps_handle_for_retry() -> None:
+async def test_plugin_registrar_cannot_create_or_adopt_sources() -> None:
     app = BotApp(RuntimeConfig())
     registrar = PluginRegistrar(app, "example.provider")
-    source = registrar.add_source(TransactionSource, fail_stop=True)
-    registrar.commit()
-    await app.start()
-
-    with pytest.raises(RuntimeError, match="停止失败"):
-        await registrar.aclose()
-
-    assert not registrar.closed
-    assert registrar.source_ids == (source.uuid,)
-    assert app.get_source(source.uuid) is source
-
-    source.fail_stop = False
-    await registrar.aclose()
-    assert registrar.closed
-    assert registrar.source_ids == ()
+    assert not hasattr(registrar, "add_source")
+    assert not hasattr(registrar, "adopt_source")
     await app.close()
 
 
@@ -188,11 +171,21 @@ async def test_ambiguous_source_ref_requires_explicit_fan_out() -> None:
 @pytest.mark.asyncio
 async def test_committed_transaction_rejects_more_registration() -> None:
     app = BotApp(RuntimeConfig())
+    app.add_source(TransactionSource)
     registrar = PluginRegistrar(app, "example.consumer")
     registrar.commit()
 
+    async def handler(event: Event) -> None:
+        del event
+
     with pytest.raises(LifecycleError, match="已提交"):
-        registrar.add_source(TransactionSource)
+        registrar.add_subscription(
+            SubscriptionSpec(
+                SourceRef("transaction.events"),
+                TransactionType.READY,
+                handler,
+            )
+        )
 
     await registrar.aclose()
     await app.close()

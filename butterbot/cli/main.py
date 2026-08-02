@@ -10,12 +10,9 @@ import click
 import yaml
 
 from butterbot import __version__
-from butterbot.app import ConfigError
-from butterbot.plugin import PluginError
+from butterbot.core.exceptions import ButterError
 
-from .configurator import configure_plugins, configure_project
 from .errors import CliError
-from .plugin_tools import check_plugins, list_plugins
 from .project import initialize_project
 from .runtime import (
     restart_application,
@@ -100,6 +97,8 @@ def init_command() -> int:
 )
 def config_command(config_path: Path) -> int:
     """全屏交互配置当前项目."""
+    from .configurator import configure_project
+
     return configure_project(config_path)
 
 
@@ -117,6 +116,8 @@ def config_command(config_path: Path) -> int:
 def plugin_command(ctx: click.Context, config_path: Path) -> int | None:
     """全屏配置、查看或检查插件."""
     if ctx.invoked_subcommand is None:
+        from .configurator import configure_plugins
+
         return configure_plugins(config_path)
     return None
 
@@ -146,6 +147,8 @@ def _effective_plugin_config(ctx: click.Context, config_path: Path | None) -> Pa
 @click.pass_context
 def plugin_list_command(ctx: click.Context, config_path: Path | None) -> int:
     """静态列出发现的全部插件及其来源."""
+    from .plugin_tools import list_plugins
+
     return list_plugins(_effective_plugin_config(ctx, config_path))
 
 
@@ -154,7 +157,19 @@ def plugin_list_command(ctx: click.Context, config_path: Path | None) -> int:
 @click.pass_context
 def plugin_check_command(ctx: click.Context, config_path: Path | None) -> int:
     """模拟导入，并报告加载或配置拦截结果."""
+    from .plugin_tools import check_plugins
+
     return check_plugins(_effective_plugin_config(ctx, config_path))
+
+
+@plugin_command.command("config")
+@_plugin_config_option
+@click.pass_context
+def plugin_config_command(ctx: click.Context, config_path: Path | None) -> int:
+    """原子修改当前 YAML 中的插件配置."""
+    from .configurator import configure_plugins
+
+    return configure_plugins(_effective_plugin_config(ctx, config_path))
 
 
 @cli.command("restart")
@@ -196,7 +211,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise
         click.echo("错误: %s" % exc, err=True)
         return exc.exit_code
-    except (ConfigError, PluginError, FileNotFoundError, yaml.YAMLError) as exc:
+    except (ButterError, FileNotFoundError, yaml.YAMLError) as exc:
         if debug:
             raise
         click.echo("配置无效: %s" % exc, err=True)

@@ -55,7 +55,8 @@ def test_init_creates_complete_runnable_project(
     assert config["sources"] == {}
     app_source = (tmp_path / "app.py").read_text(encoding="utf-8")
     assert "def app(" in app_source
-    assert "source_factory_registry=source_factory_registry" in app_source
+    assert "cli_mode: bool = True" in app_source
+    assert "BotApp(config=config, cli_mode=cli_mode)" in app_source
     plugin_root = tmp_path / "plugins" / "example.hello"
     assert 'plugin_name = "HelloPlugin"' in plugin_root.joinpath(
         "plugin.toml"
@@ -96,7 +97,7 @@ def test_run_object_entry_rejects_config_override(
     monkeypatch.chdir(tmp_path)
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    with pytest.raises(CliError, match="工厂入口"):
+    with pytest.raises(CliError, match="具名同步工厂"):
         main(["run", "-config", str(config_path), "--debug"])
 
 
@@ -328,6 +329,35 @@ def test_plugin_check_does_not_import_when_system_disabled(
     assert "BLOCKED: plugins.enabled=false" in capsys.readouterr().out
 
 
+def test_plugin_check_isolates_candidate_process_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    plugin_root = tmp_path / "plugins"
+    _write_plugin(
+        plugin_root,
+        "local.isolated",
+        "IsolatedPlugin",
+        before_class=(
+            "import os\nos.environ['BUTTERBOT_CHECK_CANDIDATE_LEAK'] = 'candidate'\n"
+        ),
+    )
+    _write_config(
+        tmp_path / "config.yaml",
+        enabled=True,
+        plugin_list=["IsolatedPlugin"],
+        plugin_path="./plugins",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("BUTTERBOT_CHECK_CANDIDATE_LEAK", raising=False)
+
+    assert main(["plugin", "check"]) == 0
+
+    assert "IsolatedPlugin\tLOADED" in capsys.readouterr().out
+    assert "BUTTERBOT_CHECK_CANDIDATE_LEAK" not in os.environ
+
+
 def test_plugin_check_reports_missing_selected_plugin(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -528,8 +558,8 @@ def test_status_reports_aggregated_degraded_health(
     assert "ConnectionError" in output
 
 
-def test_debug_preserves_cli_traceback():
-    with pytest.raises(CliError):
+def test_debug_preserves_configuration_traceback():
+    with pytest.raises(FileNotFoundError):
         main(["run", "invalid", "--debug"])
 
 
@@ -537,7 +567,7 @@ def test_non_debug_reports_cli_error(capsys: pytest.CaptureFixture[str]):
     exit_code = main(["run", "invalid"])
 
     assert exit_code == 1
-    assert "错误:" in capsys.readouterr().err
+    assert "配置无效:" in capsys.readouterr().err
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="依赖 POSIX SIGTERM 进程管理")
@@ -546,13 +576,10 @@ def test_background_full_restart_and_stop(tmp_path: Path):
     module.write_text(
         "from pathlib import Path\n"
         "from butterbot.app import BotApp\n"
-        "def app(*, config, source_factory_registry):\n"
+        "def app(*, config, cli_mode=True):\n"
         "    with Path('starts.log').open('a', encoding='utf-8') as output:\n"
         "        output.write(config.get_config('generation') + '\\n')\n"
-        "    return BotApp(\n"
-        "        config=config,\n"
-        "        source_factory_registry=source_factory_registry,\n"
-        "    )\n",
+        "    return BotApp(config=config, cli_mode=cli_mode)\n",
         encoding="utf-8",
     )
     config = tmp_path / "runtime.yaml"
@@ -668,6 +695,10 @@ def test_background_start_timeout_kills_and_reaps_child(
         "time.sleep(60)\n",
         encoding="utf-8",
     )
+    (tmp_path / "config.yaml").write_text(
+        "plugins:\n  enabled: false\n",
+        encoding="utf-8",
+    )
     monkeypatch.setenv(
         "PYTHONPATH",
         os.pathsep.join(
@@ -693,12 +724,9 @@ def _write_application(path: Path) -> None:
     path.write_text(
         "from butterbot.app import BotApp\n"
         "seen = []\n"
-        "def app(*, config, source_factory_registry):\n"
+        "def app(*, config, cli_mode=True):\n"
         "    seen.append(config.get_config('generation'))\n"
-        "    return BotApp(\n"
-        "        config=config,\n"
-        "        source_factory_registry=source_factory_registry,\n"
-        "    )\n",
+        "    return BotApp(config=config, cli_mode=cli_mode)\n",
         encoding="utf-8",
     )
 
