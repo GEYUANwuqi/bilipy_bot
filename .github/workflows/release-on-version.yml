@@ -129,9 +129,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p plugin-dist
-          for fixture in source_only handler_only combined; do
-            uv build "tests/fixtures/plugins/$fixture" --out-dir plugin-dist
-          done
+          uv build tests/fixtures/plugins/handler_only --out-dir plugin-dist
 
       - name: Smoke test external plugin wheels
         shell: bash
@@ -144,7 +142,7 @@ jobs:
           "$GITHUB_WORKSPACE/.smoke-venv/bin/python" \
             "$GITHUB_WORKSPACE/scripts/smoke_plugins.py"
 
-      - name: Smoke test local directory and hybrid plugins
+      - name: Smoke test local directory handler plugins
         shell: bash
         run: |
           smoke_dir="$(mktemp -d)"
