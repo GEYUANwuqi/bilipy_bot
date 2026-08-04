@@ -4,11 +4,20 @@ import { fileURLToPath } from "node:url"
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)))
 const outputRoot = join(projectRoot, "docs", ".vuepress", "dist")
+const siteConfigPath = join(projectRoot, "docs", ".vuepress", "config.ts")
 
 if (!existsSync(outputRoot)) {
   console.error("文档构建产物不存在，请先运行 npm run docs:build")
   process.exit(1)
 }
+
+const siteConfig = readFileSync(siteConfigPath, "utf8")
+const baseMatch = siteConfig.match(/\bbase:\s*["']([^"']+)["']/)
+if (baseMatch === null) {
+  console.error("无法从 docs/.vuepress/config.ts 读取站点 base")
+  process.exit(1)
+}
+const siteBase = new URL(baseMatch[1], "https://docs.invalid").pathname
 
 function walk(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -23,6 +32,13 @@ function targetFile(pathname) {
   if (pathname.endsWith("/")) return join(outputRoot, cleanPath, "index.html")
   if (extname(cleanPath) === "") return join(outputRoot, `${cleanPath}.html`)
   return join(outputRoot, cleanPath)
+}
+
+function stripSiteBase(pathname) {
+  if (siteBase === "/") return pathname
+  if (pathname === siteBase.slice(0, -1)) return "/"
+  if (pathname.startsWith(siteBase)) return `/${pathname.slice(siteBase.length)}`
+  return pathname
 }
 
 const failures = []
@@ -45,9 +61,10 @@ for (const sourceFile of htmlFiles) {
 
     const sourceUrl = `https://docs.invalid/${relative(outputRoot, sourceFile).replaceAll("\\", "/")}`
     const url = new URL(href, sourceUrl)
-    if (url.pathname.startsWith("/assets/")) continue
+    const localPathname = stripSiteBase(url.pathname)
+    if (localPathname.startsWith("/assets/")) continue
 
-    const destination = targetFile(url.pathname)
+    const destination = targetFile(localPathname)
     if (!existsSync(destination)) {
       failures.push(
         `${relative(outputRoot, sourceFile)} -> ${href}（目标文件不存在）`,
