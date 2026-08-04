@@ -1,16 +1,15 @@
 ---
-title: Beta 插件系统
+title: 插件系统
 ---
 
-# Beta 插件系统
+# 插件系统
 
-ButterBot `3.1.0b1` 的插件 API 是 provisional Beta 契约, 用于可信代码、启动期
-加载的行为扩展。插件可以来自已安装
+ButterBot `3.1.0` 的插件 API 是稳定契约，用于可信代码、启动期加载的行为扩展。插件可以来自已安装
 distribution 的 `butterbot.plugins` entry point，也可以来自项目的便携目录；两种
 来源进入相同的身份、依赖、Handler 注册和生命周期控制面。
 
-Beta 期间作者 API 只在确有必要时调整, 变更会同步 changelog、文档和外部 wheel
-fixture; RC 起冻结公开形状, 正式稳定版发布后开始遵守 SemVer.
+已文档化且从公共门面导出的作者 API 在 `3.x` 内遵守 SemVer。experimental 能力必须
+明确标注；未导出的运行时控制面属于 internal API。
 
 插件只扩展行为，不拥有 Source。应用配置和 `BotApp` 负责创建 Source，插件通过
 `@register` 使用已经存在的事件能力。旧的 `@configure`、`ConfigRegistrar`、配置
@@ -50,7 +49,7 @@ plugins:
 [project]
 name = "butterbot-plugin-example"
 version = "1.0.0"
-dependencies = ["butterbot-python>=3.1.0b1,<3.2"]
+dependencies = ["butterbot-python>=3.1,<4"]
 
 [project.entry-points."butterbot.plugins"]
 "ExampleHandlerPlugin" = "example_plugin:ExampleHandlerPlugin"
@@ -67,7 +66,7 @@ class ExampleHandlerPlugin(ButterPlugin):
     descriptor = PluginDescriptor(
         plugin_id="example.handler",
         version="1.0.0",
-        requires_core=">=3.1.0b1,<3.2",
+        requires_core=">=3.1,<4",
         requires_plugins=(),
     )
 ```
@@ -93,7 +92,7 @@ project/
 schema_version = 2
 plugin_name = "HelloPlugin"
 version = "0.1.0"
-requires_core = ">=3.1.0b1,<3.2"
+requires_core = ">=3.1,<4"
 entry = "plugin.py"
 requires_plugins = []
 requires_distributions = []

@@ -27,7 +27,7 @@ config = RuntimeConfig.from_yaml("config.yaml")
 CLI 和直接构造 `BotApp` 共用这条路线。`RuntimeConfig.from_yaml()` 本身不枚举候选、
 不导入插件代码，也不创建 Source、任务或连接。
 
-## Beta 插件设置
+## 插件设置
 
 `plugins` 是完整运行时配置的一部分。`RuntimeConfig.plugin_enabled` 返回最终总开关，
 `plugin_config` 和 `get_config("plugins")` 返回只读映射：
@@ -88,7 +88,7 @@ export BUTTERBOT__PLUGINS__PLUGIN_LIST='[HelloPlugin, ExampleHandlerPlugin]'
 大于零的有限数字；省略时分别为 30、10、10、5 秒。
 
 完整的打包、应用入口和信任边界见
-[Beta 插件系统](/extensions/plugins.html)。
+[插件系统](/extensions/plugins.html)。
 
 ## 命名 Source 配置
 

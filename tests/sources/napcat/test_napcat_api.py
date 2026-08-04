@@ -161,6 +161,14 @@ def _lifecycle_client() -> tuple[NapcatClient, LifecycleTransport]:
 
 
 class TestNapcatClientLifecycle:
+    def test_create_uses_bearer_token_for_websocket_authorization(self) -> None:
+        """NapCat 按 OneBot WebSocket 认证约定要求 Bearer 前缀。"""
+        client = NapcatClient.create(
+            NapcatConfig(url="ws://localhost:3001", token="test-token")
+        )
+
+        assert client.client.config.headers == {"Authorization": "Bearer test-token"}
+
     def test_ready_timeout_must_be_positive(self) -> None:
         with pytest.raises(ValueError, match="ready_timeout"):
             NapcatConfig(url="ws://localhost:3001", ready_timeout=0)

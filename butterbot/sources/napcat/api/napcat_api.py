@@ -66,7 +66,7 @@ class NapcatClient:
         headers = {}
 
         if napcat_config.token:
-            headers["Authorization"] = napcat_config.token
+            headers["Authorization"] = "Bearer %s" % napcat_config.token
 
         return cls(
             url=napcat_config.url,

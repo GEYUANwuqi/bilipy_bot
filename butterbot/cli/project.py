@@ -48,7 +48,7 @@ _PLUGIN_MANIFEST = """\
 schema_version = 2
 plugin_name = "HelloPlugin"
 version = "0.1.0"
-requires_core = ">=3.1.0b1,<3.2"
+requires_core = ">=3.1,<4"
 entry = "plugin.py"
 requires_plugins = []
 requires_distributions = []

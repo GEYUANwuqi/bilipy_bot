@@ -13,7 +13,7 @@ class TestPackage:
     def test_top_level_import_and_version(self):
         """顶层包可导入且暴露 __version__."""
         assert isinstance(butterbot.__version__, str)
-        assert butterbot.__version__ != ""
+        assert butterbot.__version__ == "3.1.0"
 
     def test_app_facade_importable(self):
         """公开门面 butterbot.app 的核心导出可用."""

@@ -16,7 +16,7 @@ from butterbot.plugin import (
 )
 from butterbot.plugin.discovery.catalog import PluginCatalog
 
-CORE_VERSION = "3.1.0b1"
+CORE_VERSION = "3.1.0"
 
 
 @dataclass
@@ -39,7 +39,7 @@ def make_plugin(
     class_name: str,
     requires: tuple[str, ...] = (),
     provides: tuple[str, ...] = (),
-    requires_core: str = ">=3.1.0.dev1",
+    requires_core: str = ">=3.1,<4",
 ) -> type[ButterPlugin]:
     descriptor = PluginDescriptor(
         plugin_id=plugin_id,
@@ -106,7 +106,7 @@ def test_distribution_plugin_must_inherit_butter_plugin():
         descriptor = PluginDescriptor(
             plugin_id="example.duck",
             version="1.0.0",
-            requires_core=">=3.1.0.dev1",
+            requires_core=">=3.1,<4",
         )
 
     with pytest.raises(PluginDiscoveryError, match="ButterPlugin"):
@@ -115,6 +115,28 @@ def test_distribution_plugin_must_inherit_butter_plugin():
             entry_points=[FakeEntryPoint("DuckPlugin", DuckPlugin)],
             core_version=CORE_VERSION,
         )
+
+
+@pytest.mark.parametrize(
+    ("core_version", "expected"),
+    (
+        ("3.1.0", True),
+        ("3.99.0", True),
+        ("4.0.0", False),
+    ),
+)
+def test_stable_plugin_requirement_covers_only_current_major(
+    core_version: str,
+    expected: bool,
+):
+    """正式版插件模板遵守当前 major 的兼容边界。"""
+    descriptor = PluginDescriptor(
+        plugin_id="example.stable",
+        version="1.0.0",
+        requires_core=">=3.1,<4",
+    )
+
+    assert descriptor.supports_core(core_version) is expected
 
 
 def test_dependencies_are_sorted_before_consumers():

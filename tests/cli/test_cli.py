@@ -558,12 +558,21 @@ def test_status_reports_aggregated_degraded_health(
     assert "ConnectionError" in output
 
 
-def test_debug_preserves_configuration_traceback():
+def test_debug_preserves_configuration_traceback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(FileNotFoundError):
         main(["run", "invalid", "--debug"])
 
 
-def test_non_debug_reports_cli_error(capsys: pytest.CaptureFixture[str]):
+def test_non_debug_reports_cli_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    monkeypatch.chdir(tmp_path)
     exit_code = main(["run", "invalid"])
 
     assert exit_code == 1
@@ -744,7 +753,7 @@ def _write_plugin(
         "schema_version = 2\n"
         f'plugin_name = "{plugin_name}"\n'
         'version = "0.1.0"\n'
-        'requires_core = ">=3.1.0b1,<3.2"\n'
+        'requires_core = ">=3.1,<4"\n'
         'entry = "plugin.py"\n'
         "requires_plugins = []\n"
         "requires_distributions = []\n",

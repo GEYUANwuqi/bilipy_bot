@@ -37,6 +37,7 @@ output.txt
 get_txt.py
 .pyright/
 .mypy_cache/
+plugins/
 
 # === VuePress ===
 node_modules/

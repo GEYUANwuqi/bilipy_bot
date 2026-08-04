@@ -3,8 +3,8 @@
 一个基于 Python 3.12+ 和 asyncio 的事件驱动机器人框架。项目把外部输入抽象为
 Source，把数据与状态包装为 Event，再由 EventBus 分发给异步 Handler。
 
-> 当前版本为 `3.1.0b1` Beta。自定义 Source 和可信 Handler 插件已经开放真实环境
-> 验证，但暂不承诺无人值守生产、跨 Beta 兼容或第三方 Source 自动发现。
+> 当前版本为 `3.1.0` 正式稳定版。已文档化的公共 API 在 `3.x` 内遵守 SemVer
+> 兼容承诺；第三方 Source 继续由应用显式装配，这是稳定的设计边界。
 
 当前仓库内置：
 
@@ -13,7 +13,26 @@ Source，把数据与状态包装为 Event，再由 EventBus 分发给异步 Han
 - Source、API、Data、Type 和 Filter 扩展契约；
 - 统一启动、回调排空与资源关闭流程。
 
-## 安装与开发
+## 安装
+
+ButterBot 已发布到 [PyPI](https://pypi.org/project/butterbot-python/)。发行包名是
+`butterbot-python`，Python 导入名是 `butterbot`：
+
+```bash
+python -m pip install butterbot-python
+uv add butterbot-python
+```
+
+按需安装内置 adapter：
+
+```bash
+python -m pip install "butterbot-python[all]"
+uv add "butterbot-python[all]"
+```
+
+更多 extra 与安装说明见[安装指南](docs/guide/installation.md)。
+
+## 开发
 
 ```bash
 uv sync --locked --dev

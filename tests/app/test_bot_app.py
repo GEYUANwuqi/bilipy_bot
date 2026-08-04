@@ -3,6 +3,7 @@
 import asyncio
 import signal
 import sys
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -85,8 +86,13 @@ class TestBotApp:
 
         assert isinstance(app.manager, SourceManager)
 
-    def test_construction_no_config_raises_file_not_found(self):
+    def test_construction_no_config_raises_file_not_found(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
         """无 config 且无 config.yaml 文件时抛出 FileNotFoundError."""
+        monkeypatch.chdir(tmp_path)
         with pytest.raises(FileNotFoundError, match="config.yaml"):
             BotApp()
 

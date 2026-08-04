@@ -56,8 +56,13 @@ class TestRuntimeConfigFromYaml:
         assert config.get_config("key1") == "value1"
         assert config.get_config("key2") == 42
 
-    def test_from_yaml_default_path(self):
+    def test_from_yaml_default_path(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
         """from_yaml 默认路径应为 'config.yaml'."""
+        monkeypatch.chdir(tmp_path)
         with pytest.raises(FileNotFoundError):
             RuntimeConfig.from_yaml()
 

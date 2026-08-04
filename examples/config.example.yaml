@@ -19,7 +19,7 @@ environment:
   NAPCAT_URL: "ws://localhost:3001"
   NAPCAT_TOKEN: ""
 
-# ---------- Beta 插件（默认关闭） ----------
+# ---------- 插件（默认关闭） ----------
 # 只列出明确可信的 entry point 或 ./plugins 本地候选。
 plugins:
   enabled: false

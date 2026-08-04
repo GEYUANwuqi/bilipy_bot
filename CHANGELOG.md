@@ -1,7 +1,22 @@
 # Changelog
 
-本文件记录面向使用者的行为、API 和安装方式变化. `3.1.0b1` 是 R1 收敛后的
-首个公开 Beta; 作者 API 在 RC 前仍是 provisional, 变更必须记录在本文件中.
+本文件记录面向使用者的行为、API 和安装方式变化。自 `3.1.0` 起，已文档化的公共
+API 在 `3.x` 内遵守 SemVer 兼容承诺。
+
+## 3.1.0 - 2026-08-04
+
+### Stable release
+
+- Source、API、Data、Type、Filter 与可信 Handler 插件的已文档化公共作者面成为
+  stable API；同一 `3.x` 内不删除名称，也不破坏正确调用的签名或语义。
+- 第三方 Source 保持由应用工厂显式装配；这不是临时限制，而是稳定的所有权边界。
+- 仅明确标注为 experimental 的能力可在后续 minor 版本调整；internal 控制面不提供
+  兼容承诺。
+
+### Fixed
+
+- NapCat WebSocket 认证按 OneBot 约定发送 `Authorization: Bearer <token>`，并加入
+  回归测试。
 
 ## 3.1.0b1 - 2026-08-02
 

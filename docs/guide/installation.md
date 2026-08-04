@@ -17,18 +17,31 @@ title: 安装
 
 ## 安装已发布包
 
-在自己的 uv 项目中添加依赖：
+ButterBot 已发布到 [PyPI](https://pypi.org/project/butterbot-python/)，发行包名为
+`butterbot-python`，Python 导入名为 `butterbot`。
+
+使用 pip 安装：
 
 ```bash
+python -m pip install butterbot-python
+```
+
+使用 uv 安装或添加到现有项目：
+
+```bash
+uv pip install butterbot-python
 uv add butterbot-python
 ```
 
-如果当前目录还不是 uv 项目，先运行 `uv init`。安装包名是
-`butterbot-python`，Python 导入名是 `butterbot`。
+`uv add` 用于已有 uv 项目；如果当前目录还不是 uv 项目，先运行 `uv init`。
 
 基础安装只包含核心、CLI 和插件契约. 按实际 adapter 选择 extra:
 
 ```bash
+python -m pip install "butterbot-python[napcat]"     # NapCat, 显式安装 aiohttp
+python -m pip install "butterbot-python[bilibili]"   # Bilibili SDK 和 aiohttp
+python -m pip install "butterbot-python[all]"        # 全部内置 adapter
+
 uv add "butterbot-python[napcat]"     # NapCat, 显式安装 aiohttp
 uv add "butterbot-python[bilibili]"  # Bilibili SDK 和 aiohttp
 uv add "butterbot-python[all]"        # 全部内置 adapter

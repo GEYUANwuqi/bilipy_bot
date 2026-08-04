@@ -7,8 +7,7 @@ title: 插件 API
 `butterbot.plugin` 只导出插件作者契约。插件扩展 Handler 和自身资源，不创建、接管或
 配置 Source。
 
-当前 `3.1.0b1` 中这些名称属于 Beta 作者面, RC 前仍可按 changelog 调整; 正式
-稳定版本发布后才开始受到 SemVer 兼容承诺保护.
+`3.1.0` 起，这些名称属于稳定作者面，并在 `3.x` 内受到 SemVer 兼容承诺保护。
 
 ## 最小 Handler
 
@@ -130,7 +129,7 @@ class HandlerPlugin(ButterPlugin):
 
 本地目录插件从 `plugin.toml` 构造 descriptor，不在 Python 代码中重复声明。
 
-## Beta 作者 API
+## 稳定作者 API
 
 `butterbot.plugin.__all__` 包含：
 
