@@ -82,17 +82,30 @@ app.run()
 
 ```python
 from butterbot.sources.napcat import NapcatApi
+from butterbot.sources.napcat.data import NapcatMessageBuilder
 
 api = app.get_api(NapcatApi, "qq_account")
+message = NapcatMessageBuilder().at_all().text("hello").build()
 result = await api.send_group_message(
     group_id=123456,
-    message=[{"type": "text", "data": {"text": "hello"}}],
+    message=message,
 )
+
+friends = await api.get_friend_list()
+await api.set_group_ban(group_id=123456, user_id=654321, duration=60)
 ```
+
+接口仍接受原始 OneBot 消息段字典列表；应用代码推荐使用带明确签名的
+`NapcatMessageBuilder`，由 builder 负责公开参数到内部 Data 字段的映射。
+合并转发消息由独立的 `NapcatForwardMessageBuilder` 构造，避免把 `forward`
+或 `node` 混入普通消息链。构造完成后通过 `send_forward_message()` 发送，
+`message_type="group"` 使用群 ID，`message_type="private"` 使用用户 ID。
 
 `send_request()` 为每个请求生成 `echo`，等待对应响应。等待超过
 `receive_timeout` 会抛 `TimeoutError`；调用被取消时会传播
 `CancelledError`，并清理 pending Future。
+业务方法统一通过 `call_action(action, **params)` 封装 NapCat action；尚未提供
+便捷方法的低频 action 也可以直接通过该入口调用。
 
 ## 关闭行为
 

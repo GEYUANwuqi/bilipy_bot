@@ -4,11 +4,12 @@ import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from butterbot.core.api import BaseApi
 from butterbot.core.context import ApiRegistry
+from butterbot.sources.napcat.data import NapcatForwardMessage, NapcatMessage
 from butterbot.utils.websocket import (
     AsyncWebSocketClient,
     ConnectionHealth,
@@ -426,16 +427,316 @@ class NapcatApi(BaseApi):
         """发送请求到服务器"""
         return await self.client.send_request(message)
 
+    async def call_action(self, action: str, **params: Any) -> dict | None:
+        """调用 NapCat action，并统一封装请求参数。"""
+        return await self.send_request(
+            {
+                "action": action,
+                "params": params,
+            }
+        )
+
     # ================== 业务接口 ================== #
 
     async def send_group_message(
-        self, group_id: int, message: list[dict]
+        self, group_id: int, message: list[dict] | NapcatMessage
     ) -> dict | None:
-        """发送群消息"""
-        results = await self.send_request(
-            {
-                "action": "send_group_msg",
-                "params": {"group_id": group_id, "message": message},
-            }
+        """发送群消息，支持原始段字典或领域消息。"""
+
+        if isinstance(message, NapcatMessage):
+            message = message.to_list_dict()
+
+        return await self.call_action(
+            "send_group_msg",
+            group_id=group_id,
+            message=message,
         )
-        return results
+
+    async def send_private_message(
+        self,
+        user_id: int,
+        message: list[dict] | NapcatMessage,
+    ) -> dict | None:
+        """发送私聊消息，支持原始段字典或领域消息。"""
+        if isinstance(message, NapcatMessage):
+            message = message.to_list_dict()
+
+        return await self.call_action(
+            "send_private_msg",
+            user_id=user_id,
+            message=message,
+        )
+
+    async def delete_message(self, message_id: int) -> dict | None:
+        """撤回消息。"""
+        return await self.call_action("delete_msg", message_id=message_id)
+
+    async def send_like(self, user_id: int, times: int = 1) -> dict | None:
+        """向好友发送名片赞。"""
+        return await self.call_action("send_like", user_id=user_id, times=times)
+
+    async def set_message_emoji_like(
+        self,
+        message_id: int,
+        emoji_id: str,
+        set: bool = True,
+    ) -> dict | None:
+        """设置或取消消息表情回应。"""
+        return await self.call_action(
+            "set_msg_emoji_like",
+            message_id=message_id,
+            emoji_id=emoji_id,
+            set=set,
+        )
+
+    async def mark_group_messages_as_read(self, group_id: int) -> dict | None:
+        """标记群消息为已读。"""
+        return await self.call_action("mark_group_msg_as_read", group_id=group_id)
+
+    async def mark_private_messages_as_read(self, user_id: int) -> dict | None:
+        """标记私聊消息为已读。"""
+        return await self.call_action("mark_private_msg_as_read", user_id=user_id)
+
+    async def send_poke(self, group_id: int, user_id: int) -> dict | None:
+        """在群内戳一戳指定用户。"""
+        return await self.call_action(
+            "send_poke",
+            group_id=group_id,
+            user_id=user_id,
+        )
+
+    async def friend_poke(self, user_id: int) -> dict | None:
+        """戳一戳好友。"""
+        return await self.call_action("friend_poke", user_id=user_id)
+
+    async def send_forward_message(
+        self,
+        message_type: Literal["group", "private"],
+        target_id: str | int,
+        message: NapcatForwardMessage,
+    ) -> dict | None:
+        """发送群聊或私聊合并转发消息。"""
+        target_params: dict[str, int]
+        if message_type == "group":
+            target_params = {"group_id": int(target_id)}
+        elif message_type == "private":
+            target_params = {"user_id": int(target_id)}
+        else:
+            raise ValueError(f"不支持的转发消息类型: {message_type}")
+
+        return await self.call_action(
+            "send_forward_msg",
+            message_type=message_type,
+            messages=message.to_list_dict(),
+            **target_params,
+        )
+
+    # ================== 查询接口 ================== #
+
+    async def get_login_info(self) -> dict | None:
+        """获取当前登录账号信息。"""
+        return await self.call_action("get_login_info")
+
+    async def get_stranger_info(self, user_id: int) -> dict | None:
+        """获取陌生人信息。"""
+        return await self.call_action("get_stranger_info", user_id=user_id)
+
+    async def get_friend_list(self) -> dict | None:
+        """获取好友列表。"""
+        return await self.call_action("get_friend_list")
+
+    async def get_group_list(self) -> dict | None:
+        """获取群列表。"""
+        return await self.call_action("get_group_list")
+
+    async def get_group_info(self, group_id: int) -> dict | None:
+        """获取群信息。"""
+        return await self.call_action("get_group_info", group_id=group_id)
+
+    async def get_group_member_info(
+        self,
+        group_id: int,
+        user_id: int,
+    ) -> dict | None:
+        """获取群成员信息。"""
+        return await self.call_action(
+            "get_group_member_info",
+            group_id=group_id,
+            user_id=user_id,
+        )
+
+    async def get_group_member_list(self, group_id: int) -> dict | None:
+        """获取群成员列表。"""
+        return await self.call_action("get_group_member_list", group_id=group_id)
+
+    async def get_message(self, message_id: int) -> dict | None:
+        """获取单条消息。"""
+        return await self.call_action("get_msg", message_id=message_id)
+
+    async def get_group_message_history(
+        self,
+        group_id: int,
+        message_seq: int | None = None,
+        count: int = 20,
+    ) -> dict | None:
+        """获取群消息历史。"""
+        params: dict[str, Any] = {"group_id": group_id, "count": count}
+        if message_seq is not None:
+            params["message_seq"] = message_seq
+        return await self.call_action("get_group_msg_history", **params)
+
+    async def get_private_message_history(
+        self,
+        user_id: int,
+        message_seq: int | None = None,
+        count: int = 20,
+    ) -> dict | None:
+        """获取私聊消息历史。"""
+        params: dict[str, Any] = {"user_id": user_id, "count": count}
+        if message_seq is not None:
+            params["message_seq"] = message_seq
+        return await self.call_action("get_friend_msg_history", **params)
+
+    async def get_status(self) -> dict | None:
+        """获取 NapCat 运行状态。"""
+        return await self.call_action("get_status")
+
+    async def get_version_info(self) -> dict | None:
+        """获取 NapCat 版本信息。"""
+        return await self.call_action("get_version_info")
+
+    # ================== 群管理接口 ================== #
+
+    async def set_group_kick(
+        self,
+        group_id: int,
+        user_id: int,
+        reject_add_request: bool = False,
+    ) -> dict | None:
+        """踢出群成员。"""
+        return await self.call_action(
+            "set_group_kick",
+            group_id=group_id,
+            user_id=user_id,
+            reject_add_request=reject_add_request,
+        )
+
+    async def set_group_ban(
+        self,
+        group_id: int,
+        user_id: int,
+        duration: int = 1800,
+    ) -> dict | None:
+        """禁言群成员。"""
+        return await self.call_action(
+            "set_group_ban",
+            group_id=group_id,
+            user_id=user_id,
+            duration=duration,
+        )
+
+    async def set_group_whole_ban(
+        self,
+        group_id: int,
+        enable: bool = True,
+    ) -> dict | None:
+        """开启或关闭全员禁言。"""
+        return await self.call_action(
+            "set_group_whole_ban",
+            group_id=group_id,
+            enable=enable,
+        )
+
+    async def set_group_admin(
+        self,
+        group_id: int,
+        user_id: int,
+        enable: bool = True,
+    ) -> dict | None:
+        """设置或取消群管理员。"""
+        return await self.call_action(
+            "set_group_admin",
+            group_id=group_id,
+            user_id=user_id,
+            enable=enable,
+        )
+
+    async def set_group_card(
+        self,
+        group_id: int,
+        user_id: int,
+        card: str = "",
+    ) -> dict | None:
+        """设置群成员名片。"""
+        return await self.call_action(
+            "set_group_card",
+            group_id=group_id,
+            user_id=user_id,
+            card=card,
+        )
+
+    async def set_group_name(self, group_id: int, name: str) -> dict | None:
+        """设置群名称。"""
+        return await self.call_action(
+            "set_group_name",
+            group_id=group_id,
+            group_name=name,
+        )
+
+    async def set_group_leave(
+        self,
+        group_id: int,
+        is_dismiss: bool = False,
+    ) -> dict | None:
+        """退出群聊，群主可选择解散群。"""
+        return await self.call_action(
+            "set_group_leave",
+            group_id=group_id,
+            is_dismiss=is_dismiss,
+        )
+
+    async def set_group_special_title(
+        self,
+        group_id: int,
+        user_id: int,
+        special_title: str = "",
+    ) -> dict | None:
+        """设置群成员专属头衔。"""
+        return await self.call_action(
+            "set_group_special_title",
+            group_id=group_id,
+            user_id=user_id,
+            special_title=special_title,
+        )
+
+    # ================== 请求处理接口 ================== #
+
+    async def set_friend_add_request(
+        self,
+        flag: str,
+        approve: bool = True,
+        remark: str = "",
+    ) -> dict | None:
+        """处理好友添加请求。"""
+        return await self.call_action(
+            "set_friend_add_request",
+            flag=flag,
+            approve=approve,
+            remark=remark,
+        )
+
+    async def set_group_add_request(
+        self,
+        flag: str,
+        sub_type: str,
+        approve: bool = True,
+        reason: str = "",
+    ) -> dict | None:
+        """处理加群邀请或申请。"""
+        return await self.call_action(
+            "set_group_add_request",
+            flag=flag,
+            sub_type=sub_type,
+            approve=approve,
+            reason=reason,
+        )

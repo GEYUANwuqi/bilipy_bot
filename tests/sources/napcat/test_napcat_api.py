@@ -1,11 +1,16 @@
 """NapCat API 请求关联与资源清理测试（PERF-001）."""
 
 import asyncio
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pytest
 
+from butterbot.sources.napcat.api import NapcatApi
 from butterbot.sources.napcat.api.napcat_api import NapcatClient, NapcatConfig
+from butterbot.sources.napcat.data import (
+    NapcatForwardMessageBuilder,
+    NapcatMessageBuilder,
+)
 from butterbot.utils.websocket import ConnectionError, ListenerId
 
 
@@ -99,6 +104,322 @@ class TestRequestCorrelation:
         """未知 echo 应留给普通事件处理路径."""
         client, _transport = _client()
         assert not client._resolve_response({"echo": "unknown"})
+
+
+class TestNapcatApi:
+    @pytest.mark.asyncio
+    async def test_call_action_wraps_action_and_params(self) -> None:
+        """Action 调用应统一封装协议请求。"""
+        api = object.__new__(NapcatApi)
+        requests: list[dict[str, Any]] = []
+
+        async def send_request(request: dict) -> dict:
+            requests.append(request)
+            return {"status": "ok"}
+
+        api.send_request = send_request  # type: ignore[method-assign]
+
+        result = await api.call_action("test_action", value=1, enabled=True)
+
+        assert result == {"status": "ok"}
+        assert requests == [
+            {
+                "action": "test_action",
+                "params": {"value": 1, "enabled": True},
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_group_message_accepts_napcat_message(self) -> None:
+        """发送接口应将领域消息转换为 OneBot11 段字典。"""
+        api = object.__new__(NapcatApi)
+        requests: list[dict[str, Any]] = []
+
+        async def send_request(request: dict) -> dict:
+            requests.append(request)
+            return {"status": "ok"}
+
+        api.send_request = send_request  # type: ignore[method-assign]
+
+        result = await api.send_group_message(
+            123456,
+            NapcatMessageBuilder().text("测试消息").build(),
+        )
+
+        assert result == {"status": "ok"}
+        assert requests == [
+            {
+                "action": "send_group_msg",
+                "params": {
+                    "group_id": 123456,
+                    "message": [{"type": "text", "data": {"text": "测试消息"}}],
+                },
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_private_message_accepts_napcat_message(self) -> None:
+        """私聊发送接口应复用领域消息序列化。"""
+        api = object.__new__(NapcatApi)
+        calls: list[tuple[str, dict[str, Any]]] = []
+
+        async def call_action(action: str, **params: Any) -> dict:
+            calls.append((action, params))
+            return {"status": "ok"}
+
+        api.call_action = call_action  # type: ignore[method-assign]
+
+        result = await api.send_private_message(
+            123456,
+            NapcatMessageBuilder().text("私聊消息").build(),
+        )
+
+        assert result == {"status": "ok"}
+        assert calls == [
+            (
+                "send_private_msg",
+                {
+                    "user_id": 123456,
+                    "message": [{"type": "text", "data": {"text": "私聊消息"}}],
+                },
+            )
+        ]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method_name", "kwargs", "action", "expected_params"),
+        [
+            (
+                "send_private_message",
+                {"user_id": 1, "message": [{"type": "text", "data": {}}]},
+                "send_private_msg",
+                {"user_id": 1, "message": [{"type": "text", "data": {}}]},
+            ),
+            ("delete_message", {"message_id": 2}, "delete_msg", {"message_id": 2}),
+            ("send_like", {"user_id": 3}, "send_like", {"user_id": 3, "times": 1}),
+            (
+                "set_message_emoji_like",
+                {"message_id": 4, "emoji_id": "14", "set": False},
+                "set_msg_emoji_like",
+                {"message_id": 4, "emoji_id": "14", "set": False},
+            ),
+            (
+                "mark_group_messages_as_read",
+                {"group_id": 5},
+                "mark_group_msg_as_read",
+                {"group_id": 5},
+            ),
+            (
+                "mark_private_messages_as_read",
+                {"user_id": 6},
+                "mark_private_msg_as_read",
+                {"user_id": 6},
+            ),
+            (
+                "send_poke",
+                {"group_id": 7, "user_id": 8},
+                "send_poke",
+                {"group_id": 7, "user_id": 8},
+            ),
+            ("friend_poke", {"user_id": 9}, "friend_poke", {"user_id": 9}),
+            ("get_login_info", {}, "get_login_info", {}),
+            (
+                "get_stranger_info",
+                {"user_id": 10},
+                "get_stranger_info",
+                {"user_id": 10},
+            ),
+            ("get_friend_list", {}, "get_friend_list", {}),
+            ("get_group_list", {}, "get_group_list", {}),
+            (
+                "get_group_info",
+                {"group_id": 11},
+                "get_group_info",
+                {"group_id": 11},
+            ),
+            (
+                "get_group_member_info",
+                {"group_id": 12, "user_id": 13},
+                "get_group_member_info",
+                {"group_id": 12, "user_id": 13},
+            ),
+            (
+                "get_group_member_list",
+                {"group_id": 14},
+                "get_group_member_list",
+                {"group_id": 14},
+            ),
+            ("get_message", {"message_id": 15}, "get_msg", {"message_id": 15}),
+            (
+                "get_group_message_history",
+                {"group_id": 16, "message_seq": 17, "count": 10},
+                "get_group_msg_history",
+                {"group_id": 16, "message_seq": 17, "count": 10},
+            ),
+            (
+                "get_private_message_history",
+                {"user_id": 18},
+                "get_friend_msg_history",
+                {"user_id": 18, "count": 20},
+            ),
+            ("get_status", {}, "get_status", {}),
+            ("get_version_info", {}, "get_version_info", {}),
+            (
+                "set_group_kick",
+                {"group_id": 19, "user_id": 20},
+                "set_group_kick",
+                {"group_id": 19, "user_id": 20, "reject_add_request": False},
+            ),
+            (
+                "set_group_ban",
+                {"group_id": 21, "user_id": 22},
+                "set_group_ban",
+                {"group_id": 21, "user_id": 22, "duration": 1800},
+            ),
+            (
+                "set_group_whole_ban",
+                {"group_id": 23},
+                "set_group_whole_ban",
+                {"group_id": 23, "enable": True},
+            ),
+            (
+                "set_group_admin",
+                {"group_id": 24, "user_id": 25, "enable": False},
+                "set_group_admin",
+                {"group_id": 24, "user_id": 25, "enable": False},
+            ),
+            (
+                "set_group_card",
+                {"group_id": 26, "user_id": 27, "card": "新名片"},
+                "set_group_card",
+                {"group_id": 26, "user_id": 27, "card": "新名片"},
+            ),
+            (
+                "set_group_name",
+                {"group_id": 28, "name": "新群名"},
+                "set_group_name",
+                {"group_id": 28, "group_name": "新群名"},
+            ),
+            (
+                "set_group_leave",
+                {"group_id": 29},
+                "set_group_leave",
+                {"group_id": 29, "is_dismiss": False},
+            ),
+            (
+                "set_group_special_title",
+                {"group_id": 30, "user_id": 31, "special_title": "头衔"},
+                "set_group_special_title",
+                {"group_id": 30, "user_id": 31, "special_title": "头衔"},
+            ),
+            (
+                "set_friend_add_request",
+                {"flag": "friend-flag"},
+                "set_friend_add_request",
+                {"flag": "friend-flag", "approve": True, "remark": ""},
+            ),
+            (
+                "set_group_add_request",
+                {"flag": "group-flag", "sub_type": "add", "approve": False},
+                "set_group_add_request",
+                {
+                    "flag": "group-flag",
+                    "sub_type": "add",
+                    "approve": False,
+                    "reason": "",
+                },
+            ),
+        ],
+    )
+    async def test_high_frequency_api_maps_to_action(
+        self,
+        method_name: str,
+        kwargs: dict[str, Any],
+        action: str,
+        expected_params: dict[str, Any],
+    ) -> None:
+        """高频 API 的公开参数应准确映射到 NapCat action。"""
+        api = object.__new__(NapcatApi)
+        calls: list[tuple[str, dict[str, Any]]] = []
+
+        async def call_action(action: str, **params: Any) -> dict:
+            calls.append((action, params))
+            return {"status": "ok"}
+
+        api.call_action = call_action  # type: ignore[method-assign]
+
+        result = await getattr(api, method_name)(**kwargs)
+
+        assert result == {"status": "ok"}
+        assert calls == [(action, expected_params)]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("message_type", "target_id", "target_params"),
+        [
+            ("group", "123456", {"group_id": 123456}),
+            ("private", 654321, {"user_id": 654321}),
+        ],
+    )
+    async def test_send_forward_message_maps_target_and_nodes(
+        self,
+        message_type: Literal["group", "private"],
+        target_id: str | int,
+        target_params: dict[str, int],
+    ) -> None:
+        """转发接口应按会话类型映射目标并序列化节点。"""
+        api = object.__new__(NapcatApi)
+        calls: list[tuple[str, dict[str, Any]]] = []
+
+        async def call_action(action: str, **params: Any) -> dict:
+            calls.append((action, params))
+            return {"status": "ok"}
+
+        api.call_action = call_action  # type: ignore[method-assign]
+        message = (
+            NapcatForwardMessageBuilder(user_id=1, nickname="发送者")
+            .forward(10001)
+            .node(NapcatMessageBuilder().text("转发正文"))
+            .build()
+        )
+
+        result = await api.send_forward_message(message_type, target_id, message)
+
+        assert result == {"status": "ok"}
+        assert calls == [
+            (
+                "send_forward_msg",
+                {
+                    "message_type": message_type,
+                    "messages": [
+                        {"type": "node", "data": {"id": "10001"}},
+                        {
+                            "type": "node",
+                            "data": {
+                                "user_id": "1",
+                                "nickname": "发送者",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "data": {"text": "转发正文"},
+                                    }
+                                ],
+                            },
+                        },
+                    ],
+                    **target_params,
+                },
+            )
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_forward_message_rejects_unknown_message_type(self) -> None:
+        """未知会话类型不能被错误地当作私聊发送。"""
+        api = object.__new__(NapcatApi)
+        message = NapcatForwardMessageBuilder().forward(10001).build()
+
+        with pytest.raises(ValueError, match="不支持的转发消息类型"):
+            await api.send_forward_message(cast(Any, "channel"), 123456, message)
 
 
 class LifecycleTransport:

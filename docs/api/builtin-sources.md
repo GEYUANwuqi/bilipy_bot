@@ -50,11 +50,116 @@ async stop() -> None
 async aclose() -> None
 get_metrics() -> dict
 async send_request(message: dict) -> dict | None
-async send_group_message(group_id: int, message: list[dict]) -> dict | None
+async call_action(action: str, **params: Any) -> dict | None
+async send_group_message(
+    group_id: int,
+    message: list[dict] | NapcatMessage,
+) -> dict | None
+async send_forward_message(
+    message_type: Literal["group", "private"],
+    target_id: str | int,
+    message: NapcatForwardMessage,
+) -> dict | None
 ```
 
 `create()` 缺配置抛 `ConfigError`。Handler 必须是协程函数。请求可能抛
-`TimeoutError` 或 `CancelledError`。
+`TimeoutError` 或 `CancelledError`。`send_forward_message()` 支持 `group` 和
+`private`，其他 `message_type` 会抛出 `ValueError`。
+
+`call_action()` 统一生成 `{"action": action, "params": params}` 请求；业务接口
+均通过它调用 NapCat。首批高频适配包括：
+
+```python
+# 消息
+send_private_message(user_id, message)
+delete_message(message_id)
+send_like(user_id, times=1)
+set_message_emoji_like(message_id, emoji_id, set=True)
+mark_group_messages_as_read(group_id)
+mark_private_messages_as_read(user_id)
+send_poke(group_id, user_id)
+friend_poke(user_id)
+
+# 查询
+get_login_info()
+get_stranger_info(user_id)
+get_friend_list()
+get_group_list()
+get_group_info(group_id)
+get_group_member_info(group_id, user_id)
+get_group_member_list(group_id)
+get_message(message_id)
+get_group_message_history(group_id, message_seq=None, count=20)
+get_private_message_history(user_id, message_seq=None, count=20)
+get_status()
+get_version_info()
+
+# 群管理与请求处理
+set_group_kick(group_id, user_id, reject_add_request=False)
+set_group_ban(group_id, user_id, duration=1800)
+set_group_whole_ban(group_id, enable=True)
+set_group_admin(group_id, user_id, enable=True)
+set_group_card(group_id, user_id, card="")
+set_group_name(group_id, name)
+set_group_leave(group_id, is_dismiss=False)
+set_group_special_title(group_id, user_id, special_title="")
+set_friend_add_request(flag, approve=True, remark="")
+set_group_add_request(flag, sub_type, approve=True, reason="")
+```
+
+这些方法当前返回 NapCat 原始响应 `dict | None`。尚未列出的 action 可通过
+`call_action()` 调用；`send_request()` 保留为底层完整请求入口。
+
+### `NapcatMessageBuilder`
+
+`butterbot.sources.napcat.data` 导出 `NapcatMessageBuilder` 和
+`NapcatMessage`。builder 为消息段提供显式参数签名，并可链式追加：
+
+```python
+from butterbot.sources.napcat.data import NapcatMessageBuilder
+
+message = (
+    NapcatMessageBuilder()
+    .at_all()
+    .text("hello")
+    .face("14")
+    .image("image.png", image_type="flash")
+    .build()
+)
+```
+
+公开参数可使用面向调用者的名称，例如 `face_id`、`image_type` 和
+`message_id`；builder 会将其映射为 OneBot Data 字段。`build()` 返回独立的
+`NapcatMessage`，可直接传给 `send_group_message()`。
+
+普通消息 builder 不提供 `forward()` 或 `node()`；可发送的合并转发消息使用
+独立的 `NapcatForwardMessageBuilder`：
+
+```python
+from butterbot.sources.napcat.data import (
+    NapcatForwardMessageBuilder,
+    NapcatMessageBuilder,
+)
+
+content = NapcatMessageBuilder().text("转发正文")
+forward_message = (
+    NapcatForwardMessageBuilder(user_id=123456, nickname="示例用户")
+    .node(content)
+    .forward(message_id=10001)
+    .build()
+)
+```
+
+`node()` 构造自定义作者节点，`forward()` 通过消息 ID 引用已有消息；`build()`
+返回只包含转发 node 的 `NapcatForwardMessage`，可通过以下方式发送：
+
+```python
+await api.send_forward_message(
+    message_type="group",
+    target_id=123456,
+    message=forward_message,
+)
+```
 
 ### `NapcatType`
 
