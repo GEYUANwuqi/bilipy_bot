@@ -34,6 +34,7 @@ from .event_data import (
     NapcatLuckyKingNotifyData,
     # 消息事件
     NapcatMessageData,
+    NapcatMessageInput,
     NapcatMessageSentData,
     # 元事件
     NapcatMetaData,
@@ -155,6 +156,7 @@ __all__ = [
     "NapcatLifecycleMetaData",
     "NapcatLuckyKingNotifyData",
     "NapcatMessageData",
+    "NapcatMessageInput",
     "NapcatMessageSentData",
     "NapcatMetaData",
     "NapcatNoticeData",

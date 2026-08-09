@@ -67,6 +67,7 @@ class NapcatSource(BaseSource):
             # 状态由已完成 discriminator 分发的 Data 类型提供。
             # 这样生产路径不再同时维护一套 raw dict 分支路由。
             napcat_type = napcat_event.event_type
+            napcat_event.bind_runtime(self.ctx, self.config_key)
 
             if napcat_type.matches(NapcatType.ALL):
                 event = Event(data=napcat_event, status=napcat_type)

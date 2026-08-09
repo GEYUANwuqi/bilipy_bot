@@ -4,12 +4,47 @@ NapCat OneBot11 事件数据模型
 基于 OneBot11 协议定义的事件类型，使用 BaseDataModel 实现自动分发构造
 """
 
-from typing import ClassVar
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from pydantic import PrivateAttr
 
 from butterbot.core.data import BaseDataModel
 
+if TYPE_CHECKING:
+    from butterbot.core.context import AppContext
+    from butterbot.core.event import EventBus
+
+    from ..api import NapcatApi
+
 from ..types import NapcatType
 from .segment_data import NapcatMessage
+
+NapcatMessageInput = str | list[dict[str, Any]] | NapcatMessage
+
+
+def _message_payload(
+    message: NapcatMessageInput,
+    *,
+    reply_to: int | None = None,
+) -> list[dict[str, Any]] | NapcatMessage:
+    """将便捷方法接受的消息转换为 NapCat API 可接受的格式。"""
+    if reply_to is None and not isinstance(message, str):
+        return message
+
+    segments: list[dict[str, Any]] = []
+    if reply_to is not None:
+        segments.append({"type": "reply", "data": {"id": str(reply_to)}})
+
+    if isinstance(message, str):
+        segments.append({"type": "text", "data": {"text": message}})
+    elif isinstance(message, NapcatMessage):
+        segments.extend(message.to_list_dict())
+    else:
+        segments.extend(message)
+    return segments
+
 
 # ==================== 嵌套数据类（发送者信息） ====================
 
@@ -76,6 +111,41 @@ class NapcatData(BaseDataModel):
     self_id: int
     post_type: str
 
+    _runtime: AppContext | None = PrivateAttr(default=None)
+    _config_key: str | None = PrivateAttr(default=None)
+
+    def bind_runtime(self, runtime: AppContext, config_key: str) -> None:
+        """绑定产生该事件的应用上下文。"""
+        object.__setattr__(self, "_runtime", runtime)
+        object.__setattr__(self, "_config_key", config_key)
+
+    @property
+    def runtime(self) -> AppContext:
+        """获取已绑定的应用上下文。"""
+        if self._runtime is None:
+            raise RuntimeError("NapcatData 尚未绑定 runtime")
+        return self._runtime
+
+    @property
+    def config_key(self) -> str:
+        """获取产生该事件的 NapCat 配置键。"""
+        if self._config_key is None:
+            raise RuntimeError("NapcatData 尚未绑定 config_key")
+        return self._config_key
+
+    @property
+    def bus(self) -> EventBus:
+        """获取应用事件总线。"""
+        return self.runtime.bus
+
+    @property
+    def api(self) -> NapcatApi:
+        """获取产生该事件的 NapCat API 实例。"""
+        # 局部导入避免 NapcatApi -> data -> NapcatApi 循环依赖。
+        from ..api import NapcatApi
+
+        return self.runtime.api_ctx.get(NapcatApi, self.config_key)
+
 
 # ==================== 消息事件 ====================
 
@@ -98,6 +168,23 @@ class NapcatMessageData(NapcatData):
     raw_message: str
     font: int
 
+    async def recall(self) -> dict | None:
+        """撤回该消息。"""
+        return await self.api.delete_message(self.message_id)
+
+    async def set_emoji_like(
+        self,
+        emoji_id: str | int,
+        *,
+        enabled: bool = True,
+    ) -> dict | None:
+        """设置或取消该消息的表情回应。"""
+        return await self.api.set_message_emoji_like(
+            self.message_id,
+            str(emoji_id),
+            set=enabled,
+        )
+
 
 class NapcatPrivateMessageData(NapcatMessageData):
     """私聊消息事件"""
@@ -110,6 +197,31 @@ class NapcatPrivateMessageData(NapcatMessageData):
     temp_source: int | None = None  # 临时会话来源
     sender: FriendSender
 
+    async def reply(
+        self,
+        message: NapcatMessageInput,
+        *,
+        quote: bool = True,
+    ) -> dict | None:
+        """回复该私聊消息。"""
+        payload = _message_payload(
+            message,
+            reply_to=self.message_id if quote else None,
+        )
+        return await self.api.send_private_message(self.user_id, payload)
+
+    async def mark_read(self) -> dict | None:
+        """将与该用户的私聊消息标记为已读。"""
+        return await self.api.mark_private_messages_as_read(self.user_id)
+
+    async def poke(self) -> dict | None:
+        """戳一戳该私聊消息的发送者。"""
+        return await self.api.friend_poke(self.user_id)
+
+    async def like(self, times: int = 1) -> dict | None:
+        """给该私聊消息的发送者点赞。"""
+        return await self.api.send_like(self.user_id, times=times)
+
 
 class NapcatGroupMessageData(NapcatMessageData):
     """群消息事件"""
@@ -120,6 +232,28 @@ class NapcatGroupMessageData(NapcatMessageData):
     sub_type: str = "normal"  # normal/anonymous/notice
     group_id: int
     sender: GroupSender
+
+    async def reply(
+        self,
+        message: NapcatMessageInput,
+        *,
+        quote: bool = True,
+    ) -> dict | None:
+        """回复该群消息。"""
+        payload = _message_payload(
+            message,
+            reply_to=self.message_id if quote else None,
+        )
+        return await self.api.send_group_message(self.group_id, payload)
+
+    async def mark_read(self) -> dict | None:
+        """将该群的消息标记为已读。"""
+        return await self.api.mark_group_messages_as_read(self.group_id)
+
+    async def poke(self, user_id: int | None = None) -> dict | None:
+        """在群内戳一戳指定用户，默认为消息发送者。"""
+        target_id = self.user_id if user_id is None else user_id
+        return await self.api.send_poke(self.group_id, target_id)
 
 
 # ==================== 消息发送事件（自身消息上报） ====================
@@ -295,6 +429,12 @@ class NapcatPokeNotifyData(NapcatNotifyData):
     user_id: int
     target_id: int
 
+    async def poke_back(self) -> dict | None:
+        """戳回事件发起者。"""
+        if self.group_id is None:
+            return await self.api.friend_poke(self.user_id)
+        return await self.api.send_poke(self.group_id, self.user_id)
+
 
 class NapcatLuckyKingNotifyData(NapcatNotifyData):
     """运气王事件"""
@@ -395,6 +535,18 @@ class NapcatFriendRequestData(NapcatRequestData):
     event_type: ClassVar[NapcatType] = NapcatType.FRIEND_REQUEST
     request_type: str = "friend"
 
+    async def approve(self, remark: str = "") -> dict | None:
+        """同意好友请求。"""
+        return await self.api.set_friend_add_request(
+            self.flag,
+            approve=True,
+            remark=remark,
+        )
+
+    async def reject(self) -> dict | None:
+        """拒绝好友请求。"""
+        return await self.api.set_friend_add_request(self.flag, approve=False)
+
 
 class NapcatGroupRequestData(NapcatRequestData):
     """群请求事件"""
@@ -404,6 +556,23 @@ class NapcatGroupRequestData(NapcatRequestData):
     request_type: str = "group"
     sub_type: str  # add/invite
     group_id: int
+
+    async def approve(self) -> dict | None:
+        """同意加群申请或邀请。"""
+        return await self.api.set_group_add_request(
+            self.flag,
+            self.sub_type,
+            approve=True,
+        )
+
+    async def reject(self, reason: str = "") -> dict | None:
+        """拒绝加群申请或邀请。"""
+        return await self.api.set_group_add_request(
+            self.flag,
+            self.sub_type,
+            approve=False,
+            reason=reason,
+        )
 
 
 # ==================== 元事件 ====================

@@ -55,6 +55,8 @@ class TestNapcatSourceDispatch:
         assert len(received) == 1
         assert received[0].status is NapcatType.GROUP_MESSAGE
         assert isinstance(received[0].data, NapcatGroupMessageData)
+        assert received[0].data.runtime is ctx
+        assert received[0].data.config_key == "napcat"
 
     def test_connection_health_is_exposed_by_source(self) -> None:
         source = NapcatSource()

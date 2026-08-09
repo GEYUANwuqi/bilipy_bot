@@ -94,13 +94,13 @@ async def handle_command(
 
     if command == "/help":
         _log.info("  → 执行帮助命令")
-        # 这里可以调用 API 发送回复
-        # await napcat_api.send_group_message(...)
+        await data.reply("可用命令：/help、/status")
     elif command == "/status":
         _log.info("  → 执行状态命令")
         # 获取客户端指标
         metrics = napcat_api.get_metrics()
         _log.info(f"  → 客户端指标: {metrics}")
+        await data.reply("服务运行中")
 
 
 # ============ 订阅通知事件 ============ #
@@ -127,13 +127,14 @@ async def handle_request(
         _log.info(f"[好友请求] 用户 {data.user_id} 请求添加好友")
         _log.info(f"  验证信息: {data.comment}")
         _log.info(f"  Flag: {data.flag}")
-        # 这里可以调用 API 同意或拒绝请求
+        # await data.approve(remark="ButterBot")
 
     elif isinstance(data, NapcatGroupRequestData):
         _log.info(f"[群请求] 用户 {data.user_id} 请求加群 {data.group_id}")
         _log.info(f"  子类型: {data.sub_type}")
         _log.info(f"  验证信息: {data.comment}")
         _log.info(f"  Flag: {data.flag}")
+        # await data.reject(reason="暂不接收新成员")
 
 
 # ============ 订阅元事件（心跳和生命周期）============ #

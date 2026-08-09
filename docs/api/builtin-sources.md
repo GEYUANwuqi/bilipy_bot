@@ -110,6 +110,36 @@ set_group_add_request(flag, sub_type, approve=True, reason="")
 这些方法当前返回 NapCat 原始响应 `dict | None`。尚未列出的 action 可通过
 `call_action()` 调用；`send_request()` 保留为底层完整请求入口。
 
+### NapCat 事件便捷方法
+
+`NapcatSource` 会在发布事件前把 `AppContext` 和当前
+`config_key` 绑定到 `NapcatData`。因此订阅者可以通过
+`event.data.api` 取得对应账号的 `NapcatApi`，也可以直接使用事件
+上的便捷方法：
+
+```python
+@app.subscribe(napcat_id, NapcatType.GROUP_MESSAGE)
+async def handle_message(event: NapcatGroupMessageEvent):
+    data = event.data
+    await data.reply("收到")              # 默认引用原消息
+    await data.set_emoji_like(66)
+    await data.mark_read()
+```
+
+快捷方法包括：
+
+- 群消息：`reply()`、`recall()`、`set_emoji_like()`、`mark_read()`、
+  `poke()`
+- 私聊消息：`reply()`、`recall()`、`set_emoji_like()`、`mark_read()`、
+  `poke()`、`like()`
+- 戳一戳通知：`poke_back()`
+- 好友和加群请求：`approve()`、`reject()`
+
+`reply()` 接受字符串、原始消息段列表或 `NapcatMessage`；传入
+`quote=False` 可不引用原消息。手动构造而未经 `NapcatSource`
+发布的 Data 不具备运行时上下文，调用 `api`、`runtime` 或便捷
+方法会抛出 `RuntimeError`。
+
 ### `NapcatMessageBuilder`
 
 `butterbot.sources.napcat.data` 导出 `NapcatMessageBuilder` 和
