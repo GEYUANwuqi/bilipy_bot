@@ -382,6 +382,35 @@ def test_typed_plugin_config_fails_during_application_preparation(tmp_path: Path
         BotApp(config_path=config_path, logging_mode="external")
 
 
+@pytest.mark.asyncio
+async def test_registration_error_exposes_missing_source_details(tmp_path: Path):
+    """非 debug 错误文本应保留缺失事件源的可操作信息。"""
+    _write_plugin(
+        tmp_path / "plugins",
+        code=(
+            "from butterbot.plugin import ButterPlugin, register\n"
+            "\n"
+            "class RuntimeHandlerPlugin(ButterPlugin):\n"
+            "    @register('missing.events', 'missing.message')\n"
+            "    async def handle(self, event):\n"
+            "        pass\n"
+        ),
+    )
+    config_path = _write_config(tmp_path)
+    app = BotApp(config_path=config_path, cli_mode=False, logging_mode="external")
+
+    with pytest.raises(PluginRegistrationError) as exc_info:
+        await app.start()
+
+    message = str(exc_info.value)
+    assert "local.runtime-handler" in message
+    assert "registering" in message
+    assert "SourceError" in message
+    assert "source_kind='missing.events'" in message
+    assert "config_key=<未指定>" in message
+    await app.close()
+
+
 def test_enabled_plugin_discovery_error_does_not_fall_back(tmp_path: Path):
     config_path = _write_config(tmp_path)
 

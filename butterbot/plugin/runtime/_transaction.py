@@ -66,7 +66,20 @@ class _RuntimeRegistrationTransaction:
         self._require_open()
         sources = self._app.get_sources(spec.source)
         if not sources:
-            raise SourceError("SourceRef %r 未匹配到事件源" % (spec.source,))
+            config_key = (
+                "<未指定>"
+                if spec.source.config_key is None
+                else repr(spec.source.config_key)
+            )
+            raise SourceError(
+                "未找到插件订阅所需的事件源: "
+                "source_kind=%r, config_key=%s; "
+                "请检查 sources 配置和插件 config_key"
+                % (
+                    spec.source.source_kind,
+                    config_key,
+                )
+            )
         if len(sources) > 1 and not spec.allow_multiple:
             raise SourceError(
                 "SourceRef %r 匹配到 %s 个事件源; "

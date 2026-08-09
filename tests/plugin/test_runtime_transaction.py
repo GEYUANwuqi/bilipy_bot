@@ -169,6 +169,32 @@ async def test_ambiguous_source_ref_requires_explicit_fan_out() -> None:
 
 
 @pytest.mark.asyncio
+async def test_missing_source_reports_plugin_kind_and_config_key() -> None:
+    """缺少 Source 时应指出插件、source_kind 和配置键。"""
+    app = BotApp(RuntimeConfig())
+    registrar = PluginRegistrar(app, "example.consumer")
+
+    async def handler(event: Event) -> None:
+        del event
+
+    with pytest.raises(SourceError) as exc_info:
+        registrar.add_subscription(
+            SubscriptionSpec(
+                SourceRef("missing.events", "secondary"),
+                TransactionType.READY,
+                handler,
+            )
+        )
+
+    message = str(exc_info.value)
+    assert "source_kind='missing.events'" in message
+    assert "config_key='secondary'" in message
+    assert "sources 配置" in message
+    await registrar.aclose()
+    await app.close()
+
+
+@pytest.mark.asyncio
 async def test_committed_transaction_rejects_more_registration() -> None:
     app = BotApp(RuntimeConfig())
     app.add_source(TransactionSource)

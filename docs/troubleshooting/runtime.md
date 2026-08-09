@@ -52,6 +52,21 @@ Python 脚本时才由开发者构造 `BotApp()` 或显式传入 `RuntimeConfig`
 - 使用的是目标 Source 对应的枚举类型；
 - 正则是否能 `fullmatch` 完整值。
 
+## 插件在 `registering` 阶段缺少事件源
+
+错误会同时显示插件 ID、`source_kind` 和 `config_key`，例如：
+
+```text
+插件 'local.example' 在 registering 阶段失败（SourceError）:
+未找到插件订阅所需的事件源:
+source_kind='bilibili.danmaku', config_key='bili_account'
+```
+
+确认 `sources.<config_key>.kwarg` 创建了提供该 `source_kind` 的 Source，并检查
+插件私有配置中的 `config_key` 是否与 `sources` 实例键一致。错误显示
+`config_key=<未指定>` 时，插件会按 `source_kind` 唯一匹配；此时至少要配置并创建
+一个对应事件源。
+
 ## 回调不执行
 
 依次检查：

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from butterbot.core.exceptions import ButterError
+from butterbot.core.exceptions import ButterError, SourceError
 
 
 class PluginError(ButterError):
@@ -33,9 +33,14 @@ class PluginRegistrationError(PluginError):
         self.plugin_id = plugin_id
         self.phase = phase
         self.cause = cause
-        super().__init__(
-            "插件 '%s' 在 %s 阶段失败（%s）" % (plugin_id, phase, type(cause).__name__)
+        message = "插件 '%s' 在 %s 阶段失败（%s）" % (
+            plugin_id,
+            phase,
+            type(cause).__name__,
         )
+        if isinstance(cause, SourceError) and str(cause):
+            message = "%s: %s" % (message, cause)
+        super().__init__(message)
 
 
 __all__ = [
