@@ -177,7 +177,7 @@ class SourceFactoryRegistry:
                 "butterbot.sources.lark",
                 "LarkSource",
                 extra="lark",
-                dependency_modules=("lark_oapi", "websockets"),
+                dependency_modules=("aiohttp", "lark_oapi", "websockets"),
             ),
             factory_name="LarkSource",
         )

@@ -22,6 +22,7 @@ all = [
     "lark-oapi>=1.7.2,<2",
 ]
 lark = [
+    "aiohttp>=3.14.1",
     "lark-oapi>=1.7.2,<2",
 ]
 

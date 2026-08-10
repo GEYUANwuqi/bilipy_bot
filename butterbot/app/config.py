@@ -695,7 +695,7 @@ def _build_lark(value: dict[str, Any]) -> Any:
     module = require_optional_module(
         "butterbot.sources.lark.api.lark_api",
         extra="lark",
-        dependency_modules=("lark_oapi", "websockets"),
+        dependency_modules=("aiohttp", "lark_oapi", "websockets"),
     )
     return module.LarkConfig(**value)
 

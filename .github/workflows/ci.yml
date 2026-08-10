@@ -98,7 +98,7 @@ jobs:
         shell: bash
         run: |
           wheel_path="$(find dist -name '*.whl' -print -quit)"
-          for extra in napcat bilibili all; do
+          for extra in napcat bilibili lark all; do
             extra_env=".extra-${extra}-venv"
             uv venv "$extra_env" --python "${{ matrix.python-version }}"
             uv pip install \

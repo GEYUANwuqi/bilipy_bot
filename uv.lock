@@ -263,6 +263,7 @@ bilibili = [
     { name = "bilibili-api-python" },
 ]
 lark = [
+    { name = "aiohttp" },
     { name = "lark-oapi" },
 ]
 napcat = [
@@ -286,6 +287,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", marker = "extra == 'all'", specifier = ">=3.14.1" },
     { name = "aiohttp", marker = "extra == 'bilibili'", specifier = ">=3.14.1" },
+    { name = "aiohttp", marker = "extra == 'lark'", specifier = ">=3.14.1" },
     { name = "aiohttp", marker = "extra == 'napcat'", specifier = ">=3.14.1" },
     { name = "bilibili-api-python", marker = "extra == 'all'", specifier = ">=17.4.2" },
     { name = "bilibili-api-python", marker = "extra == 'bilibili'", specifier = ">=17.4.2" },
