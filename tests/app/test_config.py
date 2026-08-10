@@ -12,6 +12,7 @@ from butterbot.app.config import (
     RuntimeConfig,
     register_builder,
 )
+from butterbot.sources.lark import LarkConfig
 from butterbot.sources.napcat import NapcatConfig
 
 
@@ -100,7 +101,7 @@ class TestRuntimeConfigFromYaml:
         assert config.plugin_enabled is False
         assert config.get_config("ordinary") == "value"
 
-    @pytest.mark.parametrize("source_name", ["bilibili", "napcat"])
+    @pytest.mark.parametrize("source_name", ["bilibili", "napcat", "lark"])
     def test_rejects_top_level_source_config(
         self,
         tmp_path: Path,
@@ -214,6 +215,27 @@ class TestNamedSourceConfig:
         assert napcat.url == "ws://localhost:3001"
         assert napcat.token == "token"
         assert config.get_config("sources") is None
+
+    def test_builds_named_lark_config(self, tmp_path: Path):
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n"
+            "  work_bot:\n"
+            "    source_name: lark\n"
+            "    kwarg:\n"
+            "      LarkSource: {}\n"
+            "    app_id: cli_test\n"
+            "    app_secret: secret\n"
+            "    custom_event_types:\n"
+            "      - contact.user.created_v3\n"
+        )
+
+        config = RuntimeConfig.from_yaml(yaml_file, environ={})
+        lark = config.get_config("work_bot")
+
+        assert isinstance(lark, LarkConfig)
+        assert lark.app_id == "cli_test"
+        assert lark.custom_event_types == ("contact.user.created_v3",)
 
     def test_preserves_source_definition_metadata(self, tmp_path: Path):
         """配置加载后应保留 source_name，供后续 provider 原型使用."""

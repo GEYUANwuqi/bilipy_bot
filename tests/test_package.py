@@ -36,9 +36,11 @@ class TestPackage:
     def test_builtin_sources_importable(self):
         """内置事件源包可通过常规包路径导入."""
         from butterbot.sources.bilibili import BiliDynamicSource
+        from butterbot.sources.lark import LarkSource
         from butterbot.sources.napcat import NapcatSource
 
         assert NapcatSource is not None
+        assert LarkSource is not None
         assert BiliDynamicSource is not None
 
     def test_utils_facade_does_not_import_optional_websocket(self):

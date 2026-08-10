@@ -83,6 +83,7 @@ def test_default_registry_does_not_import_optional_adapters(
         "BiliLiveSource",
     )
     assert registry.names("napcat") == ("NapcatSource",)
+    assert registry.names("lark") == ("LarkSource",)
     assert imported == []
 
 

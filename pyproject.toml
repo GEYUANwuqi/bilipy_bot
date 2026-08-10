@@ -16,7 +16,14 @@ dependencies = [
 [project.optional-dependencies]
 napcat = ["aiohttp>=3.14.1"]
 bilibili = ["aiohttp>=3.14.1", "bilibili-api-python>=17.4.2"]
-all = ["aiohttp>=3.14.1", "bilibili-api-python>=17.4.2"]
+all = [
+    "aiohttp>=3.14.1",
+    "bilibili-api-python>=17.4.2",
+    "lark-oapi>=1.7.2,<2",
+]
+lark = [
+    "lark-oapi>=1.7.2,<2",
+]
 
 [project.scripts]
 butterbot = "butterbot.cli:main"
@@ -38,6 +45,7 @@ packages = ["butterbot"]
 dev = [
     "aiohttp>=3.14.1",
     "bilibili-api-python>=17.4.2",
+    "lark-oapi>=1.7.2,<2",
     "pre-commit>=4.6.0",
     "pyright>=1.1.411",
     "pytest>=9.1.1",

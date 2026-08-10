@@ -689,5 +689,17 @@ def _build_napcat(value: dict[str, Any]) -> Any:
     return module.NapcatConfig(**value)
 
 
+def _build_lark(value: dict[str, Any]) -> Any:
+    from ._optional import require_optional_module
+
+    module = require_optional_module(
+        "butterbot.sources.lark.api.lark_api",
+        extra="lark",
+        dependency_modules=("lark_oapi", "websockets"),
+    )
+    return module.LarkConfig(**value)
+
+
 register_builder("bilibili", _build_bilibili)
 register_builder("napcat", _build_napcat)
+register_builder("lark", _build_lark)

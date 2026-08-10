@@ -171,6 +171,16 @@ class SourceFactoryRegistry:
             ),
             factory_name="NapcatSource",
         )
+        registry.register(
+            "lark",
+            _optional_source_factory(
+                "butterbot.sources.lark",
+                "LarkSource",
+                extra="lark",
+                dependency_modules=("lark_oapi", "websockets"),
+            ),
+            factory_name="LarkSource",
+        )
         return registry
 
 

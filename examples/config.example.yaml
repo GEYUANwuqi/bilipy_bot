@@ -18,6 +18,8 @@ environment:
   BILI_BUVID3: ""
   NAPCAT_URL: "ws://localhost:3001"
   NAPCAT_TOKEN: ""
+  LARK_APP_ID: ""
+  LARK_APP_SECRET: ""
 
 # ---------- 插件（默认关闭） ----------
 # 只列出明确可信的 entry point 或 ./plugins 本地候选。
@@ -71,6 +73,18 @@ sources:
     # reconnect_attempts: 5
     # receive_timeout: 60.0
     # ready_timeout: 30.0
+
+  # LarkConfig 参数。启用时取消注释，并在环境中提供凭据。
+  # feishu_bot:
+  #   source_name: lark
+  #   kwarg:
+  #     LarkSource: {}
+  #   app_id: "${LARK_APP_ID}"
+  #   app_secret: "${LARK_APP_SECRET}"
+  #   # ready_timeout: 30.0
+  #   # request_timeout: 30.0
+  #   # custom_event_types:
+  #   #   - contact.user.created_v3
 
 # 也可以直接用分层环境变量覆盖字段，例如:
 # BUTTERBOT__SOURCES__QQ_ACCOUNT__TOKEN=secret
