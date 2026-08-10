@@ -28,6 +28,7 @@ flowchart LR
 - 监听 NapCat 的 OneBot 事件并调用 API 回复；
 - 轮询 Bilibili 动态或直播状态；
 - 监听 Bilibili 直播弹幕；
+- 通过 WebSocket 长连接接收飞书事件并调用 IM OpenAPI；
 - 基于 `BaseSource` 接入自定义异步数据源。
 
 ## 当前真实能力
@@ -36,7 +37,7 @@ flowchart LR
 - `BaseType` 枚举描述事件状态，并支持层级与正则订阅。
 - `BaseFilter` 在回调执行前进行同步内容过滤。
 - `BaseSource` 与 `BaseApi` 提供公开扩展契约。
-- 内置 NapCat 和 Bilibili 适配。
+- 内置 NapCat、Bilibili 和飞书适配。
 - YAML、环境变量和命名 Source 配置。
 - 用于检查配置和管理本地应用进程的 `butterbot` CLI。
 - 关闭时停止事件源、排空回调并释放 API 资源。
@@ -57,4 +58,4 @@ flowchart LR
 
 - [安装](./installation.md)
 - [快速开始](./quick-start.md)
-- [核心概念](/concepts/)
+- [核心概念](/architecture/core-concepts.md)

@@ -32,7 +32,7 @@ config:
         details: 基于 BaseSource、BaseApi 与 AppContext 接入新的平台或数据输入。
       - title: 内置适配
         icon: material-symbols:hub-outline
-        details: 当前仓库提供 NapCat 与 Bilibili 的事件源、数据模型和 API 封装。
+        details: 当前仓库提供 NapCat、Bilibili 与飞书事件源、数据模型和 API 封装。
   - type: custom
 ---
 
@@ -74,8 +74,8 @@ if __name__ == "__main__":
 ## 从哪里开始
 
 - 第一次使用：从[安装](/guide/installation.html)和[快速开始](/guide/quick-start.html)开始。
-- 选择独立进程或嵌入模式：查看[运行模式与 `run()`](/guide/runtime-modes.html)。
-- 接入 NapCat 或 Bilibili：查看[功能指南](/features/)。
+- 选择独立进程或嵌入模式：查看[运行模式](/features/runtime-modes.html)。
+- 接入 NapCat、Bilibili 或飞书：查看[事件源指南](/features/sources/)。
 - 开发自定义事件源：查看[扩展开发](/extensions/)。
 - 查询签名和异常：查看[API 参考](/api/)。
-- 排查关闭、超时或悬挂任务：查看[故障排除](/troubleshooting/)。
+- 排查关闭、超时或悬挂任务：查看[故障排除](/features/troubleshooting/)。

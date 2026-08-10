@@ -28,6 +28,7 @@ butterbot/
 │   └── errors.py        # 插件系统共享异常
 ├── sources/
 │   ├── bilibili/        # Bilibili API、Source、Data、Type
+│   ├── lark/            # 飞书 WebSocket、IM API、Data、Type
 │   └── napcat/          # NapCat API、Source、Data、Filter、Type
 └── utils/               # 日志、WebSocket 与小型工具
 ```
@@ -112,5 +113,5 @@ Source 和 API 测试通过替身避免外部网络。修改公共生命周期�
 
 ## 下一步
 
-- [生命周期](./lifecycle.md)
+- [生命周期](/architecture/lifecycle.md)
 - [项目架构](/architecture/)

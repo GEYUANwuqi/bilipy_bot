@@ -1,10 +1,12 @@
 ---
-title: 项目架构
+title: 框架开发
 ---
 
-# 项目架构
+# 框架开发
 
-本栏目面向维护者和扩展作者，记录当前实现，而非规划中的抽象。
+本栏目面向 ButterBot 维护者，解释生命周期、任务所有权、模块依赖和内部实现。
+如果只是调用稳定 API，请阅读[API 参考](/api/)；如果要接入新平台，请阅读
+[扩展开发](/extensions/)。
 
 ## 模块职责
 
@@ -16,7 +18,7 @@ flowchart TB
   SRC[core.source: BaseSource]
   API[core.api: BaseApi]
   TYPE[core.types + data + filter]
-  BUILTIN[sources: NapCat / Bilibili]
+  BUILTIN[sources: NapCat / Bilibili / Lark]
   UTIL[utils: logging / websocket]
 
   APP --> CTX
@@ -36,9 +38,12 @@ flowchart TB
 
 - 用户门面：`butterbot.app.__all__`；
 - 扩展契约：core 各子包 `__all__`；
-- 内置适配：`butterbot.sources.napcat/bilibili.__all__`；
+- 内置适配：`butterbot.sources.napcat/bilibili/lark.__all__`；
 - 内部实现：下划线符号、DTO 解析 helper、`BasePollingSource` 私有轮询方法、
-  WebSocket 内部状态。
+WebSocket 内部状态。
+
+这里可以记录内部类和实现细节，但不因此把它们提升为公共 API。公共兼容性只由
+门面、明确的 `__all__`、API 文档和对应契约测试共同定义。
 
 ## 测试结构
 
@@ -54,6 +59,10 @@ flowchart TB
 
 ## 继续阅读
 
-[控制流, 任务所有权与能力审计](./control-flow.md).
-
-[统一 CLI、直接运行与可选插件装配的已落地设计](./unified-runtime-bootstrap.md).
+- [核心概念](./core-concepts.md)
+- [生命周期](./lifecycle.md)
+- [项目架构](./project-architecture.md)
+- [事件系统](./event-system/)
+- [Source 生命周期](./source-system/lifecycle.md)
+- [API 系统](./api-system/base-api.md)
+- [内部设计与约定](./conventions.md)

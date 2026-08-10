@@ -72,6 +72,6 @@ uv run pytest tests/test_examples.py -q
 
 ## 下一步
 
-- [生命周期与入口选择](./lifecycle.md)
-- [事件、状态与处理器](/concepts/events-and-handlers.md)
-- [开发自定义 Source](/extensions/source.md)
+- [生命周期与入口选择](/architecture/lifecycle.md)
+- [事件系统](/architecture/event-system/)
+- [自定义事件源](/extensions/custom-source.md)

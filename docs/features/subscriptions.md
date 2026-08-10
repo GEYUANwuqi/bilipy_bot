@@ -91,6 +91,6 @@ removed = app.unsubscribe(source.uuid)
 
 ## 相关页面
 
-- [事件、状态与处理器](/concepts/events-and-handlers.html)
-- [开发自定义 Filter](/extensions/filters.html)
-- [订阅故障排除](/troubleshooting/runtime.html)
+- [事件系统](/architecture/event-system/)
+- [自定义 Filter](/extensions/custom-filter.html)
+- [订阅故障排除](/features/troubleshooting/runtime.html)

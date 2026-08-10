@@ -40,15 +40,17 @@ uv add butterbot-python
 ```bash
 python -m pip install "butterbot-python[napcat]"     # NapCat, 显式安装 aiohttp
 python -m pip install "butterbot-python[bilibili]"   # Bilibili SDK 和 aiohttp
+python -m pip install "butterbot-python[lark]"       # 飞书官方服务端 SDK
 python -m pip install "butterbot-python[all]"        # 全部内置 adapter
 
 uv add "butterbot-python[napcat]"     # NapCat, 显式安装 aiohttp
 uv add "butterbot-python[bilibili]"  # Bilibili SDK 和 aiohttp
+uv add "butterbot-python[lark]"       # 飞书官方服务端 SDK
 uv add "butterbot-python[all]"        # 全部内置 adapter
 ```
 
 NapCat 和 Bilibili 都直接依赖 `aiohttp`; Bilibili extra 不依赖
-上游 SDK 是否恰好传递安装它.
+上游 SDK 是否恰好传递安装它。飞书 extra 使用官方 `lark-oapi` SDK。
 
 ## 从仓库开发
 
@@ -108,11 +110,11 @@ uv sync --locked --dev --python 3.12
 
 ### 缺少 adapter extra
 
-配置了 NapCat 或 Bilibili Source 但没有安装对应 extra 时, 构造会抛出
+配置了 NapCat、Bilibili 或飞书 Source 但没有安装对应 extra 时，构造会抛出
 带完整安装命令的 `ConfigError`. 基础 wheel 仍可以导入 `butterbot.app`,
 运行空 `BotApp` 和加载不依赖内置 adapter 的插件.
 
 ## 下一步
 
 - [运行最小闭环示例](./quick-start.md)
-- [使用命令行运行应用](./cli.md)
+- [使用命令行运行应用](/features/cli.md)
