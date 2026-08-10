@@ -72,6 +72,23 @@ class EventBus:
             1 for task in self._tasks_by_owner.get(owner_id, ()) if not task.done()
         )
 
+    def task_diagnostics(self) -> tuple[tuple[str, str, str], ...]:
+        """返回活动回调任务的 ``(owner, name, state)`` 安全快照."""
+        owners = {
+            task: owner
+            for owner, tasks in self._tasks_by_owner.items()
+            for task in tasks
+        }
+        return tuple(
+            (
+                owners.get(task, "<application>"),
+                task.get_name(),
+                "cancelling" if task.cancelling() else "pending",
+            )
+            for task in self._background_tasks
+            if not task.done()
+        )
+
     def _wrap_callback(
         self,
         func: Callable,
@@ -427,7 +444,11 @@ class EventBus:
             callback_name = getattr(callback, "__name__", "<lambda>")
             # 异步执行回调，保留强引用防止 GC 回收
             try:
-                task = asyncio.create_task(callback(event))
+                task = asyncio.create_task(
+                    callback(event),
+                    name="butterbot.event.%s.%s"
+                    % (subscriber.owner_id or "application", callback_name),
+                )
             except BaseException:
                 if capacity is not None:
                     capacity.release()

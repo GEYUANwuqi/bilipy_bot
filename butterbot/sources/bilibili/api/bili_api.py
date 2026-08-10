@@ -17,6 +17,25 @@ if TYPE_CHECKING:
 _log = getLogger("BilibiliApi")
 
 
+def _prefer_aiohttp_client() -> None:
+    """优先使用已安装的 aiohttp 后端，规避部分 WebSocket 客户端崩溃."""
+    try:
+        from bilibili_api import (
+            get_registered_clients,
+            get_selected_client,
+            select_client,
+        )
+
+        if "aiohttp" not in get_registered_clients():
+            return
+        selected, _ = get_selected_client()
+        if selected == "curl_cffi":
+            select_client("aiohttp")
+    except Exception:
+        # 客户端选择是尽力优化，不能遮蔽 API 自身的正常初始化。
+        _log.debug("无法选择 bilibili-api aiohttp 客户端", exc_info=True)
+
+
 class BilibiliApi(BaseApi):
     def __init__(self, credential: Credential | None) -> None:
         """初始化BilibiliApi客户端
@@ -33,6 +52,7 @@ class BilibiliApi(BaseApi):
             ctx: API 上下文
             config_key: 配置键
         """
+        _prefer_aiohttp_client()
         return cls(ctx.config.get_config(config_key))
 
     @property

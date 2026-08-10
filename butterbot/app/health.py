@@ -46,6 +46,35 @@ class PluginDiagnostic:
 
 
 @dataclass(frozen=True, slots=True)
+class EventBusDiagnostic:
+    """事件总线当前负载的非敏感快照."""
+
+    pending_callbacks: int
+    max_pending_callbacks: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class TaskDiagnostic:
+    """框架托管任务的非敏感诊断信息."""
+
+    owner_type: str
+    owner_id: str
+    task_name: str
+    task_kind: str
+    state: str
+
+
+@dataclass(frozen=True, slots=True)
+class PluginRuntimeDiagnostic:
+    """插件资源作用域和事件回调的运行时计数."""
+
+    plugin_id: str
+    background_tasks: int
+    cleanup_callbacks: int
+    pending_callbacks: int
+
+
+@dataclass(frozen=True, slots=True)
 class AppHealth:
     """应用、Source 和插件的一致性健康快照."""
 
@@ -57,3 +86,17 @@ class AppHealth:
     @property
     def healthy(self) -> bool:
         return self.state is AppHealthState.READY
+
+
+@dataclass(frozen=True, slots=True)
+class AppDiagnostics:
+    """面向可信插件和宿主的完整只读运行诊断快照.
+
+    快照不包含配置值、异常消息或 traceback，适合经业务权限检查后展示给
+    运维人员。详细错误继续只写入日志。
+    """
+
+    health: AppHealth
+    event_bus: EventBusDiagnostic
+    plugin_runtime: tuple[PluginRuntimeDiagnostic, ...]
+    tasks: tuple[TaskDiagnostic, ...]

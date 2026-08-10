@@ -12,7 +12,14 @@ from pathlib import Path
 
 import click
 
-from butterbot.app import AppHealth, BotApp, ConfigError, RuntimeConfig
+from butterbot.app import (
+    AppHealth,
+    BotApp,
+    ConfigError,
+    RuntimeConfig,
+    ShutdownAction,
+    ShutdownRequest,
+)
 
 from .errors import CliError
 from .loader import load_application
@@ -70,13 +77,52 @@ def run_application(
     def report_health(health: AppHealth) -> None:
         store.update_health(state.token, _runtime_health(health))
 
+    outcome: ShutdownRequest | None = None
     try:
-        app.run(health_reporter=report_health)
+        outcome = app.run(health_reporter=report_health)
         exit_code = 0
-        return 0
     finally:
         app._release_logging()
         store.mark_stopped(state.token, exit_code)
+    if outcome is not None and outcome.action is ShutdownAction.RESTART:
+        _exec_application(
+            application_path=application_path,
+            config_path=resolved_config_path,
+            debug=debug,
+            working_directory=working_directory,
+        )
+    return 0
+
+
+def _exec_application(
+    *,
+    application_path: str,
+    config_path: Path,
+    debug: bool,
+    working_directory: Path,
+) -> None:
+    """使用规范化入口和配置路径替换当前解释器.
+
+    不复用原始 ``sys.argv``，避免把一次性的 ``--background`` 等宿主参数带入
+    新进程。新解释器会重新读取磁盘配置，使运行期写入在重启后生效。
+    """
+    command = [
+        sys.executable,
+        "-m",
+        "butterbot.cli",
+        "run",
+        "-path",
+        application_path,
+        "-config",
+        str(config_path),
+    ]
+    if debug:
+        command.append("--debug")
+    try:
+        os.chdir(working_directory)
+        os.execv(command[0], command)
+    except OSError as exc:
+        raise CliError("应用已关闭，但无法启动新的解释器") from exc
 
 
 def _build_application(application_factory, config: RuntimeConfig) -> BotApp:

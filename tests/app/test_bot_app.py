@@ -13,6 +13,8 @@ from butterbot.app import (
     BotApp,
     ConfigBuilderRegistry,
     ConfigError,
+    DeclaredSourceRef,
+    ShutdownAction,
     SourceStopError,
 )
 from butterbot.app.config import RuntimeConfig
@@ -327,6 +329,47 @@ class TestBotAppYamlSourceSugar:
         app = BotApp(config, logging_mode="external")
 
         assert app.get_source(NapcatSource, "qq_account") is not None
+
+    @pytest.mark.asyncio
+    async def test_declared_source_can_be_removed_and_recreated(self, tmp_path):
+        """插件控制面只能按原 YAML 参数重建声明 Source."""
+        yaml_file = tmp_path / "config.yaml"
+        yaml_file.write_text(
+            "sources:\n"
+            "  qq_account:\n"
+            "    source_name: napcat\n"
+            "    kwarg:\n"
+            "      NapcatSource: {}\n"
+            "    url: ws://localhost:3001\n",
+            encoding="utf-8",
+        )
+        app = BotApp(
+            RuntimeConfig.from_yaml(yaml_file, environ={}),
+            logging_mode="external",
+        )
+        reference = DeclaredSourceRef("qq_account", "NapcatSource")
+
+        original = app.get_source(NapcatSource, "qq_account")
+        assert original is not None
+        assert await app.source_control.remove(reference) is original
+        assert app.source_control.declarations()[0].state == "absent"
+
+        recreated = await app.source_control.create(reference, start=False)
+        assert isinstance(recreated, NapcatSource)
+        assert recreated.uuid != original.uuid
+        assert recreated.config_key == "qq_account"
+        assert not recreated.running
+        await app.close()
+
+    @pytest.mark.asyncio
+    async def test_declared_source_rejects_unknown_reference(self, config):
+        app = BotApp(config, logging_mode="external")
+        with pytest.raises(ConfigError, match="声明不存在"):
+            await app.source_control.create(
+                DeclaredSourceRef("missing", "MissingSource"),
+                start=False,
+            )
+        await app.close()
 
     def test_rejects_injected_factory_registry(self, tmp_path):
         class ConfiguredSource(StubSource):
@@ -661,12 +704,38 @@ class TestBotAppRun:
         """run(duration) 到时应正常退出并完成关闭."""
         app = BotApp(config)
         source = app.add_source(StubSource)
-        app.run(duration=0.01)
+        outcome = app.run(duration=0.01)
 
+        assert outcome.action is ShutdownAction.STOP
         assert source.started
         assert source.stopped
         assert app.closed
         assert app.bus.closed
+
+    def test_restart_request_returns_only_after_close(self, config):
+        """Handler 发出的重启请求不能绕过完整清理流程."""
+
+        class RestartingSource(StubSource):
+            async def on_start(self):
+                await super().on_start()
+                self.ctx.config.get_config("app").request_shutdown(
+                    ShutdownAction.RESTART,
+                    requested_by="test",
+                    reason="配置已更新",
+                )
+
+        config_with_app = RuntimeConfig()
+        app = BotApp(config_with_app, logging_mode="external")
+        # 测试 Source 通过只读配置取得宿主，模拟插件 Handler 发出请求。
+        config_with_app._configs["app"] = app
+        source = app.add_source(RestartingSource)
+
+        outcome = app.run()
+
+        assert outcome.action is ShutdownAction.RESTART
+        assert outcome.reason == "配置已更新"
+        assert source.stopped
+        assert app.closed
 
     def test_run_reports_ready_and_stopped_health(self, config):
         """运行期 reporter 应能向 CLI 持久化 ready 和最终 stopped."""

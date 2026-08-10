@@ -16,7 +16,7 @@ import yaml
 from click.testing import CliRunner
 
 from butterbot import __version__
-from butterbot.app import BotApp
+from butterbot.app import BotApp, ShutdownAction, ShutdownRequest
 from butterbot.cli import runtime as runtime_module
 from butterbot.cli.errors import CliError
 from butterbot.cli.main import cli, main
@@ -128,6 +128,61 @@ def test_background_spawn_omits_config_when_not_specified(
     )
 
     assert captured["config_path"] is None
+
+
+def test_run_restart_execs_normalized_command_after_state_is_stopped(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """重启必须重读指定配置，且 exec 前运行状态已经完成落盘."""
+    config_path = tmp_path / "production.yaml"
+    config_path.write_text("plugins:\n  enabled: false\n", encoding="utf-8")
+    _write_application(tmp_path / "runtime_app.py")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(
+        BotApp,
+        "run",
+        lambda self, **kwargs: ShutdownRequest(
+            ShutdownAction.RESTART,
+            time.time(),
+            "test.plugin",
+            "配置更新",
+        ),
+    )
+    captured: dict[str, object] = {}
+
+    def fake_exec(path: str, command: list[str]) -> None:
+        state = StateStore(tmp_path / ".butterbot" / "runtime.json").load()
+        assert state is not None
+        assert state.status == "stopped"
+        captured.update(path=path, command=command)
+
+    monkeypatch.setattr(os, "execv", fake_exec)
+
+    assert (
+        run_application(
+            application=None,
+            application_override="runtime_app.app",
+            config_path=config_path,
+            background=False,
+            debug=True,
+        )
+        == 0
+    )
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert command == [
+        sys.executable,
+        "-m",
+        "butterbot.cli",
+        "run",
+        "-path",
+        "runtime_app.app",
+        "-config",
+        str(config_path.resolve()),
+        "--debug",
+    ]
 
 
 def test_restart_spawn_omits_config_when_state_used_default(

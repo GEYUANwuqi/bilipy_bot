@@ -8,6 +8,10 @@ from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
+from butterbot.app.health import AppDiagnostics
+from butterbot.app.shutdown import ShutdownAction
+from butterbot.app.source_control import RuntimeSourceController
+
 from .config import PluginConfig
 from .routing import SourceRef
 
@@ -37,6 +41,17 @@ class PluginScope:
     def cleanup_count(self) -> int:
         """返回尚未执行的清理回调数量."""
         return len(self._cleanups)
+
+    def _task_diagnostics(self) -> tuple[tuple[str, str], ...]:
+        """返回活动后台任务的名称和状态，仅供应用诊断聚合."""
+        return tuple(
+            (
+                task.get_name(),
+                "cancelling" if task.cancelling() else "pending",
+            )
+            for task in self._tasks
+            if not task.done()
+        )
 
     def spawn(
         self,
@@ -207,6 +222,11 @@ class PluginContext:
         self._get_source: Callable[[SourceRef], object | None] | None = None
         self._get_sources: Callable[[SourceRef], tuple[object, ...]] | None = None
         self._get_api: Callable[[type[Any], str], Any] | None = None
+        self._get_diagnostics: Callable[[], AppDiagnostics] | None = None
+        self._request_shutdown: (
+            Callable[[ShutdownAction, str, str | None], bool] | None
+        ) = None
+        self._source_control: RuntimeSourceController | None = None
 
     @property
     def plugin_id(self) -> str:
@@ -293,6 +313,30 @@ class PluginContext:
             raise ValueError("get_api 需要显式 config_key 或插件级 config_key")
         return cast(_ApiT, self._get_api(api_cls, resolved_key))
 
+    def get_diagnostics(self) -> AppDiagnostics:
+        """返回应用的安全结构化运行诊断快照."""
+        if self._get_diagnostics is None:
+            raise RuntimeError("插件尚未绑定应用运行上下文")
+        return self._get_diagnostics()
+
+    def request_shutdown(
+        self,
+        action: ShutdownAction = ShutdownAction.STOP,
+        *,
+        reason: str | None = None,
+    ) -> bool:
+        """请求应用优雅退出或重启，不直接在 Handler 内关闭资源."""
+        if self._request_shutdown is None:
+            raise RuntimeError("插件尚未绑定应用运行上下文")
+        return self._request_shutdown(action, self.plugin_id, reason)
+
+    @property
+    def source_control(self) -> RuntimeSourceController:
+        """返回只管理 YAML 已声明实例的运行期 Source 控制器."""
+        if self._source_control is None:
+            raise RuntimeError("插件尚未绑定应用运行上下文")
+        return self._source_control
+
     def spawn(
         self,
         coroutine: Coroutine[Any, Any, _ResultT],
@@ -310,10 +354,16 @@ class PluginContext:
         get_source: Callable[[SourceRef], object | None],
         get_sources: Callable[[SourceRef], tuple[object, ...]],
         get_api: Callable[[type[Any], str], Any],
+        get_diagnostics: Callable[[], AppDiagnostics],
+        request_shutdown: Callable[[ShutdownAction, str, str | None], bool],
+        source_control: RuntimeSourceController,
     ) -> None:
         self._get_source = get_source
         self._get_sources = get_sources
         self._get_api = get_api
+        self._get_diagnostics = get_diagnostics
+        self._request_shutdown = request_shutdown
+        self._source_control = source_control
 
 
 __all__ = [

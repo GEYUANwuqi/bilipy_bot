@@ -8,8 +8,9 @@ from dataclasses import field as dataclass_field
 from enum import StrEnum
 from logging import getLogger
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
-from butterbot.core.exceptions import LifecycleError
+from butterbot.core.exceptions import LifecycleError, SourceError
 from butterbot.plugin.contracts.context import PluginScope
 from butterbot.plugin.discovery.catalog import LoadedPlugin, PluginCatalog
 from butterbot.plugin.discovery.settings import PluginLifecyclePolicy
@@ -157,6 +158,60 @@ class PluginManager:
                 receipts.append(make_receipt(runtime))
         return tuple(receipts)
 
+    def task_diagnostics(
+        self,
+    ) -> tuple[tuple[str, int, int, tuple[tuple[str, str], ...]], ...]:
+        """返回插件资源作用域的安全运行快照."""
+        return tuple(
+            (
+                record.plugin_id,
+                record.loaded.instance.context.scope.task_count,
+                record.loaded.instance.context.scope.cleanup_count,
+                record.loaded.instance.context.scope._task_diagnostics(),
+            )
+            for record in self._ordered_records()
+        )
+
+    def attach_source(self, source: object) -> None:
+        """把匹配的声明式 Handler 原子附着到运行期新建 Source."""
+        if not self._registered or self._closed:
+            return
+        source_kind = getattr(source, "source_kind", None)
+        config_key = getattr(source, "config_key", None)
+        source_id = getattr(source, "uuid", None)
+        if not isinstance(source_id, UUID):
+            raise TypeError("运行期 Source 必须提供 UUID")
+        attached: list[PluginRegistrar] = []
+        try:
+            for record in self._ordered_records():
+                registrar = self._runtime_registrars[record.plugin_id]
+                for spec in record.loaded.instance._subscription_specs():
+                    if spec.source.source_kind != source_kind:
+                        continue
+                    if (
+                        spec.source.config_key is not None
+                        and spec.source.config_key != config_key
+                    ):
+                        continue
+                    matches = self._app.get_sources(spec.source) if self._app else ()
+                    if len(matches) > 1 and not spec.allow_multiple:
+                        raise SourceError(
+                            "运行期 SourceRef %r 匹配到 %s 个事件源; "
+                            "请指定 config_key 或启用 allow_multiple"
+                            % (spec.source, len(matches))
+                        )
+                    registrar.attach_subscription(spec, source_id)
+                    attached.append(registrar)
+        except BaseException:
+            for registrar in set(attached):
+                registrar.detach_source(source_id)
+            raise
+
+    def detach_source(self, source_id: UUID) -> None:
+        """在 Source 删除前撤销插件订阅并清理持有的句柄."""
+        for registrar in self._runtime_registrars.values():
+            registrar.detach_source(source_id)
+
     def bind(self, app: "BotApp") -> None:
         """绑定应用查询能力并校验每个插件的只读配置."""
         if self._closed:
@@ -196,6 +251,15 @@ class PluginManager:
                     get_source=app.get_source,
                     get_sources=app.get_sources,
                     get_api=app.get_api,
+                    get_diagnostics=lambda owner=app: owner.diagnostics,
+                    request_shutdown=lambda action, requested_by, reason, owner=app: (
+                        owner.request_shutdown(
+                            action,
+                            requested_by=requested_by,
+                            reason=reason,
+                        )
+                    ),
+                    source_control=app.source_control,
                 )
         except BaseException as exc:
             self._mark_failure(

@@ -124,11 +124,17 @@ class ButterPlugin(Generic[_PluginConfigT]):
         get_source: Callable[[SourceRef], object | None],
         get_sources: Callable[[SourceRef], tuple[object, ...]],
         get_api: Callable[[type[Any], str], Any],
+        get_diagnostics: Callable[[], Any],
+        request_shutdown: Callable[[Any, str, str | None], bool],
+        source_control: Any,
     ) -> None:
         self.context._bind_runtime(
             get_source=get_source,
             get_sources=get_sources,
             get_api=get_api,
+            get_diagnostics=get_diagnostics,
+            request_shutdown=request_shutdown,
+            source_control=source_control,
         )
 
     def _subscription_specs(self) -> tuple[SubscriptionSpec, ...]:

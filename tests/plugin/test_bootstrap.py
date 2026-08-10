@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import os
 import subprocess
 import sys
@@ -10,7 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from butterbot.app import BotApp, RuntimeConfig
+from butterbot.app import (
+    BotApp,
+    ConfigBuilderRegistry,
+    DeclaredSourceRef,
+    RuntimeConfig,
+)
+from butterbot.app.source_factory import SourceFactoryRegistry
 from butterbot.core.data import BaseDataMixin
 from butterbot.core.event import Event
 from butterbot.core.source import BaseSource
@@ -45,6 +52,75 @@ class RuntimeSource(BaseSource):
 class FailingSource(RuntimeSource):
     async def on_start(self) -> None:
         raise RuntimeError("source failed")
+
+
+@pytest.mark.asyncio
+async def test_declared_source_recreation_rebinds_plugin_handlers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """删除再创建声明 Source 后，插件 Handler 和任务诊断仍然有效."""
+    plugin_root = tmp_path / "plugins"
+    _write_plugin(
+        plugin_root,
+        code=(
+            "import asyncio\n"
+            "import builtins\n"
+            "from butterbot.plugin import ButterPlugin, register\n"
+            "\n"
+            "class RuntimeHandlerPlugin(ButterPlugin):\n"
+            "    async def on_start(self):\n"
+            "        self.context.spawn(asyncio.Event().wait(), name='runtime-worker')\n"
+            "\n"
+            "    @register('runtime.events', 'runtime.message')\n"
+            "    async def receive(self, event):\n"
+            "        builtins.RUNTIME_RECEIVED.append(event.data.value)\n"
+        ),
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "plugins:\n"
+        "  enabled: true\n"
+        "  plugin_list: [RuntimeHandlerPlugin]\n"
+        "  plugin_path: ./plugins\n"
+        "sources:\n"
+        "  runtime_account:\n"
+        "    source_name: runtime\n"
+        "    kwarg:\n"
+        "      RuntimeSource: {}\n",
+        encoding="utf-8",
+    )
+    builders = ConfigBuilderRegistry()
+    builders.register("runtime", lambda value: value)
+    factories = SourceFactoryRegistry()
+    factories.register(
+        "runtime",
+        RuntimeSource,
+        factory_name="RuntimeSource",
+    )
+    monkeypatch.setattr(
+        SourceFactoryRegistry,
+        "with_defaults",
+        classmethod(lambda cls: factories.copy()),
+    )
+    monkeypatch.setattr(builtins, "RUNTIME_RECEIVED", [], raising=False)
+    config = RuntimeConfig.from_yaml(config_path, builder_registry=builders)
+    app = BotApp(config, logging_mode="external")
+
+    await app.start()
+    await asyncio.sleep(0)
+    assert getattr(builtins, "RUNTIME_RECEIVED") == ["ready"]
+    diagnostics = app.diagnostics
+    assert diagnostics.plugin_runtime[0].background_tasks == 1
+    assert any(task.task_name == "runtime-worker" for task in diagnostics.tasks)
+
+    reference = DeclaredSourceRef("runtime_account", "RuntimeSource")
+    await app.source_control.remove(reference)
+    await app.source_control.create(reference)
+    await asyncio.sleep(0)
+
+    assert getattr(builtins, "RUNTIME_RECEIVED") == ["ready", "ready"]
+    await app.close()
 
 
 def _write_plugin(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from butterbot.core.event import SubscriptionHandle
 from butterbot.core.exceptions import LifecycleError, SourceError
@@ -105,6 +106,37 @@ class _RuntimeRegistrationTransaction:
                 self._subscriptions.remove(handle)
             raise
         return tuple(created)
+
+    def attach_subscription(
+        self,
+        spec: SubscriptionSpec,
+        source_id: UUID,
+    ) -> SubscriptionHandle:
+        """为运行期新建 Source 追加一条已声明订阅."""
+        if self._closed or not self._committed:
+            raise LifecycleError("插件订阅尚未提交或已经关闭")
+        source = self._app.get_source(source_id)
+        if source is None:
+            raise SourceError("运行期事件源不存在")
+        handle = self._app.add_subscriber(
+            source.uuid,
+            spec.callback,
+            spec.status,
+            event_filter=spec.event_filter,
+            owner_id=self._owner_id,
+        )
+        self._subscriptions.append(handle)
+        return handle
+
+    def detach_source(self, source_id: UUID) -> None:
+        """撤销并遗忘指向一个运行期 Source 的全部订阅句柄."""
+        retained: list[SubscriptionHandle] = []
+        for handle in self._subscriptions:
+            if handle.source_id == source_id:
+                self._app.bus.remove_subscription(handle)
+            else:
+                retained.append(handle)
+        self._subscriptions = retained
 
     def commit(self) -> None:
         """提交注册事务; 之后只能整体关闭."""

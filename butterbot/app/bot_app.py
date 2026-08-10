@@ -24,10 +24,20 @@ if TYPE_CHECKING:
 
 from .config import RuntimeConfig
 from .health import (
+    AppDiagnostics,
     AppHealth,
     AppHealthState,
+    EventBusDiagnostic,
     PluginDiagnostic,
+    PluginRuntimeDiagnostic,
     SourceDiagnostic,
+    TaskDiagnostic,
+)
+from .shutdown import ShutdownAction, ShutdownRequest
+from .source_control import (
+    DeclaredSourceDiagnostic,
+    DeclaredSourceRef,
+    RuntimeSourceController,
 )
 from .source_factory import SourceFactoryEntry, SourceFactoryRegistry
 from .source_manager import SourceManager
@@ -42,6 +52,14 @@ class _OptionalRuntime(Protocol):
 
     @property
     def statuses(self) -> tuple[Any, ...]: ...
+
+    def task_diagnostics(
+        self,
+    ) -> tuple[tuple[str, int, int, tuple[tuple[str, str], ...]], ...]: ...
+
+    def attach_source(self, source: object) -> None: ...
+
+    def detach_source(self, source_id: object) -> None: ...
 
     async def register(self) -> None: ...
 
@@ -133,9 +151,20 @@ class BotApp:
 
             # 事件源生命周期管理器
             self._manager = SourceManager(self._ctx)
+            self._source_factories = SourceFactoryRegistry.with_defaults()
+            self._declared_arguments: dict[
+                DeclaredSourceRef, tuple[str, SourceFactoryEntry, dict[str, Any]]
+            ] = {}
+            self._declared_instances: dict[DeclaredSourceRef, UUID] = {}
+            self._declared_last_kind: dict[DeclaredSourceRef, str | None] = {}
+            self._source_control = RuntimeSourceController(self)
+            self._source_control_lock: asyncio.Lock | None = None
             self._optional_runtime: _OptionalRuntime | None = None
             self._close_timeout = close_timeout
             self._logging_lease: LoggingLease | None = logging_lease
+            self._shutdown_event: asyncio.Event | None = None
+            self._shutdown_request: ShutdownRequest | None = None
+            self._runtime_loop: asyncio.AbstractEventLoop | None = None
             configured_source_ids = self._add_configured_sources()
             try:
                 if self._config.plugin_enabled:
@@ -159,21 +188,22 @@ class BotApp:
         self,
     ) -> list[UUID]:
         """注册 YAML ``kwarg`` 显式声明的 Source 实例."""
-        configured: list[tuple[str, SourceFactoryEntry, dict[str, Any]]] = []
+        configured: list[
+            tuple[DeclaredSourceRef, SourceFactoryEntry, dict[str, Any]]
+        ] = []
         definitions = tuple(self._config.source_definitions.values())
         if not any(definition.kwarg for definition in definitions):
             return []
 
-        resolved_registry = SourceFactoryRegistry.with_defaults()
         for definition in definitions:
             for factory_name, arguments in definition.kwarg.items():
-                factory_entry = resolved_registry.resolve(
+                factory_entry = self._source_factories.resolve(
                     definition.source_name,
                     factory_name,
                 )
                 if factory_entry is None:
                     available = ", ".join(
-                        resolved_registry.names(definition.source_name)
+                        self._source_factories.names(definition.source_name)
                     )
                     raise ConfigError(
                         "Source 配置 '%s' 的自动实例 '%s' 未注册；"
@@ -187,29 +217,45 @@ class BotApp:
                     )
                 kwargs = dict(arguments)
                 kwargs["config_key"] = definition.config_key
+                reference = DeclaredSourceRef(
+                    definition.config_key,
+                    factory_entry.factory_id,
+                )
+                self._declared_arguments[reference] = (
+                    definition.source_name,
+                    factory_entry,
+                    dict(kwargs),
+                )
                 configured.append(
                     (
-                        definition.config_key,
+                        reference,
                         factory_entry,
                         kwargs,
                     )
                 )
 
         added_source_ids: list[UUID] = []
-        for config_key, factory_entry, kwargs in configured:
+        for reference, factory_entry, kwargs in configured:
             try:
                 source = self._manager.add_source(factory_entry.factory, **kwargs)
                 added_source_ids.append(source.uuid)
+                self._declared_instances[reference] = source.uuid
+                self._declared_last_kind[reference] = source.source_kind
             except BaseException as exc:
                 for source_id in reversed(added_source_ids):
                     self._manager.discard_unstarted_source(source_id)
+                self._declared_instances.clear()
                 if not isinstance(exc, Exception):
                     raise
                 if isinstance(exc, ConfigError):
                     raise
                 raise ConfigError(
                     "Source 配置 '%s' 自动实例化 '%s' 失败（%s）"
-                    % (config_key, factory_entry.factory_id, type(exc).__name__)
+                    % (
+                        reference.config_key,
+                        factory_entry.factory_id,
+                        type(exc).__name__,
+                    )
                 ) from exc
         return added_source_ids
 
@@ -248,6 +294,120 @@ class BotApp:
     def manager(self) -> SourceManager:
         """获取事件源管理器."""
         return self._manager
+
+    @property
+    def source_control(self) -> RuntimeSourceController:
+        """返回只管理 YAML 声明实例的运行期 Source 控制器."""
+        return self._source_control
+
+    def _source_control_mutex(self) -> asyncio.Lock:
+        lock = self._source_control_lock
+        if lock is None:
+            lock = asyncio.Lock()
+            self._source_control_lock = lock
+        return lock
+
+    def _declared_source_diagnostics(
+        self,
+    ) -> tuple[DeclaredSourceDiagnostic, ...]:
+        result: list[DeclaredSourceDiagnostic] = []
+        for reference, (source_name, _, _) in self._declared_arguments.items():
+            source_id = self._declared_instances.get(reference)
+            source = self._manager.get_source(source_id) if source_id else None
+            result.append(
+                DeclaredSourceDiagnostic(
+                    reference=reference,
+                    source_name=source_name,
+                    source_id=source.uuid if source is not None else None,
+                    source_kind=(
+                        source.source_kind
+                        if source is not None
+                        else self._declared_last_kind.get(reference)
+                    ),
+                    state=(
+                        source.health.state.value if source is not None else "absent"
+                    ),
+                )
+            )
+        return tuple(result)
+
+    def _require_declared_source(self, reference: DeclaredSourceRef) -> BaseSource:
+        if reference not in self._declared_arguments:
+            raise ConfigError("事件源声明不存在: %r" % (reference,))
+        source_id = self._declared_instances.get(reference)
+        source = self._manager.get_source(source_id) if source_id else None
+        if source is None:
+            raise ConfigError("事件源声明尚未实例化: %r" % (reference,))
+        return source
+
+    async def _create_declared_source(
+        self,
+        reference: DeclaredSourceRef,
+        *,
+        start: bool,
+    ) -> BaseSource:
+        if not isinstance(start, bool):
+            raise TypeError("start 必须是布尔值")
+        async with self._source_control_mutex():
+            declaration = self._declared_arguments.get(reference)
+            if declaration is None:
+                raise ConfigError("事件源声明不存在: %r" % (reference,))
+            existing_id = self._declared_instances.get(reference)
+            if existing_id is not None and self._manager.get_source(existing_id):
+                raise ConfigError("事件源声明已经实例化: %r" % (reference,))
+            _, factory_entry, arguments = declaration
+            source = self._manager.add_source(
+                factory_entry.factory,
+                **dict(arguments),
+            )
+            self._declared_instances[reference] = source.uuid
+            self._declared_last_kind[reference] = source.source_kind
+            try:
+                if self._optional_runtime is not None:
+                    self._optional_runtime.attach_source(source)
+                if start:
+                    await self._manager.start_source(source)
+            except BaseException:
+                if self._optional_runtime is not None:
+                    self._optional_runtime.detach_source(source.uuid)
+                try:
+                    await self._manager.remove_source(source.uuid)
+                finally:
+                    self._declared_instances.pop(reference, None)
+                raise
+            return source
+
+    async def _start_declared_source(self, reference: DeclaredSourceRef) -> BaseSource:
+        async with self._source_control_mutex():
+            return await self._manager.start_source(
+                self._require_declared_source(reference)
+            )
+
+    async def _stop_declared_source(self, reference: DeclaredSourceRef) -> BaseSource:
+        async with self._source_control_mutex():
+            return await self._manager.stop_source(
+                self._require_declared_source(reference)
+            )
+
+    async def _remove_declared_source(
+        self, reference: DeclaredSourceRef
+    ) -> BaseSource | None:
+        async with self._source_control_mutex():
+            if reference not in self._declared_arguments:
+                raise ConfigError("事件源声明不存在: %r" % (reference,))
+            source_id = self._declared_instances.get(reference)
+            if source_id is None:
+                return None
+            source = self._manager.get_source(source_id)
+            if source is None:
+                self._declared_instances.pop(reference, None)
+                return None
+            await self._manager.stop_source(source)
+            if self._optional_runtime is not None:
+                self._optional_runtime.detach_source(source.uuid)
+            removed = await self._manager.remove_source(source.uuid)
+            self._declared_instances.pop(reference, None)
+            return removed
 
     @property
     def running(self) -> bool:
@@ -311,6 +471,104 @@ class BotApp:
             sources=sources,
             plugins=plugins,
         )
+
+    @property
+    def diagnostics(self) -> AppDiagnostics:
+        """返回应用、Source、插件与框架托管任务的安全快照."""
+        plugin_snapshots = (
+            self._optional_runtime.task_diagnostics()
+            if self._optional_runtime is not None
+            else ()
+        )
+        plugin_runtime = tuple(
+            PluginRuntimeDiagnostic(
+                plugin_id=plugin_id,
+                background_tasks=task_count,
+                cleanup_callbacks=cleanup_count,
+                pending_callbacks=self.bus.pending_callbacks_for(plugin_id),
+            )
+            for plugin_id, task_count, cleanup_count, _ in plugin_snapshots
+        )
+        tasks = [
+            TaskDiagnostic(
+                owner_type="plugin",
+                owner_id=plugin_id,
+                task_name=name,
+                task_kind="background",
+                state=state,
+            )
+            for plugin_id, _, _, task_snapshots in plugin_snapshots
+            for name, state in task_snapshots
+        ]
+        tasks.extend(
+            TaskDiagnostic(
+                owner_type=("plugin" if owner != "<application>" else "application"),
+                owner_id=owner,
+                task_name=name,
+                task_kind="event_callback",
+                state=state,
+            )
+            for owner, name, state in self.bus.task_diagnostics()
+        )
+        return AppDiagnostics(
+            health=self.health,
+            event_bus=EventBusDiagnostic(
+                pending_callbacks=self.bus.pending_callbacks,
+                max_pending_callbacks=self.bus.max_pending_callbacks,
+            ),
+            plugin_runtime=plugin_runtime,
+            tasks=tuple(tasks),
+        )
+
+    @property
+    def shutdown_request(self) -> ShutdownRequest | None:
+        """返回已经接受的退出请求；尚未请求时返回 ``None``."""
+        return self._shutdown_request
+
+    def request_shutdown(
+        self,
+        action: ShutdownAction = ShutdownAction.STOP,
+        *,
+        requested_by: str = "application",
+        reason: str | None = None,
+    ) -> bool:
+        """请求宿主结束运行；首个请求生效并唤醒所有等待者.
+
+        该方法只发出意图，不直接关闭资源，因此可安全地从事件回调中调用。
+        ``BotApp.run`` 会在完整关闭后把请求返回给宿主。
+        """
+        if not isinstance(action, ShutdownAction):
+            action = ShutdownAction(action)
+        if not requested_by or requested_by != requested_by.strip():
+            raise ValueError("requested_by 必须是非空且无首尾空白的字符串")
+        if reason is not None:
+            if not isinstance(reason, str):
+                raise TypeError("reason 必须是字符串或 None")
+            reason = reason.strip() or None
+        if self._shutdown_request is not None:
+            return False
+        self._shutdown_request = ShutdownRequest(
+            action=action,
+            requested_at=time.time(),
+            requested_by=requested_by,
+            reason=reason,
+        )
+        event = self._shutdown_event
+        loop = self._runtime_loop
+        if event is not None and loop is not None:
+            loop.call_soon_threadsafe(event.set)
+        return True
+
+    async def wait_for_shutdown(self) -> ShutdownRequest:
+        """等待并返回首个退出请求，供异步宿主使用."""
+        if self._shutdown_request is not None:
+            return self._shutdown_request
+        if self._shutdown_event is None:
+            self._shutdown_event = asyncio.Event()
+            self._runtime_loop = asyncio.get_running_loop()
+        await self._shutdown_event.wait()
+        assert self._shutdown_request is not None
+        return self._shutdown_request
 
     # ============ Source 管理（委托 SourceManager）============ #
 
@@ -636,7 +894,7 @@ class BotApp:
         install_signal_handlers: bool | None = None,
         health_reporter: Callable[[AppHealth], None] | None = None,
         health_interval: float = 1.0,
-    ) -> None:
+    ) -> ShutdownRequest:
         """阻塞运行 BotApp，直到被中断或达到指定时长.
 
         这是最简使用方式，适合大多数场景。
@@ -666,9 +924,12 @@ class BotApp:
             else install_signal_handlers
         )
 
-        async def _run() -> None:
+        async def _run() -> ShutdownRequest:
             loop = asyncio.get_running_loop()
-            stop_event = asyncio.Event()
+            self._runtime_loop = loop
+            self._shutdown_event = asyncio.Event()
+            if self._shutdown_request is not None:
+                self._shutdown_event.set()
             installed: list[signal.Signals] = []
             report_task: asyncio.Task[None] | None = None
 
@@ -688,7 +949,13 @@ class BotApp:
             if should_install_signals:
                 for sig in (signal.SIGINT, signal.SIGTERM):
                     try:
-                        loop.add_signal_handler(sig, stop_event.set)
+                        loop.add_signal_handler(
+                            sig,
+                            lambda signal_name=sig.name: self.request_shutdown(
+                                ShutdownAction.STOP,
+                                requested_by="signal:%s" % signal_name,
+                            ),
+                        )
                     except (
                         NotImplementedError,
                         RuntimeError,
@@ -706,14 +973,25 @@ class BotApp:
                         report_task = asyncio.create_task(report_health())
                     if duration is not None:
                         try:
-                            await asyncio.wait_for(stop_event.wait(), timeout=duration)
+                            request = await asyncio.wait_for(
+                                self.wait_for_shutdown(), timeout=duration
+                            )
                         except TimeoutError:
                             _log.info("BotApp 运行 %s 秒，自动停止", duration)
+                            self.request_shutdown(
+                                ShutdownAction.STOP,
+                                requested_by="duration",
+                                reason="运行时长已到",
+                            )
+                            request = await self.wait_for_shutdown()
                         else:
-                            _log.info("BotApp 收到停止信号，正在关闭")
+                            _log.info(
+                                "BotApp 收到退出请求 %s，正在关闭", request.action
+                            )
                     else:
-                        await stop_event.wait()
-                        _log.info("BotApp 收到停止信号，正在关闭")
+                        request = await self.wait_for_shutdown()
+                        _log.info("BotApp 收到退出请求 %s，正在关闭", request.action)
+                    return request
             finally:
                 if report_task is not None:
                     report_task.cancel()
@@ -721,11 +999,18 @@ class BotApp:
                 await emit_health()
                 for sig in installed:
                     loop.remove_signal_handler(sig)
+                self._runtime_loop = None
 
         try:
-            asyncio.run(_run())
+            return asyncio.run(_run())
         except KeyboardInterrupt:
             _log.info("BotApp 被用户中断")
+            self.request_shutdown(
+                ShutdownAction.STOP,
+                requested_by="keyboard_interrupt",
+            )
+            assert self._shutdown_request is not None
+            return self._shutdown_request
 
     # ============ 异步上下文管理器 ============ #
 

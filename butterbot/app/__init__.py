@@ -24,20 +24,39 @@ from .config import (
     SourceDefinition,
     register_builder,
 )
-from .health import AppHealth, AppHealthState, PluginDiagnostic, SourceDiagnostic
+from .health import (
+    AppDiagnostics,
+    AppHealth,
+    AppHealthState,
+    EventBusDiagnostic,
+    PluginDiagnostic,
+    PluginRuntimeDiagnostic,
+    SourceDiagnostic,
+    TaskDiagnostic,
+)
+from .shutdown import ShutdownAction, ShutdownRequest
 from .source_catalog import SourceCatalog, SourceCatalogEntry
+from .source_control import (
+    DeclaredSourceDiagnostic,
+    DeclaredSourceRef,
+    RuntimeSourceController,
+)
 
 __all__ = [
     # 应用主入口
     "AppHealth",
     "AppHealthState",
+    "AppDiagnostics",
     "BotApp",
     # 事件
     "Event",
     # 配置
     "BuilderRegistration",
     "ConfigBuilderRegistry",
+    "DeclaredSourceDiagnostic",
+    "DeclaredSourceRef",
     "RuntimeConfig",
+    "RuntimeSourceController",
     "SourceDefinition",
     "SourceCatalog",
     "SourceCatalogEntry",
@@ -47,6 +66,7 @@ __all__ = [
     "BaseFilter",
     "OrFilter",
     "PluginDiagnostic",
+    "PluginRuntimeDiagnostic",
     # 异常层级
     "ApiError",
     "ButterError",
@@ -54,6 +74,10 @@ __all__ = [
     "LifecycleError",
     "SourceError",
     "SourceDiagnostic",
+    "EventBusDiagnostic",
+    "TaskDiagnostic",
+    "ShutdownAction",
+    "ShutdownRequest",
     "SourceStartError",
     "SourceStopError",
     "SubscriptionError",
