@@ -14,6 +14,7 @@ title: 事件源介绍
 | --- | --- | --- | --- |
 | NapCat | `NapcatSource` | OneBot 消息、通知、请求与 action API | [NapCat](./napcat.md) |
 | Bilibili | `BiliDynamicSource` 等 | 动态、直播状态和直播弹幕 | [Bilibili](./bilibili.md) |
+| 飞书 | `LarkSource` | WebSocket 事件与常用 IM OpenAPI | [飞书](./lark.md) |
 
 每个 Source 都有独立 `uuid`，订阅通过这个 ID 隔离不同实例。`config_key` 则把
 Source 与对应账号的配置和 API 单例关联起来，因此同一平台可以配置多个账号。
@@ -27,7 +28,8 @@ Source 与对应账号的配置和 API 单例关联起来，因此同一平台�
 4. 需要主动操作平台时，通过 `app.get_api()` 获取同一配置键的 API。
 
 完整配置和代码以各平台页面为准。应用启动后增删、暂停或恢复 Source，参见
-[运行期事件源管理](./runtime-management.md)。
+[运行期事件源管理](./runtime-management.md)；常用调用方式参见
+[事件源 Data / API](./api-usage.md)。
 
 ## 内容边界
 

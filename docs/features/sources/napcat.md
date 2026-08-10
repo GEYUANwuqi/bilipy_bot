@@ -107,6 +107,9 @@ await api.set_group_ban(group_id=123456, user_id=654321, duration=60)
 业务方法统一通过 `call_action(action, **params)` 封装 NapCat action；尚未提供
 便捷方法的低频 action 也可以直接通过该入口调用。
 
+事件 Data 字段、消息段读取、事件便捷方法和完整常用 action 清单见
+[NapCat Data 与 API](./api-usage.md#napcat-顶层导出)。
+
 ## 关闭行为
 
 `NapcatSource.on_stop()` 停止 `NapcatApi`；应用随后还会调用

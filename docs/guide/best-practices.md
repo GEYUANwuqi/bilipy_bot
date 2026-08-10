@@ -17,6 +17,7 @@ title: 示例与最佳实践
 - [无外部依赖的基础示例](./basic-example.md)
 - [NapCat 示例](./examples/napcat.md)
 - [Bilibili 示例](./examples/bilibili.md)
+- [飞书示例与配置](/features/sources/lark.html)
 
 “完整示例”表示文件具备入口和关闭路径，不表示仓库 CI 能访问第三方平台。
 需要外部服务的示例不会被标记为已端到端验证。插件示例由

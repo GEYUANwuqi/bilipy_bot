@@ -107,6 +107,10 @@ await source.start_room(123456)
 await source.remove_room(123456)
 ```
 
+`DynamicData`、`LiveRoomData`、弹幕、礼物和上舰模型的字段，以及
+`BilibiliApi` 查询方法见
+[Bilibili Data 与 API](./api-usage.md#bilibili-顶层导出)。
+
 ## 任务与错误边界
 
 - 两个轮询 Source 拥有自己的 monitor task，停止时取消并等待；

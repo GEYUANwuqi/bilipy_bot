@@ -44,5 +44,5 @@ from butterbot.core.types import BaseType, BaseTypeT
 | `matching_statuses(rule)` | 将规则展开为当前枚举中的具体状态 |
 
 字符串和正则均使用完整匹配。具体平台的 Data / Type 从对应事件源包导入，使用方式
-见[事件源指南](/features/sources/)；自定义模型见
+见 [事件源 Data / API](/features/sources/api-usage.md)；自定义模型见
 [自定义 Data / Type](/extensions/custom-data-types.md)。

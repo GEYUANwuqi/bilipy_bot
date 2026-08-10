@@ -32,9 +32,14 @@ export default defineCollections([
           { text: "事件源介绍", link: "/features/sources/" },
           { text: "NapCat", link: "/features/sources/napcat.html" },
           { text: "Bilibili", link: "/features/sources/bilibili.html" },
+          { text: "飞书", link: "/features/sources/lark.html" },
           {
             text: "运行期事件源管理",
             link: "/features/sources/runtime-management.html",
+          },
+          {
+            text: "事件源 Data / API",
+            link: "/features/sources/api-usage.html",
           },
         ],
       },
