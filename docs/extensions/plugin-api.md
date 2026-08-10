@@ -143,4 +143,11 @@ class HandlerPlugin(ButterPlugin):
   `PluginDiscoveryError`、`PluginRegistrationError`
 
 `SubscriptionSpec`、registrar、discovery、manager、运行状态和收据都是框架内部
-控制面，不从插件根包导出。应用诊断通过 `BotApp.health` 读取。
+控制面，不从插件根包导出。插件通过以下 `PluginContext` 方法使用受控运维能力：
+
+- `get_diagnostics()`：读取不含 secret 和异常消息的应用诊断；
+- `request_shutdown(ShutdownAction.RESTART, reason=...)`：请求宿主完整关闭后重启；
+- `source_control`：启停、删除或按原 YAML 参数重建声明 Source。
+
+框架只提供能力边界，不负责命令鉴权；插件必须在调用变更或退出接口前完成业务
+权限检查和高风险操作确认。

@@ -72,6 +72,25 @@ source = app.get_source(source_uuid)
 - `stop_source()` 不清理订阅；
 - `remove_source()` 清理订阅，但不单独关闭共享 API；API 由应用最终关闭。
 
+## 插件管理 YAML 声明实例
+
+插件不能创建任意 Source，只能管理 `sources.<config_key>.kwarg` 已声明的实例：
+
+```python
+from butterbot.app import DeclaredSourceRef
+
+reference = DeclaredSourceRef("bili_account", "BiliLiveSource")
+await self.context.source_control.stop(reference)
+await self.context.source_control.remove(reference)
+
+# 使用原 YAML kwargs 重建，并在恢复全部声明式订阅后启动。
+source = await self.context.source_control.create(reference)
+```
+
+`declarations()` 可读取 present/absent 和健康状态。删除只删除当前实例，不删除声明；
+创建失败、订阅恢复失败或启动失败时会回滚新实例。业务监听目标应优先通过 Source
+自身公开方法调整，不要为每个房间或 UID 创建独立 Source。
+
 ## 相关页面
 
 - [生命周期](/architecture/lifecycle.html)

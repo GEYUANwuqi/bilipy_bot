@@ -40,6 +40,9 @@ BotApp(
 | `manager` | `SourceManager` | Source 生命周期管理器 |
 | `running` / `closed` | `bool` | 应用运行状态 |
 | `health` | `AppHealth` | 应用、Source 与插件的健康快照 |
+| `diagnostics` | `AppDiagnostics` | 含任务与 EventBus 负载的脱敏诊断快照 |
+| `source_control` | `RuntimeSourceController` | YAML 声明 Source 的受控运行期入口 |
+| `shutdown_request` | `ShutdownRequest \| None` | 已接受的首个退出请求 |
 
 ## Source 管理
 
@@ -55,6 +58,25 @@ async remove_source(source_id: UUID) -> BaseSource | None
 `add_source()` 只登记，不自动启动。运行期接入顺序是 add、subscribe、
 `start_source()`。详细查询和清理语义见
 [SourceManager](/api/source/source-manager.md)。
+
+插件需要增删配置中已经声明的实例时使用 `PluginContext.source_control`，不能通过
+该接口传入任意 Source 类或构造参数。
+
+## 诊断与退出请求
+
+```python
+snapshot = app.diagnostics
+accepted = app.request_shutdown(
+    ShutdownAction.RESTART,
+    requested_by="operator",
+    reason="配置已更新",
+)
+request = await app.wait_for_shutdown()
+```
+
+诊断快照只包含状态、计数、任务名、异常类型和时间，不包含异常消息、配置值或
+traceback。`request_shutdown()` 只唤醒宿主，不在调用它的事件回调中关闭资源；
+首个请求生效，后续请求返回 `False`。
 
 ## API
 
@@ -102,12 +124,14 @@ run(
     install_signal_handlers: bool | None = None,
     health_reporter: Callable[[AppHealth], None] | None = None,
     health_interval: float = 1.0,
-) -> None
+) -> ShutdownRequest
 async __aenter__() -> BotApp
 async __aexit__(exc_type, exc_val, exc_tb) -> None
 ```
 
 `run()` 是同步阻塞入口并拥有 event loop，不能从已经运行的 event loop 中调用。
+它返回退出请求时，插件、Source、EventBus 和 API 已完成关闭。ButterBot CLI 在
+收到 `RESTART` 后使用规范化入口和配置路径启动新解释器，使磁盘上的新配置生效。
 `install_signal_handlers=None` 时使用 `cli_mode` 决定是否安装 `SIGINT` / `SIGTERM`
 handler。嵌入式应用优先使用 `async with app`。
 

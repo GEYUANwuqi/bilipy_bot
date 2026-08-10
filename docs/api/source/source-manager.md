@@ -19,3 +19,7 @@ title: SourceManager
 | `start()` / `stop()` / `close()` | 批量生命周期 |
 
 `discard_unstarted_source()` 是构造期回滚接口，不建议业务代码使用。
+
+插件不直接持有 `SourceManager`。需要运行期控制时使用
+`PluginContext.source_control`，其范围仅限 YAML 已声明实例，并会协调插件订阅的
+摘除和恢复。
