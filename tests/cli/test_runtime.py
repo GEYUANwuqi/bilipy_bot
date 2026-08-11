@@ -259,6 +259,42 @@ def test_spawn_background_builds_command_and_returns_registered_pid(
     assert captured["start_new_session"] is True
 
 
+def test_spawn_background_allows_slow_application_registration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pid = os.getpid()
+    state = _state(tmp_path)
+    process = _FakeProcess(pid, None)
+    elapsed = 0.0
+
+    class DelayedStore(_SpawnStore):
+        def load(self) -> RuntimeState | None:
+            return state if elapsed >= 6.0 else None
+
+    monkeypatch.setattr(runtime, "_state_store", lambda path: DelayedStore())
+    monkeypatch.setattr(runtime, "is_process_alive", lambda current: True)
+    monkeypatch.setattr(runtime.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(runtime, "_cleanup_background_process", lambda current: None)
+    monkeypatch.setattr(runtime.time, "monotonic", lambda: elapsed)
+
+    def advance_time(_seconds: float) -> None:
+        nonlocal elapsed
+        elapsed += 1.0
+
+    monkeypatch.setattr(runtime.time, "sleep", advance_time)
+
+    assert (
+        runtime._spawn_background(
+            application_path="slow.app",
+            config_path=None,
+            debug=False,
+            working_directory=tmp_path,
+        )
+        == pid
+    )
+
+
 def test_spawn_background_reports_child_exit_and_spawn_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -772,7 +772,7 @@ def test_background_start_timeout_kills_and_reaps_child(
     monkeypatch.setattr(runtime_module, "_BACKGROUND_START_TIMEOUT", 1.0)
     monkeypatch.setattr(runtime_module, "_BACKGROUND_CLEANUP_TIMEOUT", 0.1)
 
-    with pytest.raises(CliError, match="登记状态超时"):
+    with pytest.raises(CliError, match="登记状态超时") as error:
         runtime_module._spawn_background(
             application_path="slow_app.app",
             config_path=None,
@@ -780,6 +780,8 @@ def test_background_start_timeout_kills_and_reaps_child(
             working_directory=tmp_path,
         )
 
+    assert "1 秒" in str(error.value)
+    assert str(tmp_path / ".butterbot" / "butterbot.log") in str(error.value)
     pid = int((tmp_path / "slow.pid").read_text(encoding="utf-8"))
     _wait_until_process_exits(pid)
 

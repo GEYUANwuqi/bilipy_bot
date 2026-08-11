@@ -29,7 +29,7 @@ _STATE_DIRECTORY = ".butterbot"
 _STATE_FILENAME = "runtime.json"
 _LOG_FILENAME = "butterbot.log"
 _STOP_TIMEOUT = 10.0
-_BACKGROUND_START_TIMEOUT = 5.0
+_BACKGROUND_START_TIMEOUT = 30.0
 _BACKGROUND_CLEANUP_TIMEOUT = 2.0
 _HEALTH_STALE_SECONDS = 5.0
 _STATUS_NOT_RUNNING = 3
@@ -320,7 +320,10 @@ def _spawn_background(
         time.sleep(0.05)
 
     _cleanup_background_process(process)
-    raise CliError("等待 ButterBot 后台进程登记状态超时")
+    raise CliError(
+        "等待 ButterBot 后台进程登记状态超时（%.0f 秒），请检查日志 %s"
+        % (_BACKGROUND_START_TIMEOUT, log_file)
+    )
 
 
 def _cleanup_background_process(process: subprocess.Popen[bytes]) -> None:
