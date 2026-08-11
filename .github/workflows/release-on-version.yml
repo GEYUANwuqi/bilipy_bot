@@ -55,7 +55,7 @@ jobs:
             exit 1
           fi
 
-          if [[ "$PROJECT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ "$PROJECT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?$ ]]; then
             CHANNEL="stable"
             REQUIRED_BRANCH="main"
             PRERELEASE="false"
@@ -65,7 +65,7 @@ jobs:
             PRERELEASE="true"
           else
             echo "Invalid project version: $PROJECT_VERSION"
-            echo "Expected stable tag: v3.0.5"
+            echo "Expected stable tag: v3.0.5 or v3.0.5.post1"
             echo "Expected prerelease tag: v3.0.5.dev1, v3.0.5b1, or v3.0.5rc1"
             exit 1
           fi

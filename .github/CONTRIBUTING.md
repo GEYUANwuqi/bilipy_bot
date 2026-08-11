@@ -122,10 +122,11 @@ fix(core): 修复关闭时的任务泄漏
 
 ## 发布说明
 
-发布工作流只接受：
+发布工作流只接受 PEP 440 版本：
 
-- 稳定标签 `vX.Y.Z`，且提交位于 `main`；
-- 开发标签 `vX.Y.Z-dev.N`，且提交位于 `dev_main`。
+- 稳定标签 `vX.Y.Z` 或补丁发布标签 `vX.Y.Z.postN`，且提交位于 `main`；
+- 开发、Beta 或 RC 标签 `vX.Y.Z-dev.N`、`vX.Y.ZbN`、`vX.Y.ZrcN`，且提交
+  位于 `dev_main`。
 
 标签基础版本必须与 `pyproject.toml` 一致。贡献者不要从文档流程发布包或创建
 标签；发布由维护者按现有工作流执行。
