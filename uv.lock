@@ -243,7 +243,7 @@ wheels = [
 
 [[package]]
 name = "butterbot-python"
-version = "3.1.1"
+version = "3.1.1.post1"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
